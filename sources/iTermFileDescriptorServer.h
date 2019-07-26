@@ -40,4 +40,6 @@ int iTermSelect(int *fds, int count, int *results);
 
 void iTermFileDescriptorServerLog(char *format, ...);
 
+void SetRunningServer(void);
+
 #endif  // __ITERM_FILE_DESCRIPTOR_SERVER_H

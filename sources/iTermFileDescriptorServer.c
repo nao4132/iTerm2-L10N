@@ -238,8 +238,12 @@ static void MainLoop(char *path) {
     } while (!PerformAcceptActivity(socketFd));
 }
 
-int iTermFileDescriptorServerRun(char *path, pid_t childPid, int connectionFd) {
+void SetRunningServer(void) {
     gRunningServer = 1;
+}
+
+int iTermFileDescriptorServerRun(char *path, pid_t childPid, int connectionFd) {
+    SetRunningServer();
     // syslog raises sigpipe when the parent job dies on 10.12.
     signal(SIGPIPE, SIG_IGN);
     int rc = Initialize(path, childPid);

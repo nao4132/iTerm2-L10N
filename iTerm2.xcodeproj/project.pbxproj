@@ -1337,6 +1337,8 @@
 		53850903212FA8910039AFC7 /* iTermMetaFrustrationDetector.h in Headers */ = {isa = PBXBuildFile; fileRef = 53850901212FA8910039AFC7 /* iTermMetaFrustrationDetector.h */; };
 		53850904212FA8910039AFC7 /* iTermMetaFrustrationDetector.m in Sources */ = {isa = PBXBuildFile; fileRef = 53850902212FA8910039AFC7 /* iTermMetaFrustrationDetector.m */; };
 		5387013E23629EE8005FDB65 /* iTermPasswordManagerWindowController.m in Sources */ = {isa = PBXBuildFile; fileRef = 1DFA7C991923EDD900DF1410 /* iTermPasswordManagerWindowController.m */; };
+		538970BC22E6914E008B4770 /* iTermFileDescriptorMultiServer.h in Headers */ = {isa = PBXBuildFile; fileRef = 538970BA22E6914E008B4770 /* iTermFileDescriptorMultiServer.h */; };
+		538970BD22E6914E008B4770 /* iTermFileDescriptorMultiServer.c in Sources */ = {isa = PBXBuildFile; fileRef = 538970BB22E6914E008B4770 /* iTermFileDescriptorMultiServer.c */; };
 		538BE55620C9E69A00AD15B0 /* NSDictionary+iTerm.m in Sources */ = {isa = PBXBuildFile; fileRef = A628C7A718764AA4009B0818 /* NSDictionary+iTerm.m */; };
 		539325F31DD66EFA00CABCEF /* iTermPreciseTimer.m in Sources */ = {isa = PBXBuildFile; fileRef = 539325EF1DD66EF100CABCEF /* iTermPreciseTimer.m */; };
 		539E4ECE22E172360084FE9A /* iTermAutomaticProfileSwitcher.m in Sources */ = {isa = PBXBuildFile; fileRef = A6EEA6671C83B95C00FA1594 /* iTermAutomaticProfileSwitcher.m */; };
@@ -4478,6 +4480,8 @@
 		537C4FD7227BE18B00B292E2 /* iTermSecureKeyboardEntryController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = iTermSecureKeyboardEntryController.m; sourceTree = "<group>"; };
 		53850901212FA8910039AFC7 /* iTermMetaFrustrationDetector.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = iTermMetaFrustrationDetector.h; sourceTree = "<group>"; };
 		53850902212FA8910039AFC7 /* iTermMetaFrustrationDetector.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = iTermMetaFrustrationDetector.m; sourceTree = "<group>"; };
+		538970BA22E6914E008B4770 /* iTermFileDescriptorMultiServer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = iTermFileDescriptorMultiServer.h; sourceTree = "<group>"; };
+		538970BB22E6914E008B4770 /* iTermFileDescriptorMultiServer.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = iTermFileDescriptorMultiServer.c; sourceTree = "<group>"; };
 		539325EE1DD66EF100CABCEF /* iTermPreciseTimer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = iTermPreciseTimer.h; sourceTree = "<group>"; };
 		539325EF1DD66EF100CABCEF /* iTermPreciseTimer.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = iTermPreciseTimer.m; sourceTree = "<group>"; };
 		53A96ECE2322040C00AEA8E0 /* iTermOpenDirectory.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = iTermOpenDirectory.h; sourceTree = "<group>"; };
@@ -8277,6 +8281,8 @@
 				A65B72681B23559A00F947A7 /* iTermFileDescriptorSocketPath.c */,
 				1D8FC67B17E67FA700A82402 /* shell_launcher.c */,
 				A65B72701B248F1800F947A7 /* iTermOrphanServerAdopter.m */,
+				538970BA22E6914E008B4770 /* iTermFileDescriptorMultiServer.h */,
+				538970BB22E6914E008B4770 /* iTermFileDescriptorMultiServer.c */,
 			);
 			name = "Shell Launcher/FD Client/Server";
 			sourceTree = "<group>";
@@ -9904,6 +9910,7 @@
 				A67F57B71B01A01800B4F135 /* iTermImageInfo.h in Headers */,
 				A6EC47BE21EC623D000E1321 /* iTermOnboardingWindowController.h in Headers */,
 				1DE5EBE8122B892900C736B0 /* iTermProfilesWindowController.h in Headers */,
+				538970BC22E6914E008B4770 /* iTermFileDescriptorMultiServer.h in Headers */,
 				1D93D33512695442007F741B /* DVR.h in Headers */,
 				1D93D3471269741B007F741B /* DVRBuffer.h in Headers */,
 				1D374DEB1B349FC8007BE76A /* iTermTipData.h in Headers */,
@@ -12613,6 +12620,7 @@
 				A6C763CE1B45C53A00E3C992 /* main.m in Sources */,
 				A67960ED1F8202C0008A42BC /* iTermMark.metal in Sources */,
 				A6D22A431BC8BE6B004084E0 /* Model.xcdatamodeld in Sources */,
+				538970BD22E6914E008B4770 /* iTermFileDescriptorMultiServer.c in Sources */,
 				A6DBC03F20049CB100F1466D /* iTermImage.metal in Sources */,
 				A638A04B20EB3C3800DE347F /* iTermUnusedText.metal in Sources */,
 				A6C1FD541FC2B210006B9A69 /* iTermMargin.metal in Sources */,

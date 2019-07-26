@@ -1390,6 +1390,14 @@
 		53D68F842283FA4B0018710D /* iTermTmuxLayoutBuilderTest.m in Sources */ = {isa = PBXBuildFile; fileRef = 53D68F822283FA4B0018710D /* iTermTmuxLayoutBuilderTest.m */; };
 		53E184F11FE32F2800DB78F3 /* iTermMetalBufferPool.h in Headers */ = {isa = PBXBuildFile; fileRef = 53E184EF1FE32F2800DB78F3 /* iTermMetalBufferPool.h */; };
 		53E184F21FE32F2800DB78F3 /* iTermMetalBufferPool.m in Sources */ = {isa = PBXBuildFile; fileRef = 53E184F01FE32F2800DB78F3 /* iTermMetalBufferPool.m */; };
+		53E282CE22EA9D98007CBA30 /* iTermClientServerProtocol.h in Headers */ = {isa = PBXBuildFile; fileRef = 53E282CC22EA9D98007CBA30 /* iTermClientServerProtocol.h */; };
+		53E282CF22EA9D98007CBA30 /* iTermClientServerProtocol.c in Sources */ = {isa = PBXBuildFile; fileRef = 53E282CD22EA9D98007CBA30 /* iTermClientServerProtocol.c */; };
+		53E282D222EAA02F007CBA30 /* iTermMultiServerProtocol.h in Headers */ = {isa = PBXBuildFile; fileRef = 53E282D022EAA02F007CBA30 /* iTermMultiServerProtocol.h */; };
+		53E282D322EAA02F007CBA30 /* iTermMultiServerProtocol.c in Sources */ = {isa = PBXBuildFile; fileRef = 53E282D122EAA02F007CBA30 /* iTermMultiServerProtocol.c */; };
+		53E282D622EAAD36007CBA30 /* iTermPosixTTYReplacements.h in Headers */ = {isa = PBXBuildFile; fileRef = 53E282D422EAAD36007CBA30 /* iTermPosixTTYReplacements.h */; };
+		53E282D722EAAD36007CBA30 /* iTermPosixTTYReplacements.c in Sources */ = {isa = PBXBuildFile; fileRef = 53E282D522EAAD36007CBA30 /* iTermPosixTTYReplacements.c */; };
+		53E282DA22EAC7FB007CBA30 /* iTermFileDescriptorMultiClient.h in Headers */ = {isa = PBXBuildFile; fileRef = 53E282D822EAC7FB007CBA30 /* iTermFileDescriptorMultiClient.h */; };
+		53E282DB22EAC7FB007CBA30 /* iTermFileDescriptorMultiClient.c in Sources */ = {isa = PBXBuildFile; fileRef = 53E282D922EAC7FB007CBA30 /* iTermFileDescriptorMultiClient.c */; };
 		53E8F36F2244A58800F3770F /* iTermActionsModel.h in Headers */ = {isa = PBXBuildFile; fileRef = 53E8F36D2244A58800F3770F /* iTermActionsModel.h */; };
 		53E8F3702244A58800F3770F /* iTermActionsModel.m in Sources */ = {isa = PBXBuildFile; fileRef = 53E8F36E2244A58800F3770F /* iTermActionsModel.m */; };
 		53E98E7B233C6B760094D8A9 /* iTermTmuxSessionObject.h in Headers */ = {isa = PBXBuildFile; fileRef = 53E98E79233C6B760094D8A9 /* iTermTmuxSessionObject.h */; };
@@ -4523,6 +4531,14 @@
 		53D68F822283FA4B0018710D /* iTermTmuxLayoutBuilderTest.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = iTermTmuxLayoutBuilderTest.m; sourceTree = "<group>"; };
 		53E184EF1FE32F2800DB78F3 /* iTermMetalBufferPool.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = iTermMetalBufferPool.h; sourceTree = "<group>"; };
 		53E184F01FE32F2800DB78F3 /* iTermMetalBufferPool.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = iTermMetalBufferPool.m; sourceTree = "<group>"; };
+		53E282CC22EA9D98007CBA30 /* iTermClientServerProtocol.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = iTermClientServerProtocol.h; sourceTree = "<group>"; };
+		53E282CD22EA9D98007CBA30 /* iTermClientServerProtocol.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = iTermClientServerProtocol.c; sourceTree = "<group>"; };
+		53E282D022EAA02F007CBA30 /* iTermMultiServerProtocol.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = iTermMultiServerProtocol.h; sourceTree = "<group>"; };
+		53E282D122EAA02F007CBA30 /* iTermMultiServerProtocol.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = iTermMultiServerProtocol.c; sourceTree = "<group>"; };
+		53E282D422EAAD36007CBA30 /* iTermPosixTTYReplacements.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = iTermPosixTTYReplacements.h; sourceTree = "<group>"; };
+		53E282D522EAAD36007CBA30 /* iTermPosixTTYReplacements.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = iTermPosixTTYReplacements.c; sourceTree = "<group>"; };
+		53E282D822EAC7FB007CBA30 /* iTermFileDescriptorMultiClient.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = iTermFileDescriptorMultiClient.h; sourceTree = "<group>"; };
+		53E282D922EAC7FB007CBA30 /* iTermFileDescriptorMultiClient.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = iTermFileDescriptorMultiClient.c; sourceTree = "<group>"; };
 		53E8F36D2244A58800F3770F /* iTermActionsModel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = iTermActionsModel.h; sourceTree = "<group>"; };
 		53E8F36E2244A58800F3770F /* iTermActionsModel.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = iTermActionsModel.m; sourceTree = "<group>"; };
 		53E98E79233C6B760094D8A9 /* iTermTmuxSessionObject.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = iTermTmuxSessionObject.h; sourceTree = "<group>"; };
@@ -8069,6 +8085,8 @@
 				A64511C22380673300EB6ADF /* iTermMonoServerJobManager.m */,
 				A64511C523806FB900EB6ADF /* iTermLegacyJobManager.h */,
 				A64511C623806FB900EB6ADF /* iTermLegacyJobManager.m */,
+				53E282D422EAAD36007CBA30 /* iTermPosixTTYReplacements.h */,
+				53E282D522EAAD36007CBA30 /* iTermPosixTTYReplacements.c */,
 			);
 			name = Core;
 			sourceTree = "<group>";
@@ -8283,6 +8301,12 @@
 				A65B72701B248F1800F947A7 /* iTermOrphanServerAdopter.m */,
 				538970BA22E6914E008B4770 /* iTermFileDescriptorMultiServer.h */,
 				538970BB22E6914E008B4770 /* iTermFileDescriptorMultiServer.c */,
+				53E282CC22EA9D98007CBA30 /* iTermClientServerProtocol.h */,
+				53E282CD22EA9D98007CBA30 /* iTermClientServerProtocol.c */,
+				53E282D022EAA02F007CBA30 /* iTermMultiServerProtocol.h */,
+				53E282D122EAA02F007CBA30 /* iTermMultiServerProtocol.c */,
+				53E282D822EAC7FB007CBA30 /* iTermFileDescriptorMultiClient.h */,
+				53E282D922EAC7FB007CBA30 /* iTermFileDescriptorMultiClient.c */,
 			);
 			name = "Shell Launcher/FD Client/Server";
 			sourceTree = "<group>";
@@ -9855,6 +9879,7 @@
 				1D5FDD601208E8F000C46BA3 /* PSMTabStyle.h in Headers */,
 				A6E713B318FCB559008D94DD /* AdvancedWorkingDirectoryWindowController.h in Headers */,
 				1D5FDD621208E8F000C46BA3 /* PSMTabDragAssistant.h in Headers */,
+				53E282CE22EA9D98007CBA30 /* iTermClientServerProtocol.h in Headers */,
 				A6A13ABB18C34F6400B241ED /* VT100XtermParser.h in Headers */,
 				A647E3A918C353C500450FA1 /* VT100StringParser.h in Headers */,
 				1D5FDD651208E8F000C46BA3 /* PSMTabDragWindow.h in Headers */,
@@ -10081,11 +10106,13 @@
 				1DD6707714934ADE008E4361 /* PTYSplitView.h in Headers */,
 				1D8CE03D195A143100FE1BEE /* iTermRule.h in Headers */,
 				D3CE2D4E1A00936F0098ED99 /* PSMDarkTabStyle.h in Headers */,
+				53E282DA22EAC7FB007CBA30 /* iTermFileDescriptorMultiClient.h in Headers */,
 				1D4BAFEC1BFE77E4004FF52B /* iTermPrintAccessoryViewController.h in Headers */,
 				1DD4CE8014A51C0D00ED182E /* TmuxDashboardController.h in Headers */,
 				A68A310F186E2EDA007F550F /* PopupEntry.h in Headers */,
 				1DC13AC318864E2200034DAE /* CommandHistoryPopup.h in Headers */,
 				1D0318281A42563A00932107 /* iTermImageWell.h in Headers */,
+				53E282D222EAA02F007CBA30 /* iTermMultiServerProtocol.h in Headers */,
 				1DA9AEEA14A51CA000BEB37B /* TmuxSessionsTable.h in Headers */,
 				1D0B613814A7BC1200C57C33 /* TmuxControllerRegistry.h in Headers */,
 				1D0B613C14A7C76500C57C33 /* TmuxWindowsTable.h in Headers */,
@@ -10156,6 +10183,7 @@
 				1D6944D7169E96AC00C7048A /* ThreeFingerTapGestureRecognizer.h in Headers */,
 				1D085F8616F02E7400B7FCE9 /* PasteContext.h in Headers */,
 				1D085F8D16F0328B00B7FCE9 /* PasteViewController.h in Headers */,
+				53E282D622EAAD36007CBA30 /* iTermPosixTTYReplacements.h in Headers */,
 				1D085F9216F03E5400B7FCE9 /* PasteView.h in Headers */,
 				A680AA1818CEBF5C0034D4F8 /* NSMutableData+iTerm.h in Headers */,
 				A6C7DE5519A4591E001E5C75 /* iTermNewWindowCommand.h in Headers */,
@@ -12622,6 +12650,7 @@
 				A6D22A431BC8BE6B004084E0 /* Model.xcdatamodeld in Sources */,
 				538970BD22E6914E008B4770 /* iTermFileDescriptorMultiServer.c in Sources */,
 				A6DBC03F20049CB100F1466D /* iTermImage.metal in Sources */,
+				53E282CF22EA9D98007CBA30 /* iTermClientServerProtocol.c in Sources */,
 				A638A04B20EB3C3800DE347F /* iTermUnusedText.metal in Sources */,
 				A6C1FD541FC2B210006B9A69 /* iTermMargin.metal in Sources */,
 				A67960E71F8202C0008A42BC /* iTermBackgroundColor.metal in Sources */,
@@ -12630,12 +12659,15 @@
 				A638A05020EB47A900DE347F /* iTermTextShaderCommon.metal in Sources */,
 				A629C700220FFF5E00E7D4AE /* iTermProfilePreferencesTabViewWrapperView.m in Sources */,
 				A67960EE1F8202C0008A42BC /* iTermText.metal in Sources */,
+				53E282D322EAA02F007CBA30 /* iTermMultiServerProtocol.c in Sources */,
 				A68400BF1FF99E1B008D3EE2 /* iTermTimestamps.metal in Sources */,
 				A67960EB1F8202C0008A42BC /* iTermCursorGuide.metal in Sources */,
 				A67960E91F8202C0008A42BC /* iTermBadge.metal in Sources */,
+				53E282D722EAAD36007CBA30 /* iTermPosixTTYReplacements.c in Sources */,
 				A6DBC04C2005F45700F1466D /* iTermHighlightRow.metal in Sources */,
 				A60EBD171FAED952008C7F5B /* iTermCopyBackground.metal in Sources */,
 				A67960E81F8202C0008A42BC /* iTermBackgroundImage.metal in Sources */,
+				53E282DB22EAC7FB007CBA30 /* iTermFileDescriptorMultiClient.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

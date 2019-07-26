@@ -31,10 +31,10 @@ void iTermFileDescriptorServerLog(char *format, ...) {
     va_end(args);
 }
 
-static ssize_t SendMessageAndFileDescriptor(int connectionFd,
-                                            void *buffer,
-                                            size_t bufferSize,
-                                            int fdToSend) {
+ssize_t iTermFileDescriptorServerSendMessageAndFileDescriptor(int connectionFd,
+                                                              void *buffer,
+                                                              size_t bufferSize,
+                                                              int fdToSend) {
     iTermFileDescriptorControlMessage controlMessage;
     struct msghdr message;
     message.msg_control = controlMessage.control;
@@ -48,6 +48,25 @@ static ssize_t SendMessageAndFileDescriptor(int connectionFd,
 
     message.msg_name = NULL;
     message.msg_namelen = 0;
+
+    struct iovec iov[1];
+    iov[0].iov_base = buffer;
+    iov[0].iov_len = bufferSize;
+    message.msg_iov = iov;
+    message.msg_iovlen = 1;
+
+    int rc = sendmsg(connectionFd, &message, 0);
+    while (rc == -1 && errno == EINTR) {
+        rc = sendmsg(connectionFd, &message, 0);
+    }
+    return rc;
+}
+
+ssize_t iTermFileDescriptorServerSendMessage(int connectionFd,
+                                             void *buffer,
+                                             size_t bufferSize) {
+    struct msghdr message;
+    memset(&message, 0, sizeof(message));
 
     struct iovec iov[1];
     iov[0].iov_base = buffer;
@@ -135,7 +154,7 @@ int iTermFileDescriptorServerAccept(int socketFd) {
 
 static int SendFileDescriptorAndWait(int connectionFd) {
     FDLog(LOG_DEBUG, "send master fd and child pid %d", (int)gChildPid);
-    int rc = SendMessageAndFileDescriptor(connectionFd, &gChildPid, sizeof(gChildPid), 0);
+    int rc = iTermFileDescriptorServerSendMessageAndFileDescriptor(connectionFd, &gChildPid, sizeof(gChildPid), 0);
     if (rc <= 0) {
         FDLog(LOG_NOTICE, "send failed %s", strerror(errno));
         close(connectionFd);

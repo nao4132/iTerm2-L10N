@@ -51,7 +51,7 @@ static ssize_t ReceiveMessageAndFileDescriptor(int fd,
                 int readable[2];
                 iTermSelect(fds, 2, readable);
                 if (readable[1]) {
-                    FDLog(LOG_DEBUG, "Server was dead before recevmsg. Did the shell terminate immediately?");
+                    FDLog(LOG_DEBUG, "Server was dead before recvmsg. Did the shell terminate immediately?");
                     return -1;
                 }
                 FDLog(LOG_DEBUG, "assuming socket is readable");

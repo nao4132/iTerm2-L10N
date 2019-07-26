@@ -42,4 +42,13 @@ void iTermFileDescriptorServerLog(char *format, ...);
 
 void SetRunningServer(void);
 
+ssize_t iTermFileDescriptorServerSendMessageAndFileDescriptor(int connectionFd,
+                                                              void *buffer,
+                                                              size_t bufferSize,
+                                                              int fdToSend);
+
+ssize_t iTermFileDescriptorServerSendMessage(int connectionFd,
+                                             void *buffer,
+                                             size_t bufferSize);
+
 #endif  // __ITERM_FILE_DESCRIPTOR_SERVER_H

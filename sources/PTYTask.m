@@ -4,6 +4,7 @@
 #import "DebugLogging.h"
 #import "iTermMalloc.h"
 #import "iTermNotificationController.h"
+#import "iTermPosixTTYReplacements.h"
 #import "iTermProcessCache.h"
 #import "NSWorkspace+iTerm.h"
 #import "PreferencePanel.h"
@@ -35,6 +36,8 @@
 #include <sys/user.h>
 #include <unistd.h>
 #include <util.h>
+
+NSString *kCoprocessStatusChangeNotification = @"kCoprocessStatusChangeNotification";
 
 static void HandleSigChld(int n) {
     // This is safe to do because write(2) is listed in the sigaction(2) man page

@@ -8,6 +8,7 @@
 #import "PTYTask.h"
 
 #import "iTermTTYState.h"
+#import "iTermPosixTTYReplacements.h"
 
 #include <util.h>
 

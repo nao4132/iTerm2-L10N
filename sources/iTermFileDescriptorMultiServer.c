@@ -41,25 +41,6 @@ static void SigChildHandler(int arg) {
     write(gPipe[1], "", 1);
 }
 
-static void SigUsr1Handler(int arg) {
-    unlink(gPath);
-    _exit(1);
-}
-
-#pragma mark - POSIX
-
-static ssize_t RecvMsg(int fd,
-                       iTermClientServerProtocolMessage *message) {
-    assert(message->valid == ITERM_MULTISERVER_MAGIC);
-
-    ssize_t n;
-    while (1) {
-        n = recvmsg(fd, &message->message, 0);
-    } while (n < 0 && errno == EINTR);
-
-    return n;
-}
-
 #pragma mark - Mutate Children
 
 static void AddChild(const iTermMultiServerRequestLaunch *launch,
@@ -78,6 +59,9 @@ static void AddChild(const iTermMultiServerRequestLaunch *launch,
             .launch = *launch
         }
     };
+
+    // Copy the launch request into children[i].messageWithLaunchRequest. This is done because we
+    // need to own our own pointers to arrays of strings.
     iTermClientServerProtocolMessage tempMessage;
     iTermClientServerProtocolMessageInitialize(&tempMessage);
     int status;
@@ -86,6 +70,9 @@ static void AddChild(const iTermMultiServerRequestLaunch *launch,
     status = iTermMultiServerProtocolParseMessageFromClient(&tempMessage,
                                                             &children[i].messageWithLaunchRequest);
     assert(status == 0);
+    iTermClientServerProtocolMessageFree(&tempMessage);
+
+    // Update for the remaining fields in children[i].
     children[i].masterFd = masterFd;
     children[i].pid = forkState->pid;
     children[i].terminated = 0;
@@ -150,10 +137,20 @@ static int SendLaunchResponse(int fd, int status, pid_t pid, int masterFd) {
     };
     iTermMultiServerProtocolEncodeMessageFromServer(&message, &obj);
 
-    ssize_t result = iTermFileDescriptorServerSendMessageAndFileDescriptor(fd,
-                                                                           obj.ioVectors[0].iov_base,
-                                                                           obj.ioVectors[0].iov_len,
-                                                                           masterFd);
+    ssize_t result;
+    if (masterFd >= 0) {
+        // Happy path. Send the file descrptor.
+        ssize_t result = iTermFileDescriptorServerSendMessageAndFileDescriptor(fd,
+                                                                               obj.ioVectors[0].iov_base,
+                                                                               obj.ioVectors[0].iov_len,
+                                                                               masterFd);
+    } else {
+        // Error happened. Don't send a file descriptor.
+        result = iTermFileDescriptorServerSendMessage(fd,
+                                                      obj.ioVectors[0].iov_base,
+                                                      obj.ioVectors[0].iov_len);
+    }
+    iTermClientServerProtocolMessageFree(&obj);
     return result > 0;
 }
 
@@ -174,7 +171,9 @@ static int HandleLaunchRequest(int fd, const iTermMultiServerRequestLaunch *laun
 
 #pragma mark - Report Termination
 
-static int ReportTermination(int fd, pid_t pid, int status) {
+static int ReportTermination(int fd, pid_t pid) {
+    FDLog(LOG_DEBUG, "Report termination pid %d", (int)pid);
+
     iTermClientServerProtocolMessage obj;
     iTermClientServerProtocolMessageInitialize(&obj);
 
@@ -183,7 +182,6 @@ static int ReportTermination(int fd, pid_t pid, int status) {
         .payload = {
             .termination = {
                 .pid = pid,
-                .status = status
             }
         }
     };
@@ -192,10 +190,26 @@ static int ReportTermination(int fd, pid_t pid, int status) {
     ssize_t result = iTermFileDescriptorServerSendMessage(fd,
                                                           obj.ioVectors[0].iov_base,
                                                           obj.ioVectors[0].iov_len);
+    iTermClientServerProtocolMessageFree(&obj);
     return result > 0;
 }
 
 #pragma mark - Report Child
+
+static void PopulateReportChild(const iTermMultiServerChild *child, int isLast, iTermMultiServerReportChild *out) {
+    iTermMultiServerReportChild temp = {
+        .isLast = isLast,
+        .pid = child->pid,
+        .path = child->messageWithLaunchRequest.payload.launch.path,
+        .argv = child->messageWithLaunchRequest.payload.launch.argv,
+        .argc = child->messageWithLaunchRequest.payload.launch.argc,
+        .envp = child->messageWithLaunchRequest.payload.launch.envp,
+        .envc = child->messageWithLaunchRequest.payload.launch.envc,
+        .isUTF8 = child->messageWithLaunchRequest.payload.launch.isUTF8,
+        .pwd = child->messageWithLaunchRequest.payload.launch.pwd
+    };
+    *out = temp;
+}
 
 static int ReportChild(int fd, const iTermMultiServerChild *child, int isLast) {
     iTermClientServerProtocolMessage obj;
@@ -203,48 +217,40 @@ static int ReportChild(int fd, const iTermMultiServerChild *child, int isLast) {
 
     iTermMultiServerServerOriginatedMessage message = {
         .type = iTermMultiServerRPCTypeReportChild,
-        .payload = {
-            .reportChild = {
-                .isLast = isLast,
-                .pid = child->pid,
-                .path = child->messageWithLaunchRequest.payload.launch.path,
-                .argv = child->messageWithLaunchRequest.payload.launch.argv,
-                .argc = child->messageWithLaunchRequest.payload.launch.argc,
-                .envp = child->messageWithLaunchRequest.payload.launch.envp,
-                .envc = child->messageWithLaunchRequest.payload.launch.envc,
-                .isUTF8 = child->messageWithLaunchRequest.payload.launch.isUTF8,
-                .pwd = child->messageWithLaunchRequest.payload.launch.pwd
-            }
-        }
     };
+    PopulateReportChild(child, isLast, &message.payload.reportChild);
     iTermMultiServerProtocolEncodeMessageFromServer(&message, &obj);
 
     ssize_t bytes = iTermFileDescriptorServerSendMessageAndFileDescriptor(fd,
                                                                           obj.ioVectors[0].iov_base,
                                                                           obj.ioVectors[0].iov_len,
                                                                           child->masterFd);
+    iTermClientServerProtocolMessageFree(&obj);
     return bytes >= 0;
 }
 
-#pragma mark - Dead Child Handling
+#pragma mark - Termination Handling
 
-static int ReportAndRemoveDeadChild(int connectionFd, int i) {
-    if (ReportTermination(connectionFd, children[i].pid, children[i].status)) {
-        return -1;
-    }
-    RemoveChild(i);
-    return 0;
+static pid_t WaitPidNoHang(pid_t pid, int *statusOut) {
+    pid_t result;
+    do {
+        result = waitpid(pid, statusOut, WNOHANG);;
+    } while (result < 0 && errno == EINTR);
+    return result;
 }
 
-static int ReportAndRemoveDeadChildren(int connectionFd) {
+static int WaitForAllProcessesAndReportTerminations(int connectionFd) {
+    FDLog(LOG_DEBUG, "WaitForAllProcessesAndReportTerminations");
     for (int i = 0; i < numberOfChildren; i++) {
         if (children[i].terminated) {
             continue;
         }
-        const pid_t pid = waitpid(children[i].pid, &children[i].status, WNOHANG);
-        if (pid == -1) {
+        const pid_t pid = WaitPidNoHang(children[i].pid, &children[i].status);
+        if (pid > 0) {
             children[i].terminated = 1;
-            return ReportAndRemoveDeadChild(connectionFd, i);
+            if (ReportTermination(connectionFd, i)) {
+                return -1;
+            }
         }
     }
     return 0;
@@ -255,16 +261,91 @@ static int ReportAndRemoveDeadChildren(int connectionFd) {
 static int ReportChildren(int fd) {
     // Iterate backwards because ReportAndRemoveDeadChild deletes the index passed to it.
     for (int i = numberOfChildren - 1; i >= 0; i--) {
-        if (children[i].terminated) {
-            if (ReportAndRemoveDeadChild(fd, i)) {
-                return -1;
-            }
-            // NOTE: children is now a different pointer because it has been realloced.
-        } else {
-            if (ReportChild(fd, &children[i], i + 1 == numberOfChildren)) {
-                return -1;
+        if (ReportChild(fd, &children[i], i + 1 == numberOfChildren)) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+#pragma mark - Handshake
+
+static int HandleHandshake(int fd, iTermMultiServerRequestHandshake *handshake) {
+    iTermClientServerProtocolMessage obj;
+    iTermClientServerProtocolMessageInitialize(&obj);
+
+    if (handshake->maximumProtocolVersion < iTermMultiServerProtocolVersion1) {
+        FDLog(LOG_ERR, "Maximum protocol version is too low: %d", handshake->maximumProtocolVersion);
+        return -1;
+    }
+    iTermMultiServerServerOriginatedMessage message = {
+        .type = iTermMultiServerRPCTypeHandshake,
+        .payload = {
+            .handshake = {
+                .protocolVersion = iTermMultiServerProtocolVersion1,
+                .numChildren = numberOfChildren,
             }
         }
+    };
+    iTermMultiServerProtocolEncodeMessageFromServer(&message, &obj);
+
+    ssize_t bytes = iTermFileDescriptorServerSendMessage(fd,
+                                                         obj.ioVectors[0].iov_base,
+                                                         obj.ioVectors[0].iov_len);
+    iTermClientServerProtocolMessageFree(&obj);
+    if (bytes < 0) {
+        return -1;
+    }
+    return ReportChildren(fd);
+}
+
+#pragma mark - Wait
+
+static int GetChildIndexByPID(pid_t pid) {
+    for (int i = 0; i < numberOfChildren; i++) {
+        if (children[i].pid == pid) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static int HandleWait(int fd, iTermMultiServerRequestWait *wait) {
+    iTermClientServerProtocolMessage obj;
+    iTermClientServerProtocolMessageInitialize(&obj);
+
+    int childIndex = GetChildIndexByPID(wait->pid);
+    int status = 0;
+    int errorNumber = 0;
+    if (childIndex < 0) {
+        errorNumber = -1;
+    } else if (!children[childIndex].terminated) {
+        errorNumber = -2;
+    } else {
+        status = children[childIndex].status;
+    }
+    iTermMultiServerServerOriginatedMessage message = {
+        .type = iTermMultiServerRPCTypeWait,
+        .payload = {
+            .wait = {
+                .pid = wait->pid,
+                .status = status,
+                .errorNumber = errorNumber
+            }
+        }
+    };
+    iTermMultiServerProtocolEncodeMessageFromServer(&message, &obj);
+
+    ssize_t bytes = iTermFileDescriptorServerSendMessage(fd,
+                                                         obj.ioVectors[0].iov_base,
+                                                         obj.ioVectors[0].iov_len);
+    iTermClientServerProtocolMessageFree(&obj);
+    if (bytes < 0) {
+        return -1;
+    }
+
+    if (errorNumber == 0) {
+        RemoveChild(childIndex);
     }
     return 0;
 }
@@ -273,27 +354,21 @@ static int ReportChildren(int fd) {
 
 static int ReadRequest(int fd, iTermMultiServerClientOriginatedMessage *out) {
     iTermClientServerProtocolMessage message;
-    iTermClientServerProtocolMessageInitialize(&message);
 
-    const ssize_t recvStatus = RecvMsg(fd, &message);
-    int status = 0;
-    if (recvStatus <= 0) {
-        status = -1;
+    int status = iTermMultiServerRecv(fd, &message);
+    if (status) {
         goto done;
     }
 
     memset(out, 0, sizeof(*out));
 
-    if (iTermMultiServerProtocolParseMessageFromClient(&message, out)) {
-        status = -1;
-        goto done;
-    }
+    status = iTermMultiServerProtocolParseMessageFromClient(&message, out);
+    iTermClientServerProtocolMessageFree(&message);
 
 done:
     if (status) {
         iTermMultiServerClientOriginatedMessageFree(out);
     }
-    iTermClientServerProtocolMessageFree(&message);
     return status;
 }
 
@@ -303,6 +378,10 @@ static int ReadAndHandleRequest(int fd) {
         return -1;
     }
     switch (request.type) {
+        case iTermMultiServerRPCTypeHandshake:
+            return HandleHandshake(fd, &request.payload.handshake);
+        case iTermMultiServerRPCTypeWait:
+            return HandleWait(fd, &request.payload.wait);
         case iTermMultiServerRPCTypeLaunch:
             return HandleLaunchRequest(fd, &request.payload.launch);
         case iTermMultiServerRPCTypeTermination:
@@ -315,14 +394,43 @@ static int ReadAndHandleRequest(int fd) {
 
 #pragma mark - Core
 
+static void AcceptAndReject(int socket) {
+    int fd = iTermFileDescriptorServerAccept(socket);
+    if (fd < 0) {
+        return;
+    }
+
+    FDLog(LOG_DEBUG, "Received connection while already connected");
+
+    iTermMultiServerServerOriginatedMessage message = {
+        .type = iTermMultiServerRPCTypeHandshake,
+        .payload = {
+            .handshake = {
+                .protocolVersion = iTermMultiServerProtocolVersionRejected,
+                .numChildren = 0,
+            }
+        }
+    };
+    iTermClientServerProtocolMessage obj;
+    iTermClientServerProtocolMessageInitialize(&obj);
+    iTermMultiServerProtocolEncodeMessageFromServer(&message, &obj);
+    iTermFileDescriptorServerSendMessage(fd,
+                                         obj.ioVectors[0].iov_base,
+                                         obj.ioVectors[0].iov_len)
+    iTermClientServerProtocolMessageFree(&obj);
+    
+    close(fd);
+}
+
 // There is a client connected. Respond to requests from it until it disconnects, then return.
-static void SelectLoop(int connectionFd) {
+static void SelectLoop(int socketFd, int connectionFd) {
+    FDLog(LOG_DEBUG, "Begin SelectLoop.");
     while (1) {
-        int fds[2] = { gPipe[0], connectionFd };
+        int fds[2] = { gPipe[0], connectionFd, socketFd };
         int results[2];
         iTermSelect(fds, sizeof(fds) / sizeof(*fds), results);
         if (results[0]) {
-            if (ReportAndRemoveDeadChildren(connectionFd)) {
+            if (WaitForAllProcessesAndReportTerminations(connectionFd)) {
                 break;
             }
         }
@@ -331,40 +439,32 @@ static void SelectLoop(int connectionFd) {
                 break;
             }
         }
+        if (results[2]) {
+            AcceptAndReject(socketFD);
+        }
     }
+    FDLog(LOG_DEBUG, "Exited select loop.");
     close(connectionFd);
 }
 
-static int PerformAcceptActivity(int socketFd) {
-    int connectionFd = iTermFileDescriptorServerAccept(socketFd);
-    if (connectionFd == -1) {
-        FDLog(LOG_DEBUG, "accept failed %s", strerror(errno));
-        return -1;
-    }
-
-    if (ReportChildren(connectionFd)) {
-        return 0;
-    }
-    SelectLoop(connectionFd);
-    return 0;
-}
-
-static void MainLoop(char *path, int initialConnectionFd) {
-    // Listen on a Unix Domain Socket.
+// Alternates between running the select loop and accepting a new connection.
+static void MainLoop(char *path, int socketFd, int initialConnectionFd) {
     FDLog(LOG_DEBUG, "Entering main loop.");
-    SelectLoop(initialConnectionFd);
+    assert(socketFd >= 0);
+    assert(initialConnectionFd >= 0);
+    assert(socketFd != initialConnectionFd);
 
-    int socketFd;
+    int connectionFd = initialConnectionFd;
     do {
-        // You get here after the connection is lost.
-        FDLog(LOG_DEBUG, "Calling iTermFileDescriptorServerSocketBindListen.");
-        socketFd = iTermFileDescriptorServerSocketBindListen(path);
-        if (socketFd < 0) {
-            FDLog(LOG_DEBUG, "iTermFileDescriptorServerSocketBindListen failed");
-            return;
+        SelectLoop(socketFd, connectionFd);
+
+        // You get here after the connection is lost. Listen and accept.
+        FDLog(LOG_DEBUG, "Calling accept");
+        connectionFd = iTermFileDescriptorServerAccept(socketFd);
+        if (connectionFd == -1) {
+            FDLog(LOG_DEBUG, "accept failed: %s", strerror(errno));
         }
-        FDLog(LOG_DEBUG, "Calling PerformAcceptActivity");
-    } while (!PerformAcceptActivity(socketFd));
+    } while (connectionFd > 0);
 }
 
 #pragma mark - Bootstrap
@@ -382,7 +482,6 @@ static int Initialize(char *path) {
 
     FDLog(LOG_DEBUG, "Installing SIGCHLD handler.");
     signal(SIGCHLD, SigChildHandler);
-    signal(SIGUSR1, SigUsr1Handler);
 
     // Unblock SIGCHLD.
     sigset_t signal_set;
@@ -394,7 +493,7 @@ static int Initialize(char *path) {
     return 0;
 }
 
-int iTermFileDescriptorMultiServerRun(char *path, int connectionFd) {
+static int iTermFileDescriptorMultiServerRun(char *path, int socketFd, int connectionFd) {
     SetRunningServer();
     // syslog raises sigpipe when the parent job dies on 10.12.
     signal(SIGPIPE, SIG_IGN);
@@ -402,7 +501,7 @@ int iTermFileDescriptorMultiServerRun(char *path, int connectionFd) {
     if (rc) {
         FDLog(LOG_DEBUG, "Initialize failed with code %d", rc);
     } else {
-        MainLoop(path, connectionFd);
+        MainLoop(path, socketFd, connectionFd);
         // MainLoop never returns, except by dying on a signal.
     }
     FDLog(LOG_DEBUG, "Unlink %s", path);
@@ -410,3 +509,15 @@ int iTermFileDescriptorMultiServerRun(char *path, int connectionFd) {
     return 1;
 }
 
+// On entry there should be three file descriptors:
+// 0: A socket we can accept() on.
+// 1: A connection we can recvmsg() and sendmsg() on.
+// 2: A pipe that can be used to detect this process's termination.
+//
+// There should be a single command-line argument, which is the path tot he unix-domain socket
+// I'll use.
+int main(int argc, char *argv[]) {
+    assert(argc == 2);
+    iTermFileDescriptorMultiServerRun(argv[1], 0, 1);
+    return 1;
+}

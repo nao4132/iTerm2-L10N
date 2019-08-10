@@ -7,8 +7,51 @@
 
 #import "iTermMultiServerProtocol.h"
 
+#include <assert.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+
+static int ParseHandshakeRequest(iTermClientServerProtocolMessageParser *parser,
+                                 iTermMultiServerRequestHandshake *out) {
+    if (iTermClientServerProtocolParseTaggedInt(parser, &out->maximumProtocolVersion, sizeof(out->maximumProtocolVersion), iTermMultiServerTagHandshakeRequestClientMaximumProtocolVersion)) {
+        return -1;
+    }
+    return 0;
+}
+
+static int EncodeHandshakeRequest(iTermClientServerProtocolMessageEncoder *encoder,
+                                  iTermMultiServerRequestHandshake *handshake) {
+    if (iTermClientServerProtocolEncodeTaggedInt(encoder, &handshake->maximumProtocolVersion, sizeof(handshake->maximumProtocolVersion), iTermMultiServerTagHandshakeRequestClientMaximumProtocolVersion)) {
+        return -1;
+    }
+    return 0;
+}
+
+static int ParseHandshakeResponse(iTermClientServerProtocolMessageParser *parser,
+                                  iTermMultiServerResponseHandshake *out) {
+    if (iTermClientServerProtocolParseTaggedInt(parser, &out->protocolVersion, sizeof(out->protocolVersion), iTermMultiServerTagHandshakeRequestClientMaximumProtocolVersion)) {
+        return -1;
+    }
+    if (iTermClientServerProtocolParseTaggedInt(parser, &out->numChildren, sizeof(out->numChildren), iTermMultiServerTagHandshakeResponseChildReportsNumChildren)) {
+        return -1;
+    }
+    if (out->numChildren < 0 || out->numChildren > 1024) {
+        return -1;
+    }
+    return 0;
+}
+
+static int EncodeHandshakeResponse(iTermClientServerProtocolMessageEncoder *encoder,
+                                   iTermMultiServerResponseHandshake *handshake) {
+    if (iTermClientServerProtocolEncodeTaggedInt(encoder, &handshake->protocolVersion, sizeof(handshake->protocolVersion), iTermMultiServerTagHandshakeResponseProtocolVersion)) {
+        return -1;
+    }
+    if (iTermClientServerProtocolEncodeTaggedInt(encoder, &handshake->numChildren, sizeof(handshake->numChildren), iTermMultiServerTagHandshakeResponseChildReportsNumChildren)) {
+        return -1;
+    }
+    return 0;
+}
 
 static int ParseLaunchReqest(iTermClientServerProtocolMessageParser *parser,
                              iTermMultiServerRequestLaunch *out) {
@@ -90,6 +133,50 @@ static int EncodeLaunchResponse(iTermClientServerProtocolMessageEncoder *encoder
     return 0;
 }
 
+static int ParseWaitRequest(iTermClientServerProtocolMessageParser *parser,
+                            iTermMultiServerRequestWait *out) {
+    if (iTermClientServerProtocolParseTaggedInt(parser, &out->pid, sizeof(out->pid), iTermMultiServerTagWaitRequestPid)) {
+        return -1;
+    }
+    return 0;
+}
+
+static int EncodeWaitRequest(iTermClientServerProtocolMessageEncoder *encoder,
+                             iTermMultiServerRequestWait *wait) {
+    if (iTermClientServerProtocolEncodeTaggedInt(encoder, &wait->pid, sizeof(wait->pid), iTermMultiServerTagWaitRequestPid)) {
+        return -1;
+    }
+    return 0;
+}
+
+static int ParseWaitResponse(iTermClientServerProtocolMessageParser *parser,
+                             iTermMultiServerResponseWait *out) {
+    if (iTermClientServerProtocolParseTaggedInt(parser, &out->pid, sizeof(out->pid), iTermMultiServerTagWaitResponsePid)) {
+        return -1;
+    }
+    if (iTermClientServerProtocolParseTaggedInt(parser, &out->status, sizeof(out->status), iTermMultiServerTagWaitResponseStatus)) {
+        return -1;
+    }
+    if (iTermClientServerProtocolParseTaggedInt(parser, &out->errorNumber, sizeof(out->errorNumber), iTermMultiServerTagWaitResponseErrno)) {
+        return -1;
+    }
+    return 0;
+}
+
+static int EncodeWaitResponse(iTermClientServerProtocolMessageEncoder *encoder,
+                              iTermMultiServerResponseWait *wait) {
+    if (iTermClientServerProtocolEncodeTaggedInt(encoder, &wait->pid, sizeof(wait->pid), iTermMultiServerTagWaitResponsePid)) {
+        return -1;
+    }
+    if (iTermClientServerProtocolEncodeTaggedInt(encoder, &wait->status, sizeof(wait->status), iTermMultiServerTagWaitResponseStatus)) {
+        return -1;
+    }
+    if (iTermClientServerProtocolEncodeTaggedInt(encoder, &wait->errorNumber, sizeof(wait->errorNumber), iTermMultiServerTagWaitResponseErrno)) {
+        return -1;
+    }
+    return 0;
+}
+
 static int ParseReportChild(iTermClientServerProtocolMessageParser *parser,
                             iTermMultiServerReportChild *out) {
     if (iTermClientServerProtocolParseTaggedInt(parser, &out->isLast, sizeof(out->isLast), iTermMultiServerTagReportChildIsLast)) {
@@ -111,6 +198,9 @@ static int ParseReportChild(iTermClientServerProtocolMessageParser *parser,
         return -1;
     }
     if (iTermClientServerProtocolParseTaggedString(parser, &out->pwd, iTermMultiServerTagReportChildPwd)) {
+        return -1;
+    }
+    if (iTermClientServerProtocolParseTaggedInt(parser, &out->terminated, sizeof(out->terminated), iTermMultiServerTagReportChildTerminated)) {
         return -1;
     }
     return 0;
@@ -139,6 +229,9 @@ static int EncodeReportChild(iTermClientServerProtocolMessageEncoder *encoder,
     if (iTermClientServerProtocolEncodeTaggedString(encoder, obj->pwd, iTermMultiServerTagReportChildPwd)) {
         return -1;
     }
+    if (iTermClientServerProtocolEncodeTaggedInt(encoder, &obj->terminated, sizeof(obj->terminated), iTermMultiServerTagReportChildTerminated)) {
+        return -1;
+    }
     return 0;
 }
 
@@ -147,18 +240,12 @@ static int ParseTermination(iTermClientServerProtocolMessageParser *parser,
     if (iTermClientServerProtocolParseTaggedInt(parser, &out->pid, sizeof(out->pid), iTermMultiServerTagTerminationPid)) {
         return -1;
     }
-    if (iTermClientServerProtocolParseTaggedInt(parser, &out->status, sizeof(out->status), iTermMultiServerTagTerminationStatus)) {
-        return -1;
-    }
     return 0;
 }
 
 static int EncodeTermination(iTermClientServerProtocolMessageEncoder *encoder,
                              iTermMultiServerReportTermination *obj) {
     if (iTermClientServerProtocolEncodeTaggedInt(encoder, &obj->pid, sizeof(obj->pid), iTermMultiServerTagTerminationPid)) {
-        return -1;
-    }
-    if (iTermClientServerProtocolEncodeTaggedInt(encoder, &obj->status, sizeof(obj->status), iTermMultiServerTagTerminationStatus)) {
         return -1;
     }
     return 0;
@@ -177,8 +264,12 @@ int iTermMultiServerProtocolParseMessageFromClient(iTermClientServerProtocolMess
         return -1;
     }
     switch (out->type) {
+        case iTermMultiServerRPCTypeHandshake:
+            return ParseHandshakeRequest(&parser, &out->payload.handshake);
         case iTermMultiServerRPCTypeLaunch:
             return ParseLaunchReqest(&parser, &out->payload.launch);
+        case iTermMultiServerRPCTypeWait:
+            return ParseWaitRequest(&parser, &out->payload.wait);
 
         case iTermMultiServerRPCTypeReportChild:  // Server-originated, no response.
         case iTermMultiServerRPCTypeTermination: // Server-originated, no response.
@@ -198,11 +289,17 @@ int iTermMultiServerProtocolParseMessageFromServer(iTermClientServerProtocolMess
         return -1;
     }
     switch (out->type) {
+        case iTermMultiServerRPCTypeHandshake:
+            return ParseHandshakeResponse(&parser, &out->payload.handshake);
+
         case iTermMultiServerRPCTypeLaunch:  // Server-originated response to client-originated request
             return ParseLaunchResponse(&parser, &out->payload.launch);
 
         case iTermMultiServerRPCTypeReportChild:  // Server-originated, no response.
             return ParseReportChild(&parser, &out->payload.reportChild);
+
+        case iTermMultiServerRPCTypeWait:
+            return ParseWaitResponse(&parser, &out->payload.wait);
 
         case iTermMultiServerRPCTypeTermination: // Server-originated, no response.
             return ParseTermination(&parser, &out->payload.termination);
@@ -219,8 +316,16 @@ int iTermMultiServerProtocolEncodeMessageFromClient(iTermMultiServerClientOrigin
 
     int status = -1;
     switch (obj->type) {
+        case iTermMultiServerRPCTypeHandshake:
+            status = EncodeHandshakeRequest(&encoder, &obj->payload.handshake);
+            break;
+
         case iTermMultiServerRPCTypeLaunch:
             status = EncodeLaunchRequest(&encoder, &obj->payload.launch);
+            break;
+
+        case iTermMultiServerRPCTypeWait:
+            status = EncodeWaitRequest(&encoder, &obj->payload.wait);
             break;
 
         case iTermMultiServerRPCTypeReportChild:
@@ -242,8 +347,14 @@ int iTermMultiServerProtocolEncodeMessageFromServer(iTermMultiServerServerOrigin
 
     int status = -1;
     switch (obj->type) {
+        case iTermMultiServerRPCTypeHandshake:
+            status = EncodeHandshakeResponse(&encoder, &obj->payload.handshake);
+            break;
         case iTermMultiServerRPCTypeLaunch:
             status = EncodeLaunchResponse(&encoder, &obj->payload.launch);
+            break;
+        case iTermMultiServerRPCTypeWait:
+            status = EncodeWaitResponse(&encoder, &obj->payload.wait);
             break;
         case iTermMultiServerRPCTypeReportChild:
             status = EncodeReportChild(&encoder, &obj->payload.reportChild);
@@ -283,10 +394,28 @@ static void FreeReportChild(iTermMultiServerReportChild *obj) {
     free(obj->envp);
 }
 
+static void FreeWaitRequest(iTermMultiServerRequestWait *wait) {
+}
+
+static void FreeWaitResponse(iTermMultiServerResponseWait *wait) {
+}
+
+static void FreeHandshakeRequest(iTermMultiServerRequestHandshake *handshake) {
+}
+
+static void FreeHandshakeResponse(iTermMultiServerResponseHandshake *handshake) {
+}
+
 void iTermMultiServerClientOriginatedMessageFree(iTermMultiServerClientOriginatedMessage *obj) {
     switch (obj->type) {
+        case iTermMultiServerRPCTypeHandshake:
+            FreeHandshakeRequest(&obj->payload.handshake);
+            break;
         case iTermMultiServerRPCTypeLaunch:
             FreeLaunchRequest(&obj->payload.launch);
+            break;
+        case iTermMultiServerRPCTypeWait:
+            FreeWaitRequest(&obj->payload.wait);
             break;
         case iTermMultiServerRPCTypeReportChild:
         case iTermMultiServerRPCTypeTermination:
@@ -297,7 +426,12 @@ void iTermMultiServerClientOriginatedMessageFree(iTermMultiServerClientOriginate
 
 void iTermMultiServerServerOriginatedMessageFree(iTermMultiServerServerOriginatedMessage *obj) {
     switch (obj->type) {
+        case iTermMultiServerRPCTypeHandshake:
+            FreeHandshakeResponse(&obj->payload.handshake);
         case iTermMultiServerRPCTypeLaunch:
+            break;
+        case iTermMultiServerRPCTypeWait:
+            FreeWaitResponse(&obj->payload.wait);
             break;
         case iTermMultiServerRPCTypeReportChild:
             FreeReportChild(&obj->payload.reportChild);
@@ -306,4 +440,28 @@ void iTermMultiServerServerOriginatedMessageFree(iTermMultiServerServerOriginate
             break;
     }
     memset(obj, 0xCD, sizeof(*obj));
+}
+
+static ssize_t RecvMsg(int fd,
+                       iTermClientServerProtocolMessage *message) {
+    assert(message->valid == ITERM_MULTISERVER_MAGIC);
+
+    ssize_t n;
+    while (1) {
+        n = recvmsg(fd, &message->message, 0);
+    } while (n < 0 && errno == EINTR);
+
+    return n;
+}
+
+int iTermMultiServerRecv(int fd, iTermClientServerProtocolMessage *message) {
+    iTermClientServerProtocolMessageInitialize(message);
+
+    const ssize_t recvStatus = RecvMsg(fd, message);
+    if (recvStatus <= 0) {
+        iTermClientServerProtocolMessageFree(message);
+        return 1;
+    }
+
+    return 0;
 }

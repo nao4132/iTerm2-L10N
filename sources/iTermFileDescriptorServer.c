@@ -185,6 +185,7 @@ static int PerformAcceptActivity(int socketFd) {
     return SendFileDescriptorAndWait(connectionFd);
 }
 
+// CAREFUL! This is also used by the multi-server.
 int iTermFileDescriptorServerSocketBindListen(const char *path) {
     int socketFd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (socketFd == -1) {

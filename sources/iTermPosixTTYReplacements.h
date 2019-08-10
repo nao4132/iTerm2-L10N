@@ -44,3 +44,7 @@ void iTermExec(const char *argpath,
 
 void iTermSignalSafeWrite(int fd, const char *message);
 void iTermSignalSafeWriteInt(int fd, int n);
+
+// `orig` is an array of ints with file descriptor numbers that we wish to preserve. The first one
+// gets remapped to fd 0, the second one to fd 1, etc. `count` gives the length of the array.
+void iTermPosixMoveFileDescriptors(int *orig, int count);

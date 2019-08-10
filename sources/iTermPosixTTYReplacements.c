@@ -24,32 +24,20 @@
 
 const int kNumFileDescriptorsToDup = NUM_FILE_DESCRIPTORS_TO_PASS_TO_SERVER;
 
-// Like login_tty but makes fd 0 the master, fd 1 the slave, fd 2 an open unix-domain socket
-// for transferring file descriptors, and fd 3 the write end of a pipe that closes when the server
-// dies.
-// IMPORTANT: This runs between fork and exec. Careful what you do.
-static void iTermPosixTTYReplacementLoginTTY(int master,
-                                             int slave,
-                                             int serverSocketFd,
-                                             int deadMansPipeWriteEnd) {
-    setsid();
-    ioctl(slave, TIOCSCTTY, NULL);
-
+void iTermPosixMoveFileDescriptors(int *orig, int count) {
     // This array keeps track of which file descriptors are in use and should not be dup2()ed over.
     // It has |inuseCount| valid elements. inuse must have inuseCount + arraycount(orig) elements.
-    int inuse[3 * NUM_FILE_DESCRIPTORS_TO_PASS_TO_SERVER] = {
-        0, 1, 2, 3,  // FDs get duped to the lowest numbers so reserve them
-        master, slave, serverSocketFd, deadMansPipeWriteEnd,  // FDs to get duped, which mustn't be overwritten
-        -1, -1, -1, -1 };  // Space for temp values to ensure they don't get reused
-    int inuseCount = 2 * kNumFileDescriptorsToDup;
-
+    int inuse[count * 3];
+    for (int i = 0; i < count; i++) {
+        inuse[i] = i;
+        inuse[count * 1 + i] = orig[i];
+        inuse[count * 2 + i] = -1;
+    }
+    int inuseCount = 2 * count;
     // File descriptors get dup2()ed to temporary numbers first to avoid stepping on each other or
     // on any of the desired final values. Their temporary values go in here. The first is always
     // master, then slave, then server socket.
-    int temp[NUM_FILE_DESCRIPTORS_TO_PASS_TO_SERVER];
-
-    // The original file descriptors to renumber.
-    int orig[NUM_FILE_DESCRIPTORS_TO_PASS_TO_SERVER] = { master, slave, serverSocketFd, deadMansPipeWriteEnd };
+    int temp[count];
 
     for (int o = 0; o < sizeof(orig) / sizeof(*orig); o++) {  // iterate over orig
         int original = orig[o];
@@ -81,6 +69,21 @@ static void iTermPosixTTYReplacementLoginTTY(int master,
         dup2(temp[i], i);
         close(temp[i]);
     }
+}
+
+// Like login_tty but makes fd 0 the master, fd 1 the slave, fd 2 an open unix-domain socket
+// for transferring file descriptors, and fd 3 the write end of a pipe that closes when the server
+// dies.
+// IMPORTANT: This runs between fork and exec. Careful what you do.
+static void iTermPosixTTYReplacementLoginTTY(int master,
+                                             int slave,
+                                             int serverSocketFd,
+                                             int deadMansPipeWriteEnd) {
+    setsid();
+    ioctl(slave, TIOCSCTTY, NULL);
+
+    int orig[NUM_FILE_DESCRIPTORS_TO_PASS_TO_SERVER] = { master, slave, serverSocketFd, deadMansPipeWriteEnd };
+    iTermPosixMoveFileDescriptors(orig, NUM_FILE_DESCRIPTORS_TO_PASS_TO_SERVER);
 }
 
 int iTermPosixTTYReplacementForkPty(int *amaster,

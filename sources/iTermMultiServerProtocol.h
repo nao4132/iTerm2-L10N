@@ -7,8 +7,18 @@
 
 #import "iTermClientServerProtocol.h"
 
+enum {
+    iTermMultiServerProtocolVersionRejected = -1,
+    iTermMultiServerProtocolVersion1 = 1
+};
+
 typedef enum {
     iTermMultiServerTagType,
+
+    iTermMultiServerTagHandshakeRequestClientMaximumProtocolVersion,
+
+    iTermMultiServerTagHandshakeResponseProtocolVersion,
+    iTermMultiServerTagHandshakeResponseChildReportsNumChildren,
 
     iTermMultiServerTagLaunchRequestPath,
     iTermMultiServerTagLaunchRequestArgv,
@@ -18,6 +28,12 @@ typedef enum {
     iTermMultiServerTagLaunchRequestIsUTF8,
     iTermMultiServerTagLaunchRequestPwd,
     iTermMultiServerTagLaunchRequestUniqueId,
+
+    iTermMultiServerTagWaitRequestPid,
+
+    iTermMultiServerTagWaitResponsePid,
+    iTermMultiServerTagWaitResponseStatus,
+    iTermMultiServerTagWaitResponseErrno,
 
     iTermMultiServerTagLaunchResponseStatus,
     iTermMultiServerTagLaunchResponsePid,
@@ -29,11 +45,24 @@ typedef enum {
     iTermMultiServerTagReportChildEnv,
     iTermMultiServerTagReportChildPwd,
     iTermMultiServerTagReportChildIsUTF8,
+    iTermMultiServerTagReportChildTerminated,
 
     iTermMultiServerTagTerminationPid,
     iTermMultiServerTagTerminationStatus,
-
 } iTermMultiServerTagLaunch;
+
+typedef struct {
+    // iTermMultiServerTagHandshakeRequestClientMaximumProtocolVersion
+    int maximumProtocolVersion;
+} iTermMultiServerRequestHandshake;
+
+typedef struct {
+    // iTermMultiServerTagHandshakeResponseProtocolVersion
+    int protocolVersion;
+
+    // iTermMultiServerTagHandshakeResponseChildReportsNumChildren
+    int numChildren;
+} iTermMultiServerResponseHandshake;
 
 typedef struct {
     // iTermMultiServerTagLaunchRequestPath
@@ -75,6 +104,26 @@ typedef struct {
 } iTermMultiServerResponseLaunch;
 
 typedef struct {
+    // iTermMultiServerTagWaitRequestPid
+    pid_t pid;
+} iTermMultiServerRequestWait;
+
+typedef struct {
+    // iTermMultiServerTagWaitResponsePid
+    pid_t pid;
+
+    // iTermMultiServerTagWaitResponseStatus
+    // Meaningful only if errorNumber is 0. Gives exit status from waitpid().
+    int status;
+
+    // iTermMultiServerTagWaitResponseErrno
+    // 0: No error. Status is valid. Child has been removed.
+    // -1: No such child
+    // -2: Child not terminated
+    int errorNumber;
+} iTermMultiServerResponseWait;
+
+typedef struct iTermMultiServerReportChild {
     // iTermMultiServerTagReportChildIsLast
     int isLast;
 
@@ -97,35 +146,40 @@ typedef struct {
 
     // iTermMultiServerTagReportChildPwd
     char *pwd;
+
+    // iTermMultiServerTagReportChildTerminated
+    int terminated;  // you should send iTermMultiServerResponseWait
 } iTermMultiServerReportChild;
 
 typedef enum {
+    iTermMultiServerRPCTypeHandshake,  // Client-originated, has response
     iTermMultiServerRPCTypeLaunch,  // Client-originated, has response
+    iTermMultiServerRPCTypeWait,  // Client-originated, has response
     iTermMultiServerRPCTypeReportChild,  // Server-originated, no response.
     iTermMultiServerRPCTypeTermination  // Server-originated, no response.
 } iTermMultiServerRPCType;
 
+// You should send iTermMultiServerResponseWait after getting this.
 typedef struct {
     // iTermMultiServerTagTerminationPid
     pid_t pid;
-
-    // See stat_loc argument to wait(2).
-    // iTermMultiServerTagTerminationStatus
-    int status;
 } iTermMultiServerReportTermination;
-
 
 typedef struct {
     iTermMultiServerRPCType type;
     union {
+        iTermMultiServerRequestHandshake handshake;
         iTermMultiServerRequestLaunch launch;
+        iTermMultiServerRequestWait wait;
     } payload;
 } iTermMultiServerClientOriginatedMessage;
 
 typedef struct {
     iTermMultiServerRPCType type;
     union {
+        iTermMultiServerResponseHandshake handshake;
         iTermMultiServerResponseLaunch launch;
+        iTermMultiServerResponseWait wait;
         iTermMultiServerReportTermination termination;
         iTermMultiServerReportChild reportChild;
     } payload;
@@ -146,3 +200,6 @@ int iTermMultiServerProtocolEncodeMessageFromServer(iTermMultiServerServerOrigin
 void iTermMultiServerClientOriginatedMessageFree(iTermMultiServerClientOriginatedMessage *obj);
 void iTermMultiServerServerOriginatedMessageFree(iTermMultiServerServerOriginatedMessage *obj);
 
+// Reads a message from the file descriptor. Returns 0 on success. When successful, the message
+// must be freed by the caller with iTermClientServerProtocolMessageFree().
+int iTermMultiServerRecv(int fd, iTermClientServerProtocolMessage *message);

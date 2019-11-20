@@ -380,8 +380,8 @@ done:
                              gridSize:(VT100GridSize)gridSize
                                  utf8:(BOOL)utf8
                                   pwd:(NSString *)pwd
-                           completion:(void (^)(pid_t pid, NSError * _Nullable))completion {
-
+                           completion:(void (^)(iTermFileDescriptorMultiClientChild *child, NSError * _Nullable))completion {
+#warning TODO
 }
 
 - (void)waitForChild:(iTermFileDescriptorMultiClientChild *)child
@@ -419,7 +419,7 @@ done:
         [self dispatch:message];
         dispatch_async(dispatch_get_main_queue(), ^{
             [self readLoop];
-        })
+        });
     }];
     if (!ok) {
         [self close];

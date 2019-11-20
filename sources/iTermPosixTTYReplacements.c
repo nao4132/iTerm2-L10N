@@ -5,7 +5,7 @@
 //  Created by George Nachman on 7/25/19.
 //
 
-#include "iTermPosixTTYReplacements.h"
+#import "iTermPosixTTYReplacements.h"
 #import "iTermFileDescriptorServer.h"
 #import "iTermResourceLimitsHelper.h"
 #import "shell_launcher.h"
@@ -39,7 +39,7 @@ void iTermPosixMoveFileDescriptors(int *orig, int count) {
     // master, then slave, then server socket.
     int temp[count];
 
-    for (int o = 0; o < sizeof(orig) / sizeof(*orig); o++) {  // iterate over orig
+    for (int o = 0; o < count; o++) {  // iterate over orig
         int original = orig[o];
 
         // Try to find a candidate file descriptor that is not important to us (i.e., does not belong
@@ -65,7 +65,7 @@ void iTermPosixMoveFileDescriptors(int *orig, int count) {
 
     // Dup the temp values to their desired values (which happens to equal the index in temp).
     // Close the temp file descriptors.
-    for (int i = 0; i < sizeof(orig) / sizeof(*orig); i++) {
+    for (int i = 0; i < count; i++) {
         dup2(temp[i], i);
         close(temp[i]);
     }
@@ -120,50 +120,6 @@ int iTermPosixTTYReplacementForkPty(int *amaster,
             close(deadMansPipeWriteEnd);
             return pid;
     }
-}
-
-void iTermTTYStateInitialize(iTermTTYState *ttyState,
-                             int width,
-                             int height,
-                             int isUTF8) {
-    struct termios *term = &ttyState->term;
-    struct winsize *win = &ttyState->win;
-
-    memset(term, 0, sizeof(struct termios));
-    memset(win, 0, sizeof(struct winsize));
-
-    // UTF-8 input will be added on demand.
-    term->c_iflag = ICRNL | IXON | IXANY | IMAXBEL | BRKINT | (isUTF8 ? IUTF8 : 0);
-    term->c_oflag = OPOST | ONLCR;
-    term->c_cflag = CREAD | CS8 | HUPCL;
-    term->c_lflag = ICANON | ISIG | IEXTEN | ECHO | ECHOE | ECHOK | ECHOKE | ECHOCTL;
-
-    term->c_cc[VEOF] = CTRLKEY('D');
-    term->c_cc[VEOL] = -1;
-    term->c_cc[VEOL2] = -1;
-    term->c_cc[VERASE] = 0x7f;           // DEL
-    term->c_cc[VWERASE] = CTRLKEY('W');
-    term->c_cc[VKILL] = CTRLKEY('U');
-    term->c_cc[VREPRINT] = CTRLKEY('R');
-    term->c_cc[VINTR] = CTRLKEY('C');
-    term->c_cc[VQUIT] = 0x1c;           // Control+backslash
-    term->c_cc[VSUSP] = CTRLKEY('Z');
-    term->c_cc[VDSUSP] = CTRLKEY('Y');
-    term->c_cc[VSTART] = CTRLKEY('Q');
-    term->c_cc[VSTOP] = CTRLKEY('S');
-    term->c_cc[VLNEXT] = CTRLKEY('V');
-    term->c_cc[VDISCARD] = CTRLKEY('O');
-    term->c_cc[VMIN] = 1;
-    term->c_cc[VTIME] = 0;
-    term->c_cc[VSTATUS] = CTRLKEY('T');
-
-    term->c_ispeed = B38400;
-    term->c_ospeed = B38400;
-
-    win->ws_row = height;
-    win->ws_col = width;
-    win->ws_xpixel = 0;
-    win->ws_ypixel = 0;
 }
 
 void iTermExec(const char *argpath,

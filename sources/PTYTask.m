@@ -37,8 +37,6 @@
 #include <unistd.h>
 #include <util.h>
 
-NSString *kCoprocessStatusChangeNotification = @"kCoprocessStatusChangeNotification";
-
 static void HandleSigChld(int n) {
     // This is safe to do because write(2) is listed in the sigaction(2) man page
     // as allowed in a signal handler. Calling a method is *NOT* safe since something might
@@ -359,9 +357,8 @@ static void HandleSigChld(int n) {
         return;
     }
 
-    NSSize safeViewSize = iTermTTYClampWindowSize(viewSize);
-    _desiredSize.gridSize = size;
-    _desiredSize.viewSize = safeViewSize;
+    _desiredSize.cellSize = iTermTTYCellSizeMake(size.width, size.height);
+    _desiredSize.pixelSize = iTermTTYPixelSizeMake(viewSize.width, viewSize.height);
 
     [self rateLimitedSetSizeToDesiredSize];
 }
@@ -654,7 +651,10 @@ static void HandleSigChld(int n) {
          progpath, args, env,VT100GridSizeDescription(gridSize), NSStringFromSize(viewSize), @(isUTF8), @(synchronous));
 
     iTermTTYState ttyState;
-    iTermTTYStateInit(&ttyState, gridSize, viewSize, isUTF8);
+    iTermTTYStateInit(&ttyState,
+                      iTermTTYCellSizeMake(gridSize.width, gridSize.height),
+                      iTermTTYPixelSizeMake(viewSize.width, viewSize.height),
+                      isUTF8);
 
     [self setCommand:progpath];
     if (customShell) {
@@ -806,7 +806,12 @@ static void HandleSigChld(int n) {
 }
 
 - (void)setTerminalSizeToDesiredSize {
-    DLog(@"Set size of %@ to %@ cells, %@ px", _delegate, VT100GridSizeDescription(_desiredSize.gridSize), NSStringFromSize(_desiredSize.viewSize));
+    DLog(@"Set size of %@ to %@x%@ cells, %@x%@ px",
+         _delegate,
+         @(_desiredSize.cellSize.width),
+         @(_desiredSize.cellSize.height),
+         @(_desiredSize.pixelSize.width),
+         @(_desiredSize.pixelSize.height));
     _timeOfLastSizeChange = [NSDate timeIntervalSinceReferenceDate];
 
     iTermSetTerminalSize(self.fd, _desiredSize);

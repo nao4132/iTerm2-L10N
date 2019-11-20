@@ -103,7 +103,11 @@ static int Launch(const iTermMultiServerRequestLaunch *launch,
                   iTermForkState *forkState,
                   int *errorPtr) {
     iTermTTYState ttyState;
-    iTermTTYStateInitialize(&ttyState, launch->width, launch->height, launch->isUTF8);
+#warning TODO: Pass pixel size
+    iTermTTYStateInit(&ttyState,
+                      VT100GridSizeMake(launch->width, launch->height),
+                      VT100GridSizeMake(0, 0),
+                      launch->isUTF8);
     int fd;
     forkState->numFileDescriptorsToPreserve = 3;
     forkState->pid = forkpty(&fd, ttyState.tty, &ttyState.term, &ttyState.win);

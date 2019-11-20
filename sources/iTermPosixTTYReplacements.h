@@ -5,16 +5,12 @@
 //  Created by George Nachman on 7/25/19.
 //
 
+#import "iTermTTYState.h"
+
 #include <limits.h>
 #include <termios.h>
 
 extern const int kNumFileDescriptorsToDup;
-
-typedef struct {
-    struct termios term;
-    struct winsize win;
-    char tty[PATH_MAX];
-} iTermTTYState;
 
 typedef struct {
     pid_t pid;
@@ -22,11 +18,6 @@ typedef struct {
     int deadMansPipe[2];
     int numFileDescriptorsToPreserve;
 } iTermForkState;
-
-void iTermTTYStateInitialize(iTermTTYState *ttyState,
-                             int width,
-                             int height,
-                             int isUTF8);
 
 // Just like forkpty but fd 0 the master and fd 1 the slave.
 int iTermPosixTTYReplacementForkPty(int *amaster,

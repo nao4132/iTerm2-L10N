@@ -12,13 +12,6 @@
 
 #include <util.h>
 
-typedef struct {
-    pid_t pid;
-    int connectionFd;
-    int deadMansPipe[2];
-    int numFileDescriptorsToPreserve;
-} iTermForkState;
-
 int iTermForkAndExecToRunJobInServer(iTermForkState *forkState,
                                      iTermTTYState *ttyState,
                                      NSString *tempPath,

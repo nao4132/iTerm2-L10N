@@ -172,7 +172,11 @@
 
         // Connect this task to the server's PIDs and file descriptor.
         DLog(@"attaching...");
-        [self attachToServer:serverConnection task:task];
+        iTermGeneralServerConnection general = {
+            .type = iTermGeneralServerConnectionTypeMono,
+            .mono = serverConnection
+        };
+        [self attachToServer:general task:task];
         DLog(@"attached. Set nonblocking");
         self.tty = [NSString stringWithUTF8String:ttyState.tty];
         fcntl(_fd, F_SETFL, O_NONBLOCK);
@@ -186,20 +190,22 @@
     }
 }
 
-- (void)attachToServer:(iTermFileDescriptorServerConnection)serverConnection
+- (void)attachToServer:(iTermGeneralServerConnection)serverConnection
                   task:(id<iTermTask>)task {
+    assert(serverConnection.type == iTermGeneralServerConnectionTypeMono);
+
     assert([iTermAdvancedSettingsModel runJobsInServers]);
-    _fd = serverConnection.ptyMasterFd;
-    _serverPid = serverConnection.serverPid;
-    _serverChildPid = serverConnection.childPid;
+    _fd = serverConnection.mono.ptyMasterFd;
+    _serverPid = serverConnection.mono.serverPid;
+    _serverChildPid = serverConnection.mono.childPid;
     if (_serverChildPid > 0) {
         [[iTermProcessCache sharedInstance] registerTrackedPID:_serverChildPid];
     }
-    _socketFd = serverConnection.socketFd;
+    _socketFd = serverConnection.mono.socketFd;
     [[TaskNotifier sharedInstance] registerTask:task];
 }
 
-- (void)attachToServer:(iTermFileDescriptorServerConnection)serverConnection
+- (void)attachToServer:(iTermGeneralServerConnection)serverConnection
          withProcessID:(NSNumber *)pidNumber
                   task:(id<iTermTask>)task {
     [self attachToServer:serverConnection task:task];

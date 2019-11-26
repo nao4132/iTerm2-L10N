@@ -31,6 +31,8 @@ typedef NS_ENUM(NSUInteger, iTermFileDescriptorMultiClientErrorCode) {
 @property (nonatomic, readonly) BOOL hasTerminated;
 @property (nonatomic, readonly) BOOL haveWaited;
 @property (nonatomic, readonly) int terminationStatus;  // only defined if haveWaited is YES
+@property (nonatomic, readonly) int fd;
+@property (nonatomic, readonly) NSString *tty;
 @end
 
 @protocol iTermFileDescriptorMultiClientDelegate<NSObject>
@@ -54,14 +56,14 @@ typedef NS_ENUM(NSUInteger, iTermFileDescriptorMultiClientErrorCode) {
 
 // Returns YES on success or NO if it failed to create a socket (out of file descriptors maybe?)
 - (BOOL)attachOrLaunchServer;
+- (BOOL)attach;
 
-- (void)launchChildWithExecutablePath:(NSString *)path
-                                 argv:(NSArray<NSString *> *)argv
-                          environment:(NSDictionary<NSString *, NSString *> *)environment
-                             gridSize:(VT100GridSize)gridSize
-                                 utf8:(BOOL)utf8
-                                  pwd:(NSString *)pwd
-                           completion:(void (^)(iTermFileDescriptorMultiClientChild *, NSError * _Nullable))completion;
+- (void)launchChildWithExecutablePath:(const char *)path
+                                 argv:(const char **)argv
+                          environment:(char **)environment
+                                  pwd:(const char *)pwd
+                             ttyState:(iTermTTYState *)ttyStatePtr
+                           completion:(void (^)(iTermFileDescriptorMultiClientChild *child, NSError * _Nullable))completion;
 
 - (void)waitForChild:(iTermFileDescriptorMultiClientChild *)child
           completion:(void (^)(int status, NSError * _Nullable))completion;

@@ -29,6 +29,7 @@ typedef struct {
     int terminated;  // Nonzero if process is terminated and wait()ed on.
     int masterFd;  // Valid only if not terminated is false.
     int status;  // Only valid if terminated. Gives status from wait.
+    const char *tty;
 } iTermMultiServerChild;
 
 static iTermMultiServerChild *children;
@@ -45,6 +46,7 @@ static void SigChildHandler(int arg) {
 
 static void AddChild(const iTermMultiServerRequestLaunch *launch,
                      int masterFd,
+                     const char *tty,
                      const iTermForkState *forkState) {
     if (!children) {
         children = malloc(sizeof(iTermMultiServerChild));
@@ -77,6 +79,15 @@ static void AddChild(const iTermMultiServerRequestLaunch *launch,
     children[i].pid = forkState->pid;
     children[i].terminated = 0;
     children[i].status = 0;
+    children[i].tty = strdup(tty);
+}
+
+static void FreeChild(int i) {
+    assert(i >= 0);
+    assert(i < numberOfChildren);
+    iTermMultiServerChild *child = &children[i];
+    free(child->tty);
+    child->tty = NULL;
 }
 
 static void RemoveChild(int i) {
@@ -87,6 +98,7 @@ static void RemoveChild(int i) {
         free(children);
         children = NULL;
     } else {
+        FreeChild(i);
         const int afterCount = numberOfChildren - i - 1;
         memmove(children + i,
                 children + i + 1,
@@ -101,16 +113,16 @@ static void RemoveChild(int i) {
 
 static int Launch(const iTermMultiServerRequestLaunch *launch,
                   iTermForkState *forkState,
+                  iTermTTYState *ttyStatePtr,
                   int *errorPtr) {
-    iTermTTYState ttyState;
 #warning TODO: Pass pixel size
-    iTermTTYStateInit(&ttyState,
+    iTermTTYStateInit(ttyStatePtr,
                       VT100GridSizeMake(launch->width, launch->height),
                       VT100GridSizeMake(0, 0),
                       launch->isUTF8);
     int fd;
     forkState->numFileDescriptorsToPreserve = 3;
-    forkState->pid = forkpty(&fd, ttyState.tty, &ttyState.term, &ttyState.win);
+    forkState->pid = forkpty(&fd, ttyStatePtr->tty, &ttyStatePtr->term, &ttyStatePtr->win);
     if (forkState->pid == (pid_t)0) {
         // Child
         iTermExec(launch->path,
@@ -164,11 +176,12 @@ static int HandleLaunchRequest(int fd, const iTermMultiServerRequestLaunch *laun
         .connectionFd = -1,
         .deadMansPipe = { 0, 0 },
     };
-    int masterFd = Launch(launch, &forkState, &error);
+    iTermTTYState ttyState = { 0 };
+    int masterFd = Launch(launch, &forkState, &ttyState, &error);
     if (masterFd < 0) {
         return SendLaunchResponse(fd, -1, 0, -1);
     } else {
-        AddChild(launch, masterFd, &forkState);
+        AddChild(launch, masterFd, ttyState.tty, &forkState);
         return SendLaunchResponse(fd, 0, forkState.pid, masterFd);
     }
 }
@@ -210,7 +223,8 @@ static void PopulateReportChild(const iTermMultiServerChild *child, int isLast, 
         .envp = child->messageWithLaunchRequest.payload.launch.envp,
         .envc = child->messageWithLaunchRequest.payload.launch.envc,
         .isUTF8 = child->messageWithLaunchRequest.payload.launch.isUTF8,
-        .pwd = child->messageWithLaunchRequest.payload.launch.pwd
+        .pwd = child->messageWithLaunchRequest.payload.launch.pwd,
+        .tty = child->tty
     };
     *out = temp;
 }
@@ -288,6 +302,7 @@ static int HandleHandshake(int fd, iTermMultiServerRequestHandshake *handshake) 
             .handshake = {
                 .protocolVersion = iTermMultiServerProtocolVersion1,
                 .numChildren = numberOfChildren,
+                .pid = getpid()
             }
         }
     };

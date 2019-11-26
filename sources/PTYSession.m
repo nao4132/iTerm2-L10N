@@ -1682,7 +1682,7 @@ ITERM_WEAKLY_REFERENCEABLE
     }
 }
 
-- (void)attachToServer:(iTermFileDescriptorServerConnection)serverConnection {
+- (void)attachToServer:(iTermGeneralServerConnection)serverConnection {
     if ([iTermAdvancedSettingsModel runJobsInServers]) {
         DLog(@"Attaching to a server...");
         [_shell attachToServer:serverConnection];

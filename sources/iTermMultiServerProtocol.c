@@ -36,6 +36,9 @@ static int ParseHandshakeResponse(iTermClientServerProtocolMessageParser *parser
     if (iTermClientServerProtocolParseTaggedInt(parser, &out->numChildren, sizeof(out->numChildren), iTermMultiServerTagHandshakeResponseChildReportsNumChildren)) {
         return -1;
     }
+    if (iTermClientServerProtocolParseTaggedInt(parser, &out->pid, sizeof(out->pid), iTermMultiServerTagHandshakeResponseProcessID)) {
+        return -1;
+    }
     if (out->numChildren < 0 || out->numChildren > 1024) {
         return -1;
     }
@@ -48,6 +51,9 @@ static int EncodeHandshakeResponse(iTermClientServerProtocolMessageEncoder *enco
         return -1;
     }
     if (iTermClientServerProtocolEncodeTaggedInt(encoder, &handshake->numChildren, sizeof(handshake->numChildren), iTermMultiServerTagHandshakeResponseChildReportsNumChildren)) {
+        return -1;
+    }
+    if (iTermClientServerProtocolEncodeTaggedInt(encoder, &handshake->pid, sizeof(handshake->pid), iTermMultiServerTagHandshakeResponseProcessID)) {
         return -1;
     }
     return 0;
@@ -203,6 +209,9 @@ static int ParseReportChild(iTermClientServerProtocolMessageParser *parser,
     if (iTermClientServerProtocolParseTaggedInt(parser, &out->terminated, sizeof(out->terminated), iTermMultiServerTagReportChildTerminated)) {
         return -1;
     }
+    if (iTermClientServerProtocolParseTaggedString(parser, &out->tty, iTermMultiServerTagReportChildTTY)) {
+        return -1;
+    }
     return 0;
 }
 
@@ -230,6 +239,9 @@ static int EncodeReportChild(iTermClientServerProtocolMessageEncoder *encoder,
         return -1;
     }
     if (iTermClientServerProtocolEncodeTaggedInt(encoder, &obj->terminated, sizeof(obj->terminated), iTermMultiServerTagReportChildTerminated)) {
+        return -1;
+    }
+    if (iTermClientServerProtocolEncodeTaggedString(encoder, obj->tty, iTermMultiServerTagReportChildTTY)) {
         return -1;
     }
     return 0;
@@ -278,6 +290,25 @@ int iTermMultiServerProtocolParseMessageFromClient(iTermClientServerProtocolMess
     return -1;
 }
 
+static int GetFileDescriptor(iTermClientServerProtocolMessage *message,
+                             int *receivedFileDescriptorPtr) {
+    struct cmsghdr *messageHeader = CMSG_FIRSTHDR(&message->message);
+    if (messageHeader == NULL) {
+        return -1;
+    }
+    if (messageHeader->cmsg_len != CMSG_LEN(sizeof(int))) {
+        return -1;
+    }
+    if (messageHeader->cmsg_level != SOL_SOCKET) {
+        return -1;
+    }
+    if (messageHeader->cmsg_type != SCM_RIGHTS) {
+        return -1;
+    }
+    *receivedFileDescriptorPtr = *((int *)CMSG_DATA(messageHeader));
+    return 0;
+}
+
 int iTermMultiServerProtocolParseMessageFromServer(iTermClientServerProtocolMessage *message,
                                                    iTermMultiServerServerOriginatedMessage *out) {
     iTermClientServerProtocolMessageParser parser = {
@@ -293,10 +324,22 @@ int iTermMultiServerProtocolParseMessageFromServer(iTermClientServerProtocolMess
             return ParseHandshakeResponse(&parser, &out->payload.handshake);
 
         case iTermMultiServerRPCTypeLaunch:  // Server-originated response to client-originated request
-            return ParseLaunchResponse(&parser, &out->payload.launch);
+            if (ParseLaunchResponse(&parser, &out->payload.launch)) {
+                return -1;
+            }
+            if (GetFileDescriptor(message, &out->payload.launch.fd)) {
+                return -1;
+            }
+            return 0;
 
         case iTermMultiServerRPCTypeReportChild:  // Server-originated, no response.
-            return ParseReportChild(&parser, &out->payload.reportChild);
+            if (ParseReportChild(&parser, &out->payload.reportChild)) {
+                return -1;
+            }
+            if (GetFileDescriptor(message, &out->payload.reportChild.fd)) {
+                return -1;
+            }
+            return 0;
 
         case iTermMultiServerRPCTypeWait:
             return ParseWaitResponse(&parser, &out->payload.wait);

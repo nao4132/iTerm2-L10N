@@ -486,7 +486,21 @@ static void HandleSigChld(int n) {
                                                  waitUntilDone:NO];
 }
 
-- (void)attachToServer:(iTermFileDescriptorServerConnection)serverConnection {
+- (void)logData:(const char *)buffer length:(int)length {
+    @synchronized(self) {
+        if ([self logging]) {
+            @try {
+                [_logHandle writeData:[NSData dataWithBytes:buffer
+                                                     length:length]];
+            } @catch (NSException *exception) {
+                DLog(@"Exception while logging %@ bytes of data: %@", @(length), exception);
+                [self stopLogging];
+            }
+        }
+    }
+}
+
+- (void)attachToServer:(iTermGeneralServerConnection)serverConnection {
     [_jobManager attachToServer:serverConnection withProcessID:nil task:self];
 }
 
@@ -508,7 +522,11 @@ static void HandleSigChld(int n) {
         return NO;
     } else {
         DLog(@"Succeeded.");
-        [_jobManager attachToServer:serverConnection withProcessID:@(thePid) task:self];
+        iTermGeneralServerConnection general = {
+            .type = iTermGeneralServerConnectionTypeMono,
+            .mono = serverConnection
+        };
+        [_jobManager attachToServer:general withProcessID:@(thePid) task:self];
         [self setTty:tty];
         return YES;
     }

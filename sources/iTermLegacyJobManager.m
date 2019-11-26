@@ -88,7 +88,7 @@
     completion(iTermJobManagerForkAndExecStatusSuccess);
 }
 
-- (void)attachToServer:(iTermFileDescriptorServerConnection)serverConnection
+- (void)attachToServer:(iTermGeneralServerConnection)serverConnection
          withProcessID:(NSNumber *)thePid
                   task:(id<iTermTask>)task {
 

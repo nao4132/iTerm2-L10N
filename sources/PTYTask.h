@@ -48,6 +48,22 @@ typedef NS_ENUM(NSUInteger, iTermJobManagerKillingMode) {
     iTermJobManagerKillingModeBrokenPipe,         // Removes unix domain socket and file descriptor for it. Ensures server is waitpid()ed on. This does not directly kill the child process.
 };
 
+typedef struct {
+    pid_t pid;
+    int number;
+} iTermFileDescriptorMultiServerProcess;
+
+typedef struct {
+    enum {
+        iTermGeneralServerConnectionTypeMono,
+        iTermGeneralServerConnectionTypeMulti
+    } type;
+    union {
+        iTermFileDescriptorServerConnection mono;
+        iTermFileDescriptorMultiServerProcess multi;
+    };
+} iTermGeneralServerConnection;
+
 @protocol iTermJobManager<NSObject>
 
 @property (nonatomic) int fd;
@@ -67,7 +83,7 @@ typedef NS_ENUM(NSUInteger, iTermJobManagerKillingMode) {
                            task:(id<iTermTask>)task
                      completion:(void (^)(iTermJobManagerForkAndExecStatus))completion;
 
-- (void)attachToServer:(iTermFileDescriptorServerConnection)serverConnection
+- (void)attachToServer:(iTermGeneralServerConnection)serverConnection
          withProcessID:(NSNumber *)thePid
                   task:(id<iTermTask>)task;
 
@@ -148,7 +164,7 @@ typedef NS_ENUM(NSUInteger, iTermJobManagerKillingMode) {
 // Wire up the server as the task's file descriptor and process. The caller
 // will have connected to the server to get this info. Requires
 // [iTermAdvancedSettingsModel runJobsInServers].
-- (void)attachToServer:(iTermFileDescriptorServerConnection)serverConnection;
+- (void)attachToServer:(iTermGeneralServerConnection)serverConnection;
 
 - (void)killWithMode:(iTermJobManagerKillingMode)mode;
 

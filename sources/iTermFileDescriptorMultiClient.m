@@ -54,6 +54,8 @@ NSString *const iTermFileDescriptorMultiClientErrorDomain = @"iTermFileDescripto
         _utf8 = report->isUTF8;
         _initialDirectory = [[NSString alloc] initWithUTF8String:report->pwd];
         _hasTerminated = report->terminated;
+        _fd = report->fd;
+        _tty = [NSString stringWithUTF8String:report->tty] ?: @"";
         _haveWaited = NO;
     }
     return self;
@@ -113,6 +115,10 @@ NSString *const iTermFileDescriptorMultiClientErrorDomain = @"iTermFileDescripto
         [self close];
     }
     return ok;
+}
+
+- (BOOL)attach {
+    return [self tryAttach] == iTermFileDescriptorMultiClientAttachStatusSuccess;
 }
 
 - (void)close {
@@ -374,13 +380,12 @@ done:
     return YES;
 }
 
-- (void)launchChildWithExecutablePath:(NSString *)path
-                                 argv:(NSArray<NSString *> *)argv
-                          environment:(NSDictionary<NSString *, NSString *> *)environment
-                             gridSize:(VT100GridSize)gridSize
-                                 utf8:(BOOL)utf8
-                                  pwd:(NSString *)pwd
-                           completion:(void (^)(iTermFileDescriptorMultiClientChild *child, NSError * _Nullable))completion {
+- (void)launchChildWithExecutablePath:(const char *)path
+                                 argv:(const char **)argv
+                          environment:(char **)environment
+                                  pwd:(const char *)pwd
+                             ttyState:(id)ttyStatePtr
+                           completion:(void (^)(iTermFileDescriptorMultiClientChild * _Nonnull, NSError * _Nullable))completion {
 #warning TODO
 }
 

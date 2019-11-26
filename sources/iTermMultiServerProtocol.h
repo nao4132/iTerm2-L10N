@@ -19,6 +19,7 @@ typedef enum {
 
     iTermMultiServerTagHandshakeResponseProtocolVersion,
     iTermMultiServerTagHandshakeResponseChildReportsNumChildren,
+    iTermMultiServerTagHandshakeResponseProcessID,
 
     iTermMultiServerTagLaunchRequestPath,
     iTermMultiServerTagLaunchRequestArgv,
@@ -46,6 +47,7 @@ typedef enum {
     iTermMultiServerTagReportChildPwd,
     iTermMultiServerTagReportChildIsUTF8,
     iTermMultiServerTagReportChildTerminated,
+    iTermMultiServerTagReportChildTTY,
 
     iTermMultiServerTagTerminationPid,
     iTermMultiServerTagTerminationStatus,
@@ -62,6 +64,9 @@ typedef struct {
 
     // iTermMultiServerTagHandshakeResponseChildReportsNumChildren
     int numChildren;
+
+    // iTermMultiServerTagHandshakeResponseProcessID
+    int pid;
 } iTermMultiServerResponseHandshake;
 
 typedef struct {
@@ -101,6 +106,9 @@ typedef struct {
     // Only defined if status is 0.
     // iTermMultiServerTagLaunchResponsePid
     pid_t pid;
+
+    // File descriptor. Passed out of band.
+    int fd;
 } iTermMultiServerResponseLaunch;
 
 typedef struct {
@@ -149,6 +157,12 @@ typedef struct iTermMultiServerReportChild {
 
     // iTermMultiServerTagReportChildTerminated
     int terminated;  // you should send iTermMultiServerResponseWait
+
+    // iTermMultiServerTagReportChildTTY
+    char *tty;
+
+    // Sent out-of-band
+    int fd;
 } iTermMultiServerReportChild;
 
 typedef enum {

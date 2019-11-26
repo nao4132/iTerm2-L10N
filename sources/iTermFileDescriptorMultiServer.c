@@ -138,7 +138,7 @@ static int Launch(const iTermMultiServerRequestLaunch *launch,
     return fd;
 }
 
-static int SendLaunchResponse(int fd, int status, pid_t pid, int masterFd) {
+static int SendLaunchResponse(int fd, int status, pid_t pid, int masterFd, long long uniqueId) {
     iTermClientServerProtocolMessage obj;
     iTermClientServerProtocolMessageInitialize(&obj);
 
@@ -147,7 +147,8 @@ static int SendLaunchResponse(int fd, int status, pid_t pid, int masterFd) {
         .payload = {
             .launch = {
                 .status = status,
-                .pid = pid
+                .pid = pid,
+                .uniqueId = uniqueId
             }
         }
     };
@@ -179,10 +180,10 @@ static int HandleLaunchRequest(int fd, const iTermMultiServerRequestLaunch *laun
     iTermTTYState ttyState = { 0 };
     int masterFd = Launch(launch, &forkState, &ttyState, &error);
     if (masterFd < 0) {
-        return SendLaunchResponse(fd, -1, 0, -1);
+        return SendLaunchResponse(fd, -1, 0, -1, launch->uniqueId);
     } else {
         AddChild(launch, masterFd, ttyState.tty, &forkState);
-        return SendLaunchResponse(fd, 0, forkState.pid, masterFd);
+        return SendLaunchResponse(fd, 0, forkState.pid, ttyState.tty, masterFd);
     }
 }
 

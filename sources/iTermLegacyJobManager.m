@@ -53,7 +53,7 @@
                         argpath:(const char *)argpath
                            argv:(const char **)argv
                      initialPwd:(const char *)initialPwd
-                     newEnviron:(char **)newEnviron
+                     newEnviron:(const char **)newEnviron
                     synchronous:(BOOL)synchronous
                            task:(id<iTermTask>)task
                      completion:(void (^)(iTermJobManagerForkAndExecStatus))completion {

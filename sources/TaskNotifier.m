@@ -84,6 +84,26 @@ static int unblockPipeW;
     [super dealloc];
 }
 
+#warning TODO: This probably has a lot of race conditions and bugs!
+- (void)pipeDidBreakForExternalProcessID:(pid_t)pid status:(int)status {
+    assert(pid >= 0);
+    [tasksLock lock];
+    const NSInteger i = [_tasks indexOfObjectPassingTest:^BOOL(id<iTermTask>  _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+        return obj.pid == pid;
+    }];
+    if (i == NSNotFound) {
+        [tasksLock unlock];
+        return;
+    }
+    id<iTermTask> task = [[_tasks[i] retain] autorelease];
+    [_tasks removeObjectAtIndex:i];
+#warning TODO: Is this right? I don't understand why it's set to NO in the various places that is done.
+    tasksChanged = YES;
+    [tasksLock unlock];
+
+    [task brokenPipe];
+}
+
 - (void)registerTask:(id<iTermTask>)task {
     PtyTaskDebugLog(@"registerTask: lock\n");
     [tasksLock lock];

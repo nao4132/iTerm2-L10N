@@ -7,6 +7,7 @@
 
 #import <Foundation/Foundation.h>
 #import "iTermMultiServerProtocol.h"
+#import "iTermTTYState.h"
 #import "VT100GridTypes.h"
 
 NS_ASSUME_NONNULL_BEGIN
@@ -60,10 +61,10 @@ typedef NS_ENUM(NSUInteger, iTermFileDescriptorMultiClientErrorCode) {
 
 - (void)launchChildWithExecutablePath:(const char *)path
                                  argv:(const char **)argv
-                          environment:(char **)environment
+                          environment:(const char **)environment
                                   pwd:(const char *)pwd
                              ttyState:(iTermTTYState *)ttyStatePtr
-                           completion:(void (^)(iTermFileDescriptorMultiClientChild *child, NSError * _Nullable))completion;
+                           completion:(void (^)(iTermFileDescriptorMultiClientChild * _Nullable child, NSError * _Nullable))completion;
 
 - (void)waitForChild:(iTermFileDescriptorMultiClientChild *)child
           completion:(void (^)(int status, NSError * _Nullable))completion;

@@ -111,27 +111,30 @@
                                                  command:nil
                                                    block:
          ^PTYSession *(Profile *profile, PseudoTerminal *term) {
-             iTermFileDescriptorServerConnection theServerConnection = serverConnection;
-             PTYSession *session = [[term.sessionFactory newSessionWithProfile:defaultProfile] autorelease];
-             [term addSessionInNewTab:session];
-             const BOOL ok = [term.sessionFactory attachOrLaunchCommandInSession:session
-                                                                       canPrompt:NO
-                                                                      objectType:iTermWindowObject
-                                                                serverConnection:&theServerConnection
-                                                                       urlString:nil
-                                                                    allowURLSubs:NO
-                                                                     environment:@{}
-                                                                     customShell:[ITAddressBookMgr customShellForProfile:defaultProfile]
-                                                                          oldCWD:nil
-                                                                  forceUseOldCWD:NO
-                                                                         command:nil
-                                                                          isUTF8:nil
-                                                                   substitutions:nil
-                                                                windowController:term
-                                                                     synchronous:NO
-                                                                      completion:nil];
-             return ok ? session : nil;
-         }
+            iTermGeneralServerConnection generalConnection = {
+                .type = iTermGeneralServerConnectionTypeMono,
+                .mono = serverConnection
+            };
+            PTYSession *session = [[term.sessionFactory newSessionWithProfile:defaultProfile] autorelease];
+            [term addSessionInNewTab:session];
+            const BOOL ok = [term.sessionFactory attachOrLaunchCommandInSession:session
+                                                                      canPrompt:NO
+                                                                     objectType:iTermWindowObject
+                                                               serverConnection:&generalConnection
+                                                                      urlString:nil
+                                                                   allowURLSubs:NO
+                                                                    environment:@{}
+                                                                    customShell:[ITAddressBookMgr customShellForProfile:defaultProfile]
+                                                                         oldCWD:nil
+                                                                 forceUseOldCWD:NO
+                                                                        command:nil
+                                                                         isUTF8:nil
+                                                                  substitutions:nil
+                                                               windowController:term
+                                                                    synchronous:NO
+                                                                     completion:nil];
+            return ok ? session : nil;
+        }
                                              synchronous:NO
                                               completion:nil];
     NSLog(@"restored an orphan");

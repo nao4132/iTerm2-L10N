@@ -9,6 +9,7 @@
 
 #import "DebugLogging.h"
 #import "iTermFileDescriptorMultiClient.h"
+#import "iTermNotificationCenter.h"
 #import "iTermProcessCache.h"
 #import "NSArray+iTerm.h"
 #import "NSFileManager+iTerm.h"
@@ -24,7 +25,7 @@
                    argpath:(const char *)argpath
                       argv:(const char **)argv
                 initialPwd:(const char *)initialPwd
-                newEnviron:(char **)newEnviron
+                newEnviron:(const char **)newEnviron
                 completion:(void (^)(iTermFileDescriptorMultiClientChild *child))completion;
 
 @end
@@ -101,7 +102,7 @@
                    argpath:(const char *)argpath
                       argv:(const char **)argv
                 initialPwd:(const char *)initialPwd
-                newEnviron:(char **)newEnviron
+                newEnviron:(const char **)newEnviron
                 completion:(void (^)(iTermFileDescriptorMultiClientChild *child))completion {
     [_client launchChildWithExecutablePath:argpath
                                       argv:argv
@@ -140,7 +141,8 @@
 
 - (void)fileDescriptorMultiClient:(iTermFileDescriptorMultiClient *)client
                 childDidTerminate:(iTermFileDescriptorMultiClientChild *)child {
-#warning todo
+    [[iTermMultiServerChildDidTerminateNotification notificationWithProcessID:child.pid
+                                                            terminationStatus:child.terminationStatus] post];
 }
 
 @end
@@ -150,7 +152,23 @@
     iTermFileDescriptorMultiClientChild *_child;
 }
 
-@synthesize tty = _tty;
+- (instancetype)init {
+    self = [super init];
+    if (self) {
+        static dispatch_once_t onceToken;
+        static id subscriber;
+        dispatch_once(&onceToken, ^{
+            subscriber = [[NSObject alloc] init];
+            [iTermMultiServerChildDidTerminateNotification subscribe:subscriber
+                                                               block:
+             ^(iTermMultiServerChildDidTerminateNotification * _Nonnull notification) {
+                [[TaskNotifier sharedInstance] pipeDidBreakForExternalProcessID:notification.pid
+                                                                         status:notification.terminationStatus];
+            }];
+        });
+    }
+    return self;
+}
 
 - (NSString *)description {
     return [NSString stringWithFormat:@"<%@: %p child=%@ connection=%@>",
@@ -161,7 +179,7 @@
                         argpath:(const char *)argpath
                            argv:(const char **)argv
                      initialPwd:(const char *)initialPwd
-                     newEnviron:(char **)newEnviron
+                     newEnviron:(const char **)newEnviron
                     synchronous:(BOOL)synchronous
                            task:(id<iTermTask>)task
                      completion:(void (^)(iTermJobManagerForkAndExecStatus))completion {
@@ -180,8 +198,16 @@
     return _child.fd;
 }
 
+- (void)setFd:(int)fd {
+    assert(NO);
+}
+
 - (NSString *)tty {
     return _child.tty;
+}
+
+- (void)setTty:(NSString *)tty {
+    assert(NO);
 }
 
 - (pid_t)externallyVisiblePid {
@@ -241,6 +267,7 @@
     kill(_child.pid, signo);
 }
 
+#warning TODO: Test all these killing modes
 - (void)killWithMode:(iTermJobManagerKillingMode)mode {
     switch (mode) {
         case iTermJobManagerKillingModeRegular:
@@ -257,19 +284,18 @@
             break;
 
         case iTermJobManagerKillingModeProcessGroup:
-            if (_serverChildPid > 0) {
-                [[iTermProcessCache sharedInstance] unregisterTrackedPID:_serverChildPid];
+            if (_child.pid > 0) {
+                [[iTermProcessCache sharedInstance] unregisterTrackedPID:_child.pid];
                 // Kill a server-owned child.
                 // TODO: Don't want to do this when Sparkle is upgrading.
-                killpg(_serverChildPid, SIGHUP);
+                killpg(_child.pid, SIGHUP);
             }
             break;
 
         case iTermJobManagerKillingModeBrokenPipe:
-            [self killServerIfRunning];
+            [self sendSignal:SIGHUP toServer:NO];
             break;
     }
 }
-
 
 @end

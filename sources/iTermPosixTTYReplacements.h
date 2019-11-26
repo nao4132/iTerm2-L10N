@@ -31,7 +31,7 @@ void iTermExec(const char *argpath,
                int closeFileDescriptors,
                const iTermForkState *forkState,
                const char *initialPwd,
-               char **newEnviron);
+               const char **newEnviron);
 
 void iTermSignalSafeWrite(int fd, const char *message);
 void iTermSignalSafeWriteInt(int fd, int n);

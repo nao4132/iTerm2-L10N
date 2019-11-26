@@ -19,7 +19,7 @@ int iTermForkAndExecToRunJobInServer(iTermForkState *forkState,
                                      const char **argv,
                                      BOOL closeFileDescriptors,
                                      const char *initialPwd,
-                                     char **newEnviron);
+                                     const char **newEnviron);
 
 int iTermForkAndExecToRunJobDirectly(iTermForkState *forkState,
                                      iTermTTYState *ttyState,
@@ -27,7 +27,7 @@ int iTermForkAndExecToRunJobDirectly(iTermForkState *forkState,
                                      const char **argv,
                                      BOOL closeFileDescriptors,
                                      const char *initialPwd,
-                                     char **newEnviron);
+                                     const char **newEnviron);
 
 void iTermSignalSafeWrite(int fd, const char *message);
 void iTermSignalSafeWriteInt(int fd, int n);

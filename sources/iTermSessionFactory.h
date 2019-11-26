@@ -9,6 +9,7 @@
 
 #import "ITAddressBookMgr.h"
 #import "iTermFileDescriptorClient.h"
+#import "PTYTask.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -25,7 +26,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)attachOrLaunchCommandInSession:(PTYSession *)aSession
                              canPrompt:(BOOL)canPrompt
                             objectType:(iTermObjectType)objectType
-                      serverConnection:(iTermFileDescriptorServerConnection * _Nullable)serverConnection
+                      serverConnection:(iTermGeneralServerConnection * _Nullable)serverConnection
                              urlString:(nullable NSString *)urlString
                           allowURLSubs:(BOOL)allowURLSubs
                            environment:(nullable NSDictionary *)environment

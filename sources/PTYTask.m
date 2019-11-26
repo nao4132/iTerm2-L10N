@@ -582,7 +582,7 @@ static void HandleSigChld(int n) {
 // in "env" are added or override existing environment vars. Both the returned
 // array and all string pointers within it are malloced and should be free()d
 // by the caller.
-- (char **)environWithOverrides:(NSDictionary *)env {
+- (const char **)environWithOverrides:(NSDictionary *)env {
     NSMutableDictionary *environmentDict = [self mutableEnvironmentDictionary];
     for (NSString *k in env) {
         environmentDict[k] = env[k];
@@ -594,7 +594,7 @@ static void HandleSigChld(int n) {
         environment[i++] = strdup([temp UTF8String]);
     }
     environment[i] = NULL;
-    return environment;
+    return (const char **)environment;
 }
 
 - (NSDictionary *)environmentBySettingShell:(NSDictionary *)originalEnvironment {
@@ -704,7 +704,7 @@ static void HandleSigChld(int n) {
 
     DLog(@"Preparing to launch a job. Command is %@ and args are %@", commandToExec, args);
     DLog(@"Environment is\n%@", env);
-    char **newEnviron = [self environWithOverrides:env];
+    const char **newEnviron = [self environWithOverrides:env];
 
     // Note: stringByStandardizingPath will automatically call stringByExpandingTildeInPath.
     const char *initialPwd = [[[env objectForKey:@"PWD"] stringByStandardizingPath] UTF8String];
@@ -719,7 +719,7 @@ static void HandleSigChld(int n) {
                                     task:self
                               completion:
      ^(iTermJobManagerForkAndExecStatus status) {
-         [self freeEnvironment:newEnviron];
+         [self freeEnvironment:(char **)newEnviron];
          switch (status) {
              case iTermJobManagerForkAndExecStatusSuccess:
                  // Parent

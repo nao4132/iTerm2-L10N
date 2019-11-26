@@ -127,7 +127,7 @@ void iTermExec(const char *argpath,
                int closeFileDescriptors,
                const iTermForkState *forkState,
                const char *initialPwd,
-               char **newEnviron) {
+               const char **newEnviron) {
     // BE CAREFUL WHAT YOU DO HERE!
     // See man sigaction for the list of legal function calls to make between fork and exec.
 
@@ -159,7 +159,7 @@ void iTermExec(const char *argpath,
 
     // Sub in our environ for the existing one. Since Mac OS doesn't have execvpe, this hack
     // does the job.
-    extern char **environ;
+    extern const char **environ;
     environ = newEnviron;
     execvp(argpath, (char* const*)argv);
 

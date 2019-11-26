@@ -102,7 +102,7 @@ static void Free2DArray(char **array, NSInteger count) {
 
     NSArray<NSString *> *argv = @[ path ];
     char **cargv = Make2DArray(argv);
-    char **cenv = Make2DArray(@[]);
+    const char **cenv = (const char **)Make2DArray(@[]);
     const char *argpath = executable.UTF8String;
 
     forkState.pid = fork();
@@ -126,7 +126,7 @@ static void Free2DArray(char **array, NSInteger count) {
             close(serverSocketFd);
             close(forkState.deadMansPipe[1]);
             Free2DArray(cargv, argv.count);
-            Free2DArray(cenv, 0);
+            Free2DArray((char **)cenv, 0);
             return forkState;
     }
 }

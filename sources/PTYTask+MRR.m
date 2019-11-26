@@ -29,7 +29,7 @@ int iTermForkAndExecToRunJobInServer(iTermForkState *forkState,
                                      const char **argv,
                                      BOOL closeFileDescriptors,
                                      const char *initialPwd,
-                                     char **newEnviron) {
+                                     const char **newEnviron) {
     // Get ready to run the server in a thread.
     __block int serverConnectionFd = -1;
     DLog(@"iTermForkAndExecToRunJobInServer");
@@ -96,7 +96,7 @@ int iTermForkAndExecToRunJobDirectly(iTermForkState *forkState,
                                      const char **argv,
                                      BOOL closeFileDescriptors,
                                      const char *initialPwd,
-                                     char **newEnviron) {
+                                     const char **newEnviron) {
     int fd;
     forkState->numFileDescriptorsToPreserve = 3;
     forkState->pid = forkpty(&fd, ttyState->tty, &ttyState->term, &ttyState->win);

@@ -105,7 +105,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)attachOrLaunchCommandInSession:(PTYSession *)aSession
                              canPrompt:(BOOL)canPrompt
                             objectType:(iTermObjectType)objectType
-                      serverConnection:(iTermFileDescriptorServerConnection * _Nullable)serverConnection
+                      serverConnection:(iTermGeneralServerConnection * _Nullable)serverConnection
                              urlString:(nullable NSString *)urlString
                           allowURLSubs:(BOOL)allowURLSubs
                            environment:(nullable NSDictionary *)environment

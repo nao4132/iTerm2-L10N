@@ -61,13 +61,13 @@ static int EncodeHandshakeResponse(iTermClientServerProtocolMessageEncoder *enco
 
 static int ParseLaunchReqest(iTermClientServerProtocolMessageParser *parser,
                              iTermMultiServerRequestLaunch *out) {
-    if (iTermClientServerProtocolParseTaggedString(parser, &out->path, iTermMultiServerTagLaunchRequestPath)) {
+    if (iTermClientServerProtocolParseTaggedString(parser, (char **)&out->path, iTermMultiServerTagLaunchRequestPath)) {
         return -1;
     }
-    if (iTermClientServerProtocolParseTaggedStringArray(parser, &out->argv, &out->argc, iTermMultiServerTagLaunchRequestArgv)) {
+    if (iTermClientServerProtocolParseTaggedStringArray(parser, (char ***)&out->argv, &out->argc, iTermMultiServerTagLaunchRequestArgv)) {
         return -1;
     }
-    if (iTermClientServerProtocolParseTaggedStringArray(parser, &out->envp, &out->envc, iTermMultiServerTagLaunchRequestEnvironment)) {
+    if (iTermClientServerProtocolParseTaggedStringArray(parser, (char ***)&out->envp, &out->envc, iTermMultiServerTagLaunchRequestEnvironment)) {
         return -1;
     }
     if (iTermClientServerProtocolParseTaggedInt(parser, &out->width, sizeof(out->width), iTermMultiServerTagLaunchRequestWidth)) {
@@ -79,7 +79,7 @@ static int ParseLaunchReqest(iTermClientServerProtocolMessageParser *parser,
     if (iTermClientServerProtocolParseTaggedInt(parser, &out->isUTF8, sizeof(out->isUTF8), iTermMultiServerTagLaunchRequestIsUTF8)) {
         return -1;
     }
-    if (iTermClientServerProtocolParseTaggedString(parser, &out->pwd, iTermMultiServerTagLaunchRequestPwd)) {
+    if (iTermClientServerProtocolParseTaggedString(parser, (char **)&out->pwd, iTermMultiServerTagLaunchRequestPwd)) {
         return -1;
     }
     if (iTermClientServerProtocolParseTaggedInt(parser, &out->uniqueId, sizeof(out->uniqueId), iTermMultiServerTagLaunchRequestUniqueId)) {
@@ -93,10 +93,10 @@ static int EncodeLaunchRequest(iTermClientServerProtocolMessageEncoder *encoder,
     if (iTermClientServerProtocolEncodeTaggedString(encoder, launch->path, iTermMultiServerTagLaunchRequestPath)) {
         return -1;
     }
-    if (iTermClientServerProtocolEncodeTaggedStringArray(encoder, launch->argv, launch->argc, iTermMultiServerTagLaunchRequestArgv)) {
+    if (iTermClientServerProtocolEncodeTaggedStringArray(encoder, (char **)launch->argv, launch->argc, iTermMultiServerTagLaunchRequestArgv)) {
         return -1;
     }
-    if (iTermClientServerProtocolEncodeTaggedStringArray(encoder, launch->envp, launch->envc, iTermMultiServerTagLaunchRequestEnvironment)) {
+    if (iTermClientServerProtocolEncodeTaggedStringArray(encoder, (char **)launch->envp, launch->envc, iTermMultiServerTagLaunchRequestEnvironment)) {
         return -1;
     }
     if (iTermClientServerProtocolEncodeTaggedInt(encoder, &launch->width, sizeof(launch->width), iTermMultiServerTagLaunchRequestWidth)) {
@@ -125,6 +125,12 @@ static int ParseLaunchResponse(iTermClientServerProtocolMessageParser *parser,
     if (iTermClientServerProtocolParseTaggedInt(parser, &out->pid, sizeof(out->pid), iTermMultiServerTagLaunchResponsePid)) {
         return -1;
     }
+    if (iTermClientServerProtocolParseTaggedInt(parser, &out->uniqueId, sizeof(out->uniqueId), iTermMultiServerTagLaunchResponseUniqueID)) {
+        return -1;
+    }
+    if (iTermClientServerProtocolParseTaggedString(parser, (char **)&out->tty, iTermMultiServerTagLaunchResponseTty)) {
+        return -1;
+    }
     return 0;
 }
 
@@ -134,6 +140,12 @@ static int EncodeLaunchResponse(iTermClientServerProtocolMessageEncoder *encoder
         return -1;
     }
     if (iTermClientServerProtocolEncodeTaggedInt(encoder, &launch->pid, sizeof(launch->pid), iTermMultiServerTagLaunchResponsePid)) {
+        return -1;
+    }
+    if (iTermClientServerProtocolEncodeTaggedInt(encoder, &launch->uniqueId, sizeof(launch->uniqueId), iTermMultiServerTagLaunchResponseUniqueID)) {
+        return -1;
+    }
+    if (iTermClientServerProtocolEncodeTaggedString(encoder, launch->tty, iTermMultiServerTagLaunchResponseTty)) {
         return -1;
     }
     return 0;
@@ -191,25 +203,25 @@ static int ParseReportChild(iTermClientServerProtocolMessageParser *parser,
     if (iTermClientServerProtocolParseTaggedInt(parser, &out->pid, sizeof(out->pid), iTermMultiServerTagReportChildPid)) {
         return -1;
     }
-    if (iTermClientServerProtocolParseTaggedString(parser, &out->path, iTermMultiServerTagReportChildPath)) {
+    if (iTermClientServerProtocolParseTaggedString(parser, (char **)&out->path, iTermMultiServerTagReportChildPath)) {
         return -1;
     }
-    if (iTermClientServerProtocolParseTaggedStringArray(parser, &out->argv, &out->argc, iTermMultiServerTagReportChildArgs)) {
+    if (iTermClientServerProtocolParseTaggedStringArray(parser, (char ***)&out->argv, &out->argc, iTermMultiServerTagReportChildArgs)) {
         return -1;
     }
-    if (iTermClientServerProtocolParseTaggedStringArray(parser, &out->envp, &out->envc, iTermMultiServerTagReportChildEnv)) {
+    if (iTermClientServerProtocolParseTaggedStringArray(parser, (char ***)&out->envp, &out->envc, iTermMultiServerTagReportChildEnv)) {
         return -1;
     }
     if (iTermClientServerProtocolParseTaggedInt(parser, &out->isUTF8, sizeof(out->isUTF8), iTermMultiServerTagReportChildIsUTF8)) {
         return -1;
     }
-    if (iTermClientServerProtocolParseTaggedString(parser, &out->pwd, iTermMultiServerTagReportChildPwd)) {
+    if (iTermClientServerProtocolParseTaggedString(parser, (char **)&out->pwd, iTermMultiServerTagReportChildPwd)) {
         return -1;
     }
     if (iTermClientServerProtocolParseTaggedInt(parser, &out->terminated, sizeof(out->terminated), iTermMultiServerTagReportChildTerminated)) {
         return -1;
     }
-    if (iTermClientServerProtocolParseTaggedString(parser, &out->tty, iTermMultiServerTagReportChildTTY)) {
+    if (iTermClientServerProtocolParseTaggedString(parser, (char **)&out->tty, iTermMultiServerTagReportChildTTY)) {
         return -1;
     }
     return 0;
@@ -226,10 +238,10 @@ static int EncodeReportChild(iTermClientServerProtocolMessageEncoder *encoder,
     if (iTermClientServerProtocolEncodeTaggedString(encoder, obj->path, iTermMultiServerTagReportChildPath)) {
         return -1;
     }
-    if (iTermClientServerProtocolEncodeTaggedStringArray(encoder, obj->argv, obj->argc, iTermMultiServerTagReportChildArgs)) {
+    if (iTermClientServerProtocolEncodeTaggedStringArray(encoder, (char **)obj->argv, obj->argc, iTermMultiServerTagReportChildArgs)) {
         return -1;
     }
-    if (iTermClientServerProtocolEncodeTaggedStringArray(encoder, obj->envp, obj->envc, iTermMultiServerTagReportChildEnv)) {
+    if (iTermClientServerProtocolEncodeTaggedStringArray(encoder, (char **)obj->envp, obj->envc, iTermMultiServerTagReportChildEnv)) {
         return -1;
     }
     if (iTermClientServerProtocolEncodeTaggedInt(encoder, &obj->isUTF8, sizeof(obj->isUTF8), iTermMultiServerTagReportChildIsUTF8)) {
@@ -413,28 +425,31 @@ int iTermMultiServerProtocolEncodeMessageFromServer(iTermMultiServerServerOrigin
 }
 
 static void FreeLaunchRequest(iTermMultiServerRequestLaunch *obj) {
-    free(obj->path);
+    free((void *)obj->path);
     for (int i = 0; i < obj->argc; i++) {
-        free(obj->argv[i]);
+        free((void *)obj->argv[i]);
     }
-    free(obj->argv);
+    free((void *)obj->argv);
     for (int i = 0; i < obj->envc; i++) {
-        free(obj->envp[i]);
+        free((void *)obj->envp[i]);
     }
-    free(obj->envp);
-    free(obj->pwd);
+    free((void *)obj->envp);
+    free((void *)obj->pwd);
+    memset(obj, 0xab, sizeof(*obj));
 }
 
 static void FreeReportChild(iTermMultiServerReportChild *obj) {
-    free(obj->path);
+    free((void *)obj->path);
     for (int i = 0; i < obj->argc; i++) {
-        free(obj->argv[i]);
+        free((void *)obj->argv[i]);
     }
-    free(obj->argv);
+    free((void *)obj->argv);
     for (int i = 0; i < obj->envc; i++) {
-        free(obj->envp[i]);
+        free((void *)obj->envp[i]);
     }
-    free(obj->envp);
+    free((void *)obj->envp);
+    free((void *)obj->tty);
+    memset(obj, 0xab, sizeof(*obj));
 }
 
 static void FreeWaitRequest(iTermMultiServerRequestWait *wait) {
@@ -447,6 +462,10 @@ static void FreeHandshakeRequest(iTermMultiServerRequestHandshake *handshake) {
 }
 
 static void FreeHandshakeResponse(iTermMultiServerResponseHandshake *handshake) {
+}
+
+static void FreeLaunchResponse(iTermMultiServerResponseLaunch *launch) {
+    free((void *)launch->tty);
 }
 
 void iTermMultiServerClientOriginatedMessageFree(iTermMultiServerClientOriginatedMessage *obj) {
@@ -472,6 +491,7 @@ void iTermMultiServerServerOriginatedMessageFree(iTermMultiServerServerOriginate
         case iTermMultiServerRPCTypeHandshake:
             FreeHandshakeResponse(&obj->payload.handshake);
         case iTermMultiServerRPCTypeLaunch:
+            FreeLaunchResponse(&obj->payload.launch);
             break;
         case iTermMultiServerRPCTypeWait:
             FreeWaitResponse(&obj->payload.wait);

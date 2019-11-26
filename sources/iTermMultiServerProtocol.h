@@ -38,6 +38,8 @@ typedef enum {
 
     iTermMultiServerTagLaunchResponseStatus,
     iTermMultiServerTagLaunchResponsePid,
+    iTermMultiServerTagLaunchResponseUniqueID,
+    iTermMultiServerTagLaunchResponseTty,
 
     iTermMultiServerTagReportChildIsLast,
     iTermMultiServerTagReportChildPid,
@@ -71,14 +73,14 @@ typedef struct {
 
 typedef struct {
     // iTermMultiServerTagLaunchRequestPath
-    char *path;
+    const char *path;
 
     // iTermMultiServerTagLaunchRequestArgv
-    char **argv;
+    const char **argv;
     int argc;
 
     // iTermMultiServerTagLaunchRequestEnvironment
-    char **envp;
+    const char **envp;
     int envc;
 
     // iTermMultiServerTagLaunchRequestWidth
@@ -86,12 +88,12 @@ typedef struct {
 
     // iTermMultiServerTagLaunchRequestHeight
     int height;
-
+#warning TODO: Add pixel size
     // iTermMultiServerTagLaunchRequestIsUTF8
     int isUTF8;
 
     // iTermMultiServerTagLaunchRequestPwd
-    char *pwd;
+    const char *pwd;
 
     // iTermMultiServerTagLaunchRequestUniqueId
     long long uniqueId;
@@ -109,6 +111,12 @@ typedef struct {
 
     // File descriptor. Passed out of band.
     int fd;
+
+    // iTermMultiServerTagLaunchResponseUniqueID
+    long long uniqueId;
+
+    // iTermMultiServerTagLaunchResponseTty
+    const char *tty;
 } iTermMultiServerResponseLaunch;
 
 typedef struct {
@@ -139,27 +147,27 @@ typedef struct iTermMultiServerReportChild {
     pid_t pid;
 
     // iTermMultiServerTagReportChildPath
-    char *path;
+    const char *path;
 
     // iTermMultiServerTagReportChildArgs
-    char **argv;
+    const char **argv;
     int argc;
 
     // iTermMultiServerTagReportChildEnv
-    char **envp;
+    const char **envp;
     int envc;
 
     // iTermMultiServerTagReportChildIsUTF8
     int isUTF8;
 
     // iTermMultiServerTagReportChildPwd
-    char *pwd;
+    const char *pwd;
 
     // iTermMultiServerTagReportChildTerminated
     int terminated;  // you should send iTermMultiServerResponseWait
 
     // iTermMultiServerTagReportChildTTY
-    char *tty;
+    const char *tty;
 
     // Sent out-of-band
     int fd;

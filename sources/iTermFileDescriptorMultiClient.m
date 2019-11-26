@@ -73,11 +73,38 @@ NSString *const iTermFileDescriptorMultiClientErrorDomain = @"iTermFileDescripto
 
 @end
 
+typedef void (^LaunchCallback)(iTermFileDescriptorMultiClientChild * _Nullable, NSError * _Nullable);
+
+@interface iTermFileDescriptorMultiClientPendingLaunch: NSObject
+@property (nonatomic, readonly) iTermMultiServerRequestLaunch launchRequest;
+@property (nonatomic, readonly) LaunchCallback completion;
+
+- (instancetype)initWithRequest:(iTermMultiServerRequestLaunch)request
+                     completion:(LaunchCallback)completion NS_DESIGNATED_INITIALIZER;
+- (instancetype)init NS_UNAVAILABLE;
+
+@end
+
+@implementation iTermFileDescriptorMultiClientPendingLaunch
+
+- (instancetype)initWithRequest:(iTermMultiServerRequestLaunch)request
+                     completion:(LaunchCallback)completion {
+    self = [super init];
+    if (self) {
+        _launchRequest = request;
+        _completion = [completion copy];
+    }
+    return self;
+}
+
+@end
+
 @implementation iTermFileDescriptorMultiClient {
     NSMutableArray<iTermFileDescriptorMultiClientChild *> *_children;
     NSString *_socketPath;
     int _socketFD;
     dispatch_queue_t _queue;
+    NSMutableDictionary<NSNumber *, iTermFileDescriptorMultiClientPendingLaunch *> *_pendingLaunches;
 }
 
 - (instancetype)initWithPath:(NSString *)path {
@@ -87,6 +114,7 @@ NSString *const iTermFileDescriptorMultiClientErrorDomain = @"iTermFileDescripto
         _socketPath = [path copy];
         _socketFD = -1;
         _queue = dispatch_queue_create("com.iterm2.multi-client", DISPATCH_QUEUE_SERIAL);
+        _pendingLaunches = [NSMutableDictionary dictionary];
     }
     return self;
 }
@@ -380,13 +408,50 @@ done:
     return YES;
 }
 
+static int LengthOfNullTerminatedPointerArray(const void **array) {
+    int i = 0;
+    while (array[i]) {
+        i++;
+    }
+    return i;
+}
+
+static long long MakeUniqueID(void) {
+    long long result = arc4random_uniform(0xffffffff);
+    result <<= 32;
+    result |= arc4random_uniform(0xffffffff);;
+    return result;
+}
+
 - (void)launchChildWithExecutablePath:(const char *)path
                                  argv:(const char **)argv
-                          environment:(char **)environment
+                          environment:(const char **)environment
                                   pwd:(const char *)pwd
-                             ttyState:(id)ttyStatePtr
-                           completion:(void (^)(iTermFileDescriptorMultiClientChild * _Nonnull, NSError * _Nullable))completion {
-#warning TODO
+                             ttyState:(iTermTTYState *)ttyStatePtr
+                           completion:(void (^)(iTermFileDescriptorMultiClientChild * _Nullable, NSError * _Nullable))completion {
+    const long long uniqueID = MakeUniqueID();
+    iTermMultiServerClientOriginatedMessage message = {
+        .type = iTermMultiServerRPCTypeLaunch,
+        .payload = {
+            .launch = {
+                .path = path,
+                .argv = argv,
+                .argc = LengthOfNullTerminatedPointerArray((const void **)argv),
+                .envp = environment,
+                .envc = LengthOfNullTerminatedPointerArray((const void **)environment),
+                .width = ttyStatePtr->win.ws_col,
+                .height = ttyStatePtr->win.ws_row,
+                .isUTF8 = !!(ttyStatePtr->term.c_iflag & IUTF8),
+                .pwd = pwd,
+                .uniqueId = uniqueID
+            }
+        }
+    };
+    if (![self send:&message]) {
+        completion(nil, [self connectionLostError]);
+        return;
+    }
+    _pendingLaunches[@(uniqueID)] = [[iTermFileDescriptorMultiClientPendingLaunch alloc] initWithRequest:message.payload.launch completion:completion];
 }
 
 - (void)waitForChild:(iTermFileDescriptorMultiClientChild *)child
@@ -450,7 +515,29 @@ done:
 }
 
 - (void)handleLaunch:(iTermMultiServerResponseLaunch)launch {
-    assert(NO);  // TODO
+    iTermFileDescriptorMultiClientPendingLaunch *pendingLaunch = _pendingLaunches[@(launch.uniqueId)];
+#warning yay race conditions
+    assert(pendingLaunch);
+    [_pendingLaunches removeObjectForKey:@(launch.uniqueId)];
+    /*
+     launch has: status (0=success) pid, fd, uniqueId
+     */
+    iTermMultiServerReportChild fakeReport = {
+        .isLast = 0,
+        .pid = launch.pid,
+        .path = pendingLaunch.launchRequest.path,
+        .argv = pendingLaunch.launchRequest.argv,
+        .argc = pendingLaunch.launchRequest.argc,
+        .envp = pendingLaunch.launchRequest.envp,
+        .envc = pendingLaunch.launchRequest.envc,
+        .isUTF8 = pendingLaunch.launchRequest.isUTF8,
+        .pwd = pendingLaunch.launchRequest.pwd,
+        .terminated = 0,
+        .tty = launch.tty,
+        .fd = launch.fd
+    };
+    iTermFileDescriptorMultiClientChild *child = [[iTermFileDescriptorMultiClientChild alloc] initWithReport:&fakeReport];
+    pendingLaunch.completion(child, NULL);
 }
 
 - (void)handleTermination:(iTermMultiServerReportTermination)termination {

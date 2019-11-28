@@ -15,71 +15,11 @@
 #include <unistd.h>
 
 static const int kMaxConnections = 1;
-static int gRunningServer;
 
 // These variables are global because signal handlers use them.
 static pid_t gChildPid;
 static char *gPath;
 static int gPipe[2];
-
-void iTermFileDescriptorServerLog(char *format, ...) {
-    va_list args;
-    va_start(args, format);
-    char temp[1000];
-    snprintf(temp, sizeof(temp) - 1, "%s(%d) %s", gRunningServer ? "Server" : "ParentServer", getpid(), format);
-    vsyslog(LOG_DEBUG, temp, args);
-    va_end(args);
-}
-
-ssize_t iTermFileDescriptorServerSendMessageAndFileDescriptor(int connectionFd,
-                                                              void *buffer,
-                                                              size_t bufferSize,
-                                                              int fdToSend) {
-    iTermFileDescriptorControlMessage controlMessage;
-    struct msghdr message;
-    message.msg_control = controlMessage.control;
-    message.msg_controllen = sizeof(controlMessage.control);
-
-    struct cmsghdr *messageHeader = CMSG_FIRSTHDR(&message);
-    messageHeader->cmsg_len = CMSG_LEN(sizeof(int));
-    messageHeader->cmsg_level = SOL_SOCKET;
-    messageHeader->cmsg_type = SCM_RIGHTS;
-    *((int *) CMSG_DATA(messageHeader)) = fdToSend;
-
-    message.msg_name = NULL;
-    message.msg_namelen = 0;
-
-    struct iovec iov[1];
-    iov[0].iov_base = buffer;
-    iov[0].iov_len = bufferSize;
-    message.msg_iov = iov;
-    message.msg_iovlen = 1;
-
-    int rc = sendmsg(connectionFd, &message, 0);
-    while (rc == -1 && errno == EINTR) {
-        rc = sendmsg(connectionFd, &message, 0);
-    }
-    return rc;
-}
-
-ssize_t iTermFileDescriptorServerSendMessage(int connectionFd,
-                                             void *buffer,
-                                             size_t bufferSize) {
-    struct msghdr message;
-    memset(&message, 0, sizeof(message));
-
-    struct iovec iov[1];
-    iov[0].iov_base = buffer;
-    iov[0].iov_len = bufferSize;
-    message.msg_iov = iov;
-    message.msg_iovlen = 1;
-
-    int rc = sendmsg(connectionFd, &message, 0);
-    while (rc == -1 && errno == EINTR) {
-        rc = sendmsg(connectionFd, &message, 0);
-    }
-    return rc;
-}
 
 static pid_t Wait() {
     pid_t pid;
@@ -106,51 +46,6 @@ static void SigUsr1Handler(int arg) {
     _exit(1);
 }
 
-
-int iTermSelect(int *fds, int count, int *results) {
-    int result;
-    int theError;
-    fd_set readset;
-    do {
-        FD_ZERO(&readset);
-        int max = 0;
-        for (int i = 0; i < count; i++) {
-            if (fds[i] > max) {
-                max = fds[i];
-            }
-            FD_SET(fds[i], &readset);
-        }
-        FDLog(LOG_DEBUG, "Calling select...");
-        result = select(max + 1, &readset, NULL, NULL, NULL);
-        theError = errno;
-        FDLog(LOG_DEBUG, "select returned %d, error = %s", result, strerror(theError));
-    } while (result == -1 && theError == EINTR);
-
-    int n = 0;
-    for (int i = 0; i < count; i++) {
-        results[i] = FD_ISSET(fds[i], &readset);
-        if (results[i]) {
-            n++;
-        }
-    }
-    return n;
-}
-
-int iTermFileDescriptorServerAccept(int socketFd) {
-    // incoming unix domain socket connection to get FDs
-    struct sockaddr_un remote;
-    socklen_t sizeOfRemote = sizeof(remote);
-    int connectionFd = -1;
-    do {
-        FDLog(LOG_DEBUG, "accept()");
-        connectionFd = accept(socketFd, (struct sockaddr *)&remote, &sizeOfRemote);
-        FDLog(LOG_DEBUG, "accept() returned %d error=%s", connectionFd, strerror(errno));
-    } while (connectionFd == -1 && errno == EINTR);
-    if (connectionFd != -1) {
-        close(socketFd);
-    }
-    return connectionFd;
-}
 
 static int SendFileDescriptorAndWait(int connectionFd) {
     FDLog(LOG_DEBUG, "send master fd and child pid %d", (int)gChildPid);
@@ -256,10 +151,6 @@ static void MainLoop(char *path) {
         }
         FDLog(LOG_DEBUG, "Calling PerformAcceptActivity");
     } while (!PerformAcceptActivity(socketFd));
-}
-
-void SetRunningServer(void) {
-    gRunningServer = 1;
 }
 
 int iTermFileDescriptorServerRun(char *path, pid_t childPid, int connectionFd) {

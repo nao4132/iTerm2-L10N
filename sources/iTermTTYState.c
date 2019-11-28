@@ -9,26 +9,28 @@
 
 #import "DebugLogging.h"
 
+#include <stdbool.h>
+#include <string.h>
 #include <sys/ioctl.h>
 
 static cc_t iTermTTYMakeControlKey(char c) {
     return c - 'A' + 1;
 }
 
-static BOOL iTermWinSizeEqualsTaskSize(struct winsize lhs, PTYTaskSize rhs) {
+static bool iTermWinSizeEqualsTaskSize(struct winsize lhs, PTYTaskSize rhs) {
     if (lhs.ws_col != rhs.cellSize.width) {
-        return NO;
+        return false;
     }
     if (lhs.ws_row != rhs.cellSize.height) {
-        return NO;
+        return false;
     }
     if (lhs.ws_xpixel != rhs.pixelSize.width) {
-        return NO;
+        return false;
     }
     if (lhs.ws_ypixel != rhs.pixelSize.height) {
-        return NO;
+        return false;
     }
-    return YES;
+    return true;
 }
 
 void iTermTTYStateInit(iTermTTYState *ttyState,
@@ -89,7 +91,7 @@ static void iTermForceSetTerminalSize(int fd, PTYTaskSize taskSize) {
         .ws_ypixel = taskSize.pixelSize.height
     };
 
-    DLog(@"Set window size to cells=(%d x %d) pixels=(%d x %d)",
+    CLog("Set window size to cells=(%d x %d) pixels=(%d x %d)",
          winsize.ws_col,
          winsize.ws_row,
          winsize.ws_xpixel,
@@ -138,7 +140,7 @@ iTermTTYCellSize iTermTTYCellSizeMake(double width, double height) {
     } else if (height > USHRT_MAX) {
         result.height = USHRT_MAX;
     } else {
-        result.height = width;
+        result.height = height;
     }
     return result;
 }

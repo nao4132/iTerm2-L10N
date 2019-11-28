@@ -14,6 +14,7 @@ extern const int kNumFileDescriptorsToDup;
 
 typedef struct {
     pid_t pid;
+    // Client socket FD for recvmsg and sendmsg
     int connectionFd;
     int deadMansPipe[2];
     int numFileDescriptorsToPreserve;

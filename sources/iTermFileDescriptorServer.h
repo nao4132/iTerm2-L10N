@@ -1,23 +1,7 @@
 #ifndef __ITERM_FILE_DESCRIPTOR_SERVER_H
 #define __ITERM_FILE_DESCRIPTOR_SERVER_H
 
-#include <sys/socket.h>
-
-// Because xcode is hot garbage, syslog(LOG_DEBUG) goes to its console so we turn that off for debug builds.
-#if DEBUG
-#define FDLog(level, format, ...) do { \
-    if (level < LOG_DEBUG) { \
-        syslog(level, "Client(%d) " format, getpid(), ##__VA_ARGS__); \
-    } \
-} while (0)
-#else
-#define FDLog(level, format, ...) syslog(level, "Client(%d) " format, getpid(), ##__VA_ARGS__)
-#endif
-
-typedef union {
-    struct cmsghdr cm;
-    char control[CMSG_SPACE(sizeof(int))];
-} iTermFileDescriptorControlMessage;
+#include "iTermFileDescriptorServerShared.h"
 
 // Spin up a new server. |connectionFd| comes from iTermFileDescriptorServerAccept(),
 // which should be run prior to fork()ing.
@@ -33,22 +17,8 @@ int iTermFileDescriptorServerSocketBindListen(const char *path);
 // suitable to pass to iTermFileDescriptorServerRun() in |connectionFd|.
 int iTermFileDescriptorServerAccept(int socketFd);
 
-// Takes an array of file descriptors and its length as input. `results` should be an array of
-// equal length. On return, the readable FDs will have the corresponding value in `results` set to
-// true. Takes care of EINTR. Return value is number of readable FDs.
-int iTermSelect(int *fds, int count, int *results);
-
 void iTermFileDescriptorServerLog(char *format, ...);
 
 void SetRunningServer(void);
-
-ssize_t iTermFileDescriptorServerSendMessageAndFileDescriptor(int connectionFd,
-                                                              void *buffer,
-                                                              size_t bufferSize,
-                                                              int fdToSend);
-
-ssize_t iTermFileDescriptorServerSendMessage(int connectionFd,
-                                             void *buffer,
-                                             size_t bufferSize);
 
 #endif  // __ITERM_FILE_DESCRIPTOR_SERVER_H

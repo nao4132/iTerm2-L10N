@@ -567,6 +567,7 @@ DEFINE_BOOL(escapeWithQuotes, NO, SECTION_EXPERIMENTAL @"Escape file names with 
 DEFINE_BOOL(dismemberScrollView, NO, SECTION_EXPERIMENTAL @"Dismember scroll view for better GPU performance?\nThis was a dangerous hack that was necessary in 10.14 for performance but seems not to be needed in 10.15. This setting only affects macOS 10.15 and later.");
 DEFINE_BOOL(fastForegroundJobUpdates, NO, SECTION_EXPERIMENTAL @"Enable low-latency updates of the current foreground job");
 DEFINE_STRING(fontsForGenerousRounding, @"consolas", SECTION_EXPERIMENTAL @"List of fonts to use alternate rounding algorithm for line height calculation.\nThis fixes consolas and emulates Terminal.app’s behavior on macOS 10.15. This is a comma-delimited list of font family substrings.");
+DEFINE_BOOL(multiserver, NO, SECTION_EXPERIMENTAL @"Enable multi-server daemon.\nA new implementation of session restoration that combines daemon processes.");
 
 #pragma mark - Scripting
 #define SECTION_SCRIPTING @"Scripting: "

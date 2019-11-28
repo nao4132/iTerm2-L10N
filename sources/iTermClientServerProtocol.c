@@ -46,7 +46,6 @@ static void iTermClientServerProtocolParserCopyAndAdvance(iTermClientServerProto
                                                           void *out,
                                                           size_t size) {
     assert(iTermClientServerProtocolParserBytesLeft(parser) >= size);
-    assert(parser->message->ioVectors[0].iov_len == size);
     memmove(out, parser->message->ioVectors[0].iov_base + parser->offset, size);
     parser->offset += size;
 }
@@ -93,7 +92,7 @@ static int iTermClientServerProtocolParseString(iTermClientServerProtocolMessage
     if (iTermClientServerProtocolParserBytesLeft(parser) < length) {
         return -1;
     }
-    *out = malloc(length) + 1;
+    *out = malloc(length + 1);
     iTermClientServerProtocolParserCopyAndAdvance(parser, *out, length);
     (*out)[length] = '\0';
     return 0;
@@ -184,13 +183,13 @@ int iTermClientServerProtocolEncodeTaggedInt(iTermClientServerProtocolMessageEnc
         return -1;
     }
 
-    return iTermClientServerProtocolEncodeInt(encoder, valuePtr, size);
+    return 0;
 }
 
 static int iTermClientServerProtocolEncodeString(iTermClientServerProtocolMessageEncoder *encoder,
                                                  const char *string) {
     size_t length = strlen(string);
-    if (iTermClientServerProtocolEncodeInt(encoder, &length, sizeof(int))) {
+    if (iTermClientServerProtocolEncodeInt(encoder, &length, sizeof(length))) {
         return -1;
     }
     if (iTermClientServerProtocolEncoderBytesLeft(encoder) < length) {

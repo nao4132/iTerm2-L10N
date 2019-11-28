@@ -6,9 +6,21 @@
 //
 //
 
-#import <Foundation/Foundation.h>
 #include <assert.h>
 
+#ifndef __OBJC__
+// Straight C codepath
+ #include <syslog.h>
+
+#define STR_HELPER(x) #x
+#define STR(x) STR_HELPER(x)
+
+#define CLog(args...) \
+  syslog(LOG_NOTICE, "iTermServer " STR(__FILE__) ":" STR(__LINE__) " " STR(__FUNCTION__) ": " args);
+#else
+
+// Rest of the file is Obj-C code path
+#import <Foundation/Foundation.h>
 extern BOOL gDebugLogging;
 
 #define USE_STOPWATCH 0
@@ -202,3 +214,4 @@ BOOL TurnOffDebugLoggingSilently(void);
 
 void SetPinnedDebugLogMessage(NSString *key, NSString *value, ...);
 void AppendPinnedDebugLogMessage(NSString *key, NSString *value, ...);
+#endif  // __OBJC__

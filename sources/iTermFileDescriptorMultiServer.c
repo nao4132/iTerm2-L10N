@@ -6,6 +6,13 @@
 //
 
 #include "iTermFileDescriptorMultiServer.h"
+#include "iTermFileDescriptorServerShared.h"
+
+#ifndef ITERM_SERVER
+#error ITERM_SERVER not defined. Build process is broken.
+#endif
+
+#define DLog(format, args...) syslog(LOG_DEBUG, "iTermServer(pid=%d) " format, getpid(), ##__VA_ARGS__); \
 
 #import "iTermFileDescriptorServer.h"
 #import "iTermMultiServerProtocol.h"
@@ -86,7 +93,7 @@ static void FreeChild(int i) {
     assert(i >= 0);
     assert(i < numberOfChildren);
     iTermMultiServerChild *child = &children[i];
-    free(child->tty);
+    free((char *)child->tty);
     child->tty = NULL;
 }
 
@@ -117,8 +124,8 @@ static int Launch(const iTermMultiServerRequestLaunch *launch,
                   int *errorPtr) {
 #warning TODO: Pass pixel size
     iTermTTYStateInit(ttyStatePtr,
-                      VT100GridSizeMake(launch->width, launch->height),
-                      VT100GridSizeMake(0, 0),
+                      iTermTTYCellSizeMake(launch->width, launch->height),
+                      iTermTTYPixelSizeMake(0, 0),
                       launch->isUTF8);
     int fd;
     forkState->numFileDescriptorsToPreserve = 3;
@@ -138,7 +145,7 @@ static int Launch(const iTermMultiServerRequestLaunch *launch,
     return fd;
 }
 
-static int SendLaunchResponse(int fd, int status, pid_t pid, int masterFd, long long uniqueId) {
+static int SendLaunchResponse(int fd, int status, pid_t pid, int masterFd, const char *tty, long long uniqueId) {
     iTermClientServerProtocolMessage obj;
     iTermClientServerProtocolMessageInitialize(&obj);
 
@@ -148,7 +155,8 @@ static int SendLaunchResponse(int fd, int status, pid_t pid, int masterFd, long 
             .launch = {
                 .status = status,
                 .pid = pid,
-                .uniqueId = uniqueId
+                .uniqueId = uniqueId,
+                .tty = tty
             }
         }
     };
@@ -157,10 +165,10 @@ static int SendLaunchResponse(int fd, int status, pid_t pid, int masterFd, long 
     ssize_t result;
     if (masterFd >= 0) {
         // Happy path. Send the file descrptor.
-        ssize_t result = iTermFileDescriptorServerSendMessageAndFileDescriptor(fd,
-                                                                               obj.ioVectors[0].iov_base,
-                                                                               obj.ioVectors[0].iov_len,
-                                                                               masterFd);
+        result = iTermFileDescriptorServerSendMessageAndFileDescriptor(fd,
+                                                                       obj.ioVectors[0].iov_base,
+                                                                       obj.ioVectors[0].iov_len,
+                                                                       masterFd);
     } else {
         // Error happened. Don't send a file descriptor.
         result = iTermFileDescriptorServerSendMessage(fd,
@@ -168,7 +176,7 @@ static int SendLaunchResponse(int fd, int status, pid_t pid, int masterFd, long 
                                                       obj.ioVectors[0].iov_len);
     }
     iTermClientServerProtocolMessageFree(&obj);
-    return result > 0;
+    return result == -1;
 }
 
 static int HandleLaunchRequest(int fd, const iTermMultiServerRequestLaunch *launch) {
@@ -177,13 +185,24 @@ static int HandleLaunchRequest(int fd, const iTermMultiServerRequestLaunch *laun
         .connectionFd = -1,
         .deadMansPipe = { 0, 0 },
     };
-    iTermTTYState ttyState = { 0 };
+    iTermTTYState ttyState;
+    memset(&ttyState, 0, sizeof(ttyState));
     int masterFd = Launch(launch, &forkState, &ttyState, &error);
     if (masterFd < 0) {
-        return SendLaunchResponse(fd, -1, 0, -1, launch->uniqueId);
+        return SendLaunchResponse(fd,
+                                  -1 /* status */,
+                                  0 /* pid */,
+                                  -1 /* masterFd */,
+                                  "" /* tty */,
+                                  launch->uniqueId);
     } else {
         AddChild(launch, masterFd, ttyState.tty, &forkState);
-        return SendLaunchResponse(fd, 0, forkState.pid, ttyState.tty, masterFd);
+        return SendLaunchResponse(fd,
+                                  0 /* status */,
+                                  forkState.pid,
+                                  masterFd,
+                                  ttyState.tty,
+                                  launch->uniqueId);
     }
 }
 
@@ -394,7 +413,7 @@ done:
 
 static int ReadAndHandleRequest(int fd) {
     iTermMultiServerClientOriginatedMessage request;
-    if (!ReadRequest(fd, &request)) {
+    if (ReadRequest(fd, &request)) {
         return -1;
     }
     switch (request.type) {
@@ -436,7 +455,7 @@ static void AcceptAndReject(int socket) {
     iTermMultiServerProtocolEncodeMessageFromServer(&message, &obj);
     iTermFileDescriptorServerSendMessage(fd,
                                          obj.ioVectors[0].iov_base,
-                                         obj.ioVectors[0].iov_len)
+                                         obj.ioVectors[0].iov_len);
     iTermClientServerProtocolMessageFree(&obj);
     
     close(fd);
@@ -446,8 +465,9 @@ static void AcceptAndReject(int socket) {
 static void SelectLoop(int socketFd, int connectionFd) {
     FDLog(LOG_DEBUG, "Begin SelectLoop.");
     while (1) {
-        int fds[2] = { gPipe[0], connectionFd, socketFd };
-        int results[2];
+        static const int fdCount = 3;
+        int fds[fdCount] = { gPipe[0], connectionFd, socketFd };
+        int results[fdCount];
         iTermSelect(fds, sizeof(fds) / sizeof(*fds), results);
         if (results[0]) {
             if (WaitForAllProcessesAndReportTerminations(connectionFd)) {
@@ -460,7 +480,7 @@ static void SelectLoop(int socketFd, int connectionFd) {
             }
         }
         if (results[2]) {
-            AcceptAndReject(socketFD);
+            AcceptAndReject(socketFd);
         }
     }
     FDLog(LOG_DEBUG, "Exited select loop.");
@@ -528,6 +548,8 @@ static int iTermFileDescriptorMultiServerRun(char *path, int socketFd, int conne
     unlink(path);
     return 1;
 }
+
+
 
 // On entry there should be three file descriptors:
 // 0: A socket we can accept() on.

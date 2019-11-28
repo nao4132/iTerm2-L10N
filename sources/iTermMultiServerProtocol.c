@@ -30,7 +30,7 @@ static int EncodeHandshakeRequest(iTermClientServerProtocolMessageEncoder *encod
 
 static int ParseHandshakeResponse(iTermClientServerProtocolMessageParser *parser,
                                   iTermMultiServerResponseHandshake *out) {
-    if (iTermClientServerProtocolParseTaggedInt(parser, &out->protocolVersion, sizeof(out->protocolVersion), iTermMultiServerTagHandshakeRequestClientMaximumProtocolVersion)) {
+    if (iTermClientServerProtocolParseTaggedInt(parser, &out->protocolVersion, sizeof(out->protocolVersion), iTermMultiServerTagHandshakeResponseProtocolVersion)) {
         return -1;
     }
     if (iTermClientServerProtocolParseTaggedInt(parser, &out->numChildren, sizeof(out->numChildren), iTermMultiServerTagHandshakeResponseChildReportsNumChildren)) {
@@ -369,7 +369,10 @@ int iTermMultiServerProtocolEncodeMessageFromClient(iTermMultiServerClientOrigin
         .message = message
     };
 
-    int status = -1;
+    int status = iTermClientServerProtocolEncodeTaggedInt(&encoder, &obj->type, sizeof(obj->type), iTermMultiServerTagType);
+    if (status) {
+        return status;
+    }
     switch (obj->type) {
         case iTermMultiServerRPCTypeHandshake:
             status = EncodeHandshakeRequest(&encoder, &obj->payload.handshake);
@@ -399,8 +402,10 @@ int iTermMultiServerProtocolEncodeMessageFromServer(iTermMultiServerServerOrigin
         .offset = 0,
         .message = message
     };
-
-    int status = -1;
+    int status = iTermClientServerProtocolEncodeTaggedInt(&encoder, &obj->type, sizeof(obj->type), iTermMultiServerTagType);
+    if (status) {
+        return status;
+    }
     switch (obj->type) {
         case iTermMultiServerRPCTypeHandshake:
             status = EncodeHandshakeResponse(&encoder, &obj->payload.handshake);
@@ -490,6 +495,7 @@ void iTermMultiServerServerOriginatedMessageFree(iTermMultiServerServerOriginate
     switch (obj->type) {
         case iTermMultiServerRPCTypeHandshake:
             FreeHandshakeResponse(&obj->payload.handshake);
+            break;
         case iTermMultiServerRPCTypeLaunch:
             FreeLaunchResponse(&obj->payload.launch);
             break;
@@ -509,8 +515,8 @@ static ssize_t RecvMsg(int fd,
                        iTermClientServerProtocolMessage *message) {
     assert(message->valid == ITERM_MULTISERVER_MAGIC);
 
-    ssize_t n;
-    while (1) {
+    ssize_t n = -1;
+    do {
         n = recvmsg(fd, &message->message, 0);
     } while (n < 0 && errno == EINTR);
 

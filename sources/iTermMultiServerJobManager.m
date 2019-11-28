@@ -199,7 +199,7 @@
 }
 
 - (void)setFd:(int)fd {
-    assert(NO);
+    assert(fd == -1);
 }
 
 - (NSString *)tty {

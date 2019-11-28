@@ -102,7 +102,6 @@ typedef void (^LaunchCallback)(iTermFileDescriptorMultiClientChild * _Nullable, 
 @implementation iTermFileDescriptorMultiClient {
     NSMutableArray<iTermFileDescriptorMultiClientChild *> *_children;
     NSString *_socketPath;
-    int _socketFD;
     dispatch_queue_t _queue;
     NSMutableDictionary<NSNumber *, iTermFileDescriptorMultiClientPendingLaunch *> *_pendingLaunches;
 }
@@ -119,6 +118,7 @@ typedef void (^LaunchCallback)(iTermFileDescriptorMultiClientChild * _Nullable, 
     return self;
 }
 
+extern WTF(const char *);
 - (BOOL)attachOrLaunchServer {
     switch ([self tryAttach]) {
         case iTermFileDescriptorMultiClientAttachStatusSuccess:
@@ -135,6 +135,7 @@ typedef void (^LaunchCallback)(iTermFileDescriptorMultiClientChild * _Nullable, 
             assert(_socketFD < 0);
             return NO;
     }
+
     assert(_socketFD >= 0);
     BOOL ok = [self handshakeWithChildDiscoveryBlock:^(iTermMultiServerReportChild *child) {
         [self addChild:[[iTermFileDescriptorMultiClientChild alloc] initWithReport:child]];
@@ -251,7 +252,9 @@ done:
         goto done;
     }
 
+    errno = 0;
     const ssize_t bytesWritten = iTermFileDescriptorServerSendMessage(_socketFD, obj.ioVectors[0].iov_base, obj.ioVectors[0].iov_len);
+
     if (bytesWritten <= 0) {
         status = 1;
         goto done;
@@ -342,10 +345,13 @@ done:
         return NO;
     }
 
+    [self readLoop];
+
     return YES;
 }
 
 // This is copypasta from iTermFileDescriptorClient.c's iTermFileDescriptorClientConnect()
+// NOTE: Sets _socketFD as a side-effect.
 - (iTermFileDescriptorMultiClientAttachStatus)tryAttach {
     assert(_socketFD < 0);
     int interrupted = 0;
@@ -403,8 +409,8 @@ done:
     if (forkState.pid < 0) {
         return NO;
     }
+    assert(_socketFD >= 0);
 
-    _socketFD = forkState.connectionFd;
     return YES;
 }
 

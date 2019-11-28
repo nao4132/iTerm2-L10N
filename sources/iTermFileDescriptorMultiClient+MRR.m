@@ -12,6 +12,7 @@
 #import "iTermAdvancedSettingsModel.h"
 #import "iTermFileDescriptorServer.h"
 #import "iTermPosixTTYReplacements.h"
+#include <sys/un.h>
 
 static const NSInteger numberOfFileDescriptorsToPreserve = 3;
 
@@ -33,9 +34,10 @@ static void Free2DArray(char **array, NSInteger count) {
 
 @implementation iTermFileDescriptorMultiClient (MRR)
 
+// NOTE: Sets _socketFD as client file descriptor as a side-effect
 - (BOOL)createAttachedSocketAtPath:(NSString *)path
-                            socket:(int *)socketFDOut
-                        connection:(int *)connectionFDOut {
+                            socket:(int *)socketFDOut  // server fd for accept()
+                        connection:(int *)connectionFDOut {  // server socket fd for recvmsg/sendmsg
     DLog(@"iTermForkAndExecToRunJobInServer");
     *socketFDOut = iTermFileDescriptorServerSocketBindListen(path.UTF8String);
 
@@ -80,6 +82,52 @@ static void Free2DArray(char **array, NSInteger count) {
     return YES;
 }
 
+static void
+do_sendmsg(int sock)
+{
+    struct msghdr msg;
+        memset(&msg, 0, sizeof(msg));
+
+    struct iovec iov[1];
+    iov[0].iov_base = "Hello";
+    iov[0].iov_len = 6;
+
+    msg.msg_iov = iov;
+    msg.msg_iovlen = sizeof(iov) / sizeof(iov[0]);
+
+    assert(sendmsg(sock, &msg, 0) != -1);
+}
+
+static int
+make_socket(const char *sockpath) {
+    int sock = socket(PF_LOCAL, SOCK_STREAM, 0);
+        assert(sock != -1);
+
+    struct sockaddr_storage storage;
+    struct sockaddr_un *addr = (struct sockaddr_un *)&storage;
+    addr->sun_family = AF_LOCAL;
+    strlcpy(addr->sun_path, sockpath, sizeof(addr->sun_path));
+    addr->sun_len = SUN_LEN(addr);
+    assert(bind(sock, (struct sockaddr *)addr, addr->sun_len) != -1);
+    assert(listen(sock, 0) != -1);
+    return sock;
+}
+
+static void
+server_main(const char *sockpath)
+{
+    int sock = make_socket(sockpath);
+
+    int s;
+    assert((s = accept(sock, NULL, 0)) != -1);
+
+    do_sendmsg(s);
+
+    assert (close(s) != -1);
+    assert (close(sock) != -1);
+    assert (unlink(sockpath) != -1);
+}
+
 - (iTermForkState)launchWithSocketPath:(NSString *)path
                             executable:(NSString *)executable {
     assert([iTermAdvancedSettingsModel runJobsInServers]);
@@ -98,12 +146,17 @@ static void Free2DArray(char **array, NSInteger count) {
         return forkState;
     }
 
+    forkState.connectionFd = _socketFD;
+
     pipe(forkState.deadMansPipe);
 
-    NSArray<NSString *> *argv = @[ path ];
+    NSArray<NSString *> *argv = @[ executable, path ];
     char **cargv = Make2DArray(argv);
     const char **cenv = (const char **)Make2DArray(@[]);
     const char *argpath = executable.UTF8String;
+
+    int fds[] = { serverSocketFd, serverConnectionFd, forkState.deadMansPipe[1] };
+    assert(sizeof(fds) / sizeof(*fds) == numberOfFileDescriptorsToPreserve);
 
     forkState.pid = fork();
     switch (forkState.pid) {
@@ -114,8 +167,7 @@ static void Free2DArray(char **array, NSInteger count) {
 
         case 0: {
             // child
-            int fds[] = { serverSocketFd, serverConnectionFd, forkState.deadMansPipe[1] };
-            assert(sizeof(fds) / sizeof(*fds) == numberOfFileDescriptorsToPreserve);
+
             iTermPosixMoveFileDescriptors(fds, numberOfFileDescriptorsToPreserve);
             iTermExec(argpath, (const char **)cargv, NO, &forkState, "/", cenv);
             _exit(-1);
@@ -127,6 +179,7 @@ static void Free2DArray(char **array, NSInteger count) {
             close(forkState.deadMansPipe[1]);
             Free2DArray(cargv, argv.count);
             Free2DArray((char **)cenv, 0);
+//            do_sendmsg(_socketFD); WORKS HERE
             return forkState;
     }
 }

@@ -125,9 +125,11 @@ int iTermPosixTTYReplacementForkPty(int *amaster,
 void iTermExec(const char *argpath,
                const char **argv,
                int closeFileDescriptors,
+               int restoreResourceLimits,
                const iTermForkState *forkState,
                const char *initialPwd,
-               const char **newEnviron) {
+               const char **newEnviron,
+               int errorFd) {
     // BE CAREFUL WHAT YOU DO HERE!
     // See man sigaction for the list of legal function calls to make between fork and exec.
 
@@ -144,7 +146,8 @@ void iTermExec(const char *argpath,
     if (closeFileDescriptors) {
         // If running jobs in servers close file descriptors after exec when it's safe to
         // enumerate files in /dev/fd. This is the potentially very slow path (issue 5391).
-        for (int j = forkState->numFileDescriptorsToPreserve; j < getdtablesize(); j++) {
+        const int dtableSize = getdtablesize();
+        for (int j = forkState->numFileDescriptorsToPreserve; j < dtableSize; j++) {
             close(j);
         }
     }
@@ -153,7 +156,9 @@ void iTermExec(const char *argpath,
     // be safe nonetheless. The implementation is simply to make a system call. Neither memory
     // allocation nor mutex locking occurs in user space. There isn't any other way to do this besides
     // passing the desired limits to the child process, which is pretty gross.
-    iTermResourceLimitsHelperRestoreSavedLimits();
+    if (restoreResourceLimits) {
+        iTermResourceLimitsHelperRestoreSavedLimits();
+    }
 
     chdir(initialPwd);
 
@@ -163,20 +168,20 @@ void iTermExec(const char *argpath,
     environ = newEnviron;
     execvp(argpath, (char* const*)argv);
 
-    // NOTE: This won't be visible when jobs run in servers :(
-    // exec error
-    int e = errno;
-    iTermSignalSafeWrite(1, "## exec failed ##\n");
-    iTermSignalSafeWrite(1, "Program: ");
-    iTermSignalSafeWrite(1, argpath);
-    iTermSignalSafeWrite(1, "\nErrno: ");
-    if (e == ENOENT) {
-        iTermSignalSafeWrite(1, "\nNo such file or directory");
-    } else {
-        iTermSignalSafeWrite(1, "\nErrno: ");
-        iTermSignalSafeWriteInt(1, e);
+    if (errorFd >= 0) {
+        int e = errno;
+        iTermSignalSafeWrite(errorFd, "## exec failed ##\n");
+        iTermSignalSafeWrite(errorFd, "Program: ");
+        iTermSignalSafeWrite(errorFd, argpath);
+        iTermSignalSafeWrite(errorFd, "\nErrno: ");
+        if (e == ENOENT) {
+            iTermSignalSafeWrite(errorFd, "\nNo such file or directory");
+        } else {
+            iTermSignalSafeWrite(errorFd, "\nErrno: ");
+            iTermSignalSafeWriteInt(errorFd, e);
+        }
+        iTermSignalSafeWrite(errorFd, "\n");
     }
-    iTermSignalSafeWrite(1, "\n");
 
     sleep(1);
 }

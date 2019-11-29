@@ -82,10 +82,13 @@ typedef void (^LaunchCallback)(iTermFileDescriptorMultiClientChild * _Nullable, 
 - (instancetype)initWithRequest:(iTermMultiServerRequestLaunch)request
                      completion:(LaunchCallback)completion NS_DESIGNATED_INITIALIZER;
 - (instancetype)init NS_UNAVAILABLE;
-
+- (void)invalidate;
 @end
 
-@implementation iTermFileDescriptorMultiClientPendingLaunch
+@implementation iTermFileDescriptorMultiClientPendingLaunch {
+    BOOL _invalid;
+    iTermMultiServerRequestLaunch _launchRequest;
+}
 
 - (instancetype)initWithRequest:(iTermMultiServerRequestLaunch)request
                      completion:(LaunchCallback)completion {
@@ -95,6 +98,16 @@ typedef void (^LaunchCallback)(iTermFileDescriptorMultiClientChild * _Nullable, 
         _completion = [completion copy];
     }
     return self;
+}
+
+- (void)invalidate {
+    _invalid = YES;
+    memset(&_launchRequest, 0, sizeof(_launchRequest));
+}
+
+- (iTermMultiServerRequestLaunch)launchRequest {
+    assert(!_invalid);
+    return _launchRequest;
 }
 
 @end
@@ -195,6 +208,7 @@ extern WTF(const char *);
 // Runs in background queue
 - (void)recvWithCompletion:(void (^)(BOOL ok, iTermMultiServerServerOriginatedMessage *message))block {
     __block iTermClientServerProtocolMessage encodedMessage;
+    memset(&encodedMessage, 0, sizeof(encodedMessage));
     const int status = iTermMultiServerRecv(_socketFD, &encodedMessage);
 
     __weak __typeof(self) weakSelf = self;
@@ -429,6 +443,27 @@ static long long MakeUniqueID(void) {
     return result;
 }
 
+- (iTermMultiServerClientOriginatedMessage)copyLaunchRequest:(iTermMultiServerClientOriginatedMessage)original {
+    assert(original.type == iTermMultiServerRPCTypeLaunch);
+
+    // Encode and decode the message so we can have our own copy of it.
+    iTermClientServerProtocolMessage temp;
+    iTermClientServerProtocolMessageInitialize(&temp);
+
+    {
+        const int status = iTermMultiServerProtocolEncodeMessageFromClient(&original, &temp);
+        assert(status == 0);
+    }
+
+    iTermMultiServerClientOriginatedMessage messageCopy;
+    {
+        const int status = iTermMultiServerProtocolParseMessageFromClient(&temp, &messageCopy);
+        assert(status == 0);
+    }
+
+    return messageCopy;
+}
+
 - (void)launchChildWithExecutablePath:(const char *)path
                                  argv:(const char **)argv
                           environment:(const char **)environment
@@ -457,7 +492,10 @@ static long long MakeUniqueID(void) {
         completion(nil, [self connectionLostError]);
         return;
     }
-    _pendingLaunches[@(uniqueID)] = [[iTermFileDescriptorMultiClientPendingLaunch alloc] initWithRequest:message.payload.launch completion:completion];
+
+    iTermMultiServerClientOriginatedMessage messageCopy = [self copyLaunchRequest:message];
+
+    _pendingLaunches[@(uniqueID)] = [[iTermFileDescriptorMultiClientPendingLaunch alloc] initWithRequest:messageCopy.payload.launch completion:completion];
 }
 
 - (void)waitForChild:(iTermFileDescriptorMultiClientChild *)child
@@ -525,9 +563,14 @@ static long long MakeUniqueID(void) {
 #warning yay race conditions
     assert(pendingLaunch);
     [_pendingLaunches removeObjectForKey:@(launch.uniqueId)];
-    /*
-     launch has: status (0=success) pid, fd, uniqueId
-     */
+
+    if (launch.status != 0) {
+        pendingLaunch.completion(NULL, [self forkError]);
+        [pendingLaunch invalidate];
+        return;
+    }
+
+    // Happy path
     iTermMultiServerReportChild fakeReport = {
         .isLast = 0,
         .pid = launch.pid,
@@ -542,8 +585,16 @@ static long long MakeUniqueID(void) {
         .tty = launch.tty,
         .fd = launch.fd
     };
+
     iTermFileDescriptorMultiClientChild *child = [[iTermFileDescriptorMultiClientChild alloc] initWithReport:&fakeReport];
+    [self addChild:child];
     pendingLaunch.completion(child, NULL);
+
+    iTermMultiServerClientOriginatedMessage temp;
+    temp.type = iTermMultiServerRPCTypeLaunch;
+    temp.payload.launch = pendingLaunch.launchRequest;
+    iTermMultiServerClientOriginatedMessageFree(&temp);
+    [pendingLaunch invalidate];
 }
 
 - (void)handleTermination:(iTermMultiServerReportTermination)termination {
@@ -573,6 +624,12 @@ static long long MakeUniqueID(void) {
             [self close];
             break;
     }
+}
+
+- (NSError *)forkError {
+    return [NSError errorWithDomain:iTermFileDescriptorMultiClientErrorDomain
+                               code:iTermFileDescriptorMultiClientErrorCodeForkFailed
+                           userInfo:nil];
 }
 
 - (NSError *)connectionLostError {

@@ -169,7 +169,7 @@ server_main(const char *sockpath)
             // child
 
             iTermPosixMoveFileDescriptors(fds, numberOfFileDescriptorsToPreserve);
-            iTermExec(argpath, (const char **)cargv, NO, &forkState, "/", cenv);
+            iTermExec(argpath, (const char **)cargv, NO, YES, &forkState, "/", cenv, 1);
             _exit(-1);
             return forkState;
         }

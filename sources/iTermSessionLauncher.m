@@ -474,7 +474,7 @@
 }
 
 - (void)setFinishedWithSuccess:(BOOL)ok {
-    DLog(@"setFInishedWithSuccess:%@", @(ok));
+    DLog(@"setFinishedWithSuccess:%@", @(ok));
     if (_finished) {
         return;
     }

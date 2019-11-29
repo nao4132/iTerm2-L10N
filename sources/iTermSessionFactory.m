@@ -150,7 +150,7 @@ NS_ASSUME_NONNULL_BEGIN
     }
     if (!substitutions) {
         if (completion) {
-            [aSession didFinishInitialization:NO];
+            [aSession didFinishInitialization];
             completion(NO);
         }
         return NO;
@@ -194,7 +194,7 @@ NS_ASSUME_NONNULL_BEGIN
         }
         void (^wrapper)(BOOL) = ^(BOOL ok) {
             DLog(@"factory completion wrapper starting");
-            [aSession didFinishInitialization:ok];
+            [aSession didFinishInitialization];
             DLog(@"factory did finish initialization");
             if (completion) {
                 completion(ok);

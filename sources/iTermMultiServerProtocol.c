@@ -304,10 +304,10 @@ int iTermMultiServerProtocolParseMessageFromClient(iTermClientServerProtocolMess
 
 static int GetFileDescriptor(iTermClientServerProtocolMessage *message,
                              int *receivedFileDescriptorPtr) {
-    struct cmsghdr *messageHeader = CMSG_FIRSTHDR(&message->message);
-    if (messageHeader == NULL) {
-        return -1;
-    }
+    // Should be this:
+//    struct cmsghdr *messageHeader = CMSG_FIRSTHDR(&message->message);
+    // But because the structure is copied you can't trust the pointer.
+    struct cmsghdr *messageHeader = &message->controlBuffer.cm;
     if (messageHeader->cmsg_len != CMSG_LEN(sizeof(int))) {
         return -1;
     }

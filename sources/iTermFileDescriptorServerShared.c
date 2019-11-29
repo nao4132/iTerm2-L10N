@@ -71,6 +71,11 @@ ssize_t iTermFileDescriptorServerSendMessage(int connectionFd,
     while (rc == -1 && errno == EINTR) {
         rc = sendmsg(connectionFd, &message, 0);
     }
+    if (rc == -1) {
+        FDLog(LOG_DEBUG, "sendmsg failed with %s", strerror(errno));
+    } else {
+        FDLog(LOG_DEBUG, "send %d bytes to client", (int)rc);
+    }
     return rc;
 }
 
@@ -78,8 +83,13 @@ ssize_t iTermFileDescriptorServerSendMessageAndFileDescriptor(int connectionFd,
                                                               void *buffer,
                                                               size_t bufferSize,
                                                               int fdToSend) {
-    iTermFileDescriptorControlMessage controlMessage;
+    FDLog(LOG_DEBUG, "Send file descriptor %d", fdToSend);
     struct msghdr message;
+    memset(&message, 0, sizeof(message));
+
+    iTermFileDescriptorControlMessage controlMessage;
+    memset(&controlMessage, 0, sizeof(controlMessage));
+
     message.msg_control = controlMessage.control;
     message.msg_controllen = sizeof(controlMessage.control);
 

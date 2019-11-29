@@ -26,7 +26,8 @@
                       argv:(const char **)argv
                 initialPwd:(const char *)initialPwd
                 newEnviron:(const char **)newEnviron
-                completion:(void (^)(iTermFileDescriptorMultiClientChild *child))completion;
+                completion:(void (^)(iTermFileDescriptorMultiClientChild *child,
+                                     NSError *error))completion;
 
 @end
 
@@ -103,7 +104,8 @@
                       argv:(const char **)argv
                 initialPwd:(const char *)initialPwd
                 newEnviron:(const char **)newEnviron
-                completion:(void (^)(iTermFileDescriptorMultiClientChild *child))completion {
+                completion:(void (^)(iTermFileDescriptorMultiClientChild *child,
+                                     NSError *error))completion {
     [_client launchChildWithExecutablePath:argpath
                                       argv:argv
                                environment:newEnviron
@@ -113,7 +115,7 @@
         if (error) {
             DLog(@"While creating child: %@", error);
         }
-        completion(child);
+        completion(child, error);
     }];
 }
 
@@ -189,8 +191,38 @@
                          argv:argv
                    initialPwd:initialPwd
                    newEnviron:newEnviron
-                   completion:^(iTermFileDescriptorMultiClientChild *child) {
+                   completion:^(iTermFileDescriptorMultiClientChild *child,
+                                NSError *error) {
         self->_child = child;
+        if (child != NULL) {
+            // Happy path
+            [[TaskNotifier sharedInstance] registerTask:task];
+            [[iTermProcessCache sharedInstance] setNeedsUpdate:YES];
+            completion(iTermJobManagerForkAndExecStatusSuccess);
+            return;
+        }
+
+        // Handle errors
+        assert([error.domain isEqualToString:iTermFileDescriptorMultiClientErrorDomain]);
+        const iTermFileDescriptorMultiClientErrorCode code = (iTermFileDescriptorMultiClientErrorCode)error.code;
+        switch (code) {
+            case iTermFileDescriptorMultiClientErrorCodeConnectionLost:
+                completion(iTermJobManagerForkAndExecStatusServerError);
+                break;
+            case iTermFileDescriptorMultiClientErrorCodeNoSuchChild:
+                completion(iTermJobManagerForkAndExecStatusServerError);
+                break;
+            case iTermFileDescriptorMultiClientErrorCodeCanNotWait:
+                completion(iTermJobManagerForkAndExecStatusServerError);
+                break;
+            case iTermFileDescriptorMultiClientErrorCodeUnknown:
+                completion(iTermJobManagerForkAndExecStatusServerError);
+                break;
+            case iTermFileDescriptorMultiClientErrorCodeForkFailed:
+                completion(iTermJobManagerForkAndExecStatusFailedToFork);
+                break;
+        }
+        assert(NO);
     }];
 }
 

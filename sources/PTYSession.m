@@ -911,7 +911,7 @@ ITERM_WEAKLY_REFERENCEABLE
                [self class], self, [_screen width], [_screen height], @(self.useMetal), _guid];
 }
 
-- (void)didFinishInitialization:(BOOL)ok {
+- (void)didFinishInitialization {
     [_pwdPoller poll];
     if ([self.variablesScope valueForVariableName:iTermVariableKeySessionUsername] == nil) {
         [self.variablesScope setValue:NSUserName() forVariableNamed:iTermVariableKeySessionUsername];
@@ -1527,7 +1527,7 @@ ITERM_WEAKLY_REFERENCEABLE
                                                        state:state
                                            tmuxDCSIdentifier:tmuxDCSIdentifier
                                               missingProfile:missingProfile];
-        [aSession didFinishInitialization:YES];
+        [aSession didFinishInitialization];
     };
     if ([aSession.profile[KEY_AUTOLOG] boolValue]) {
         [aSession retain];
@@ -2074,6 +2074,7 @@ ITERM_WEAKLY_REFERENCEABLE
                             completion:^{
                                 [self sendInitialText];
                                 if (completion) {
+#warning TODO: Super sketchy that this always calls completion with YES.
                                     completion(YES);
                                 }
                             }];

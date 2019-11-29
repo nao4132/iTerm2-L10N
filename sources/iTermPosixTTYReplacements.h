@@ -30,9 +30,11 @@ int iTermPosixTTYReplacementForkPty(int *amaster,
 void iTermExec(const char *argpath,
                const char **argv,
                int closeFileDescriptors,
+               int restoreResourceLimits,
                const iTermForkState *forkState,
                const char *initialPwd,
-               const char **newEnviron);
+               const char **newEnviron,
+               int errorFd);
 
 void iTermSignalSafeWrite(int fd, const char *message);
 void iTermSignalSafeWriteInt(int fd, int n);

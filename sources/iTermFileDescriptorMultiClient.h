@@ -19,7 +19,8 @@ typedef NS_ENUM(NSUInteger, iTermFileDescriptorMultiClientErrorCode) {
     iTermFileDescriptorMultiClientErrorCodeConnectionLost,
     iTermFileDescriptorMultiClientErrorCodeNoSuchChild,
     iTermFileDescriptorMultiClientErrorCodeCanNotWait,  // child not terminated
-    iTermFileDescriptorMultiClientErrorCodeUnknown
+    iTermFileDescriptorMultiClientErrorCodeUnknown,
+    iTermFileDescriptorMultiClientErrorCodeForkFailed
 };
 
 @interface iTermFileDescriptorMultiClientChild : NSObject

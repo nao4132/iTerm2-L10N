@@ -83,7 +83,7 @@ int iTermForkAndExecToRunJobInServer(iTermForkState *forkState,
 
     if (forkState->pid == (pid_t)0) {
         // Child
-        iTermExec(argpath, argv, closeFileDescriptors, forkState, initialPwd, newEnviron);
+        iTermExec(argpath, argv, closeFileDescriptors, 1, forkState, initialPwd, newEnviron, 1);
         _exit(-1);
     }
 
@@ -102,7 +102,7 @@ int iTermForkAndExecToRunJobDirectly(iTermForkState *forkState,
     forkState->pid = forkpty(&fd, ttyState->tty, &ttyState->term, &ttyState->win);
     if (forkState->pid == (pid_t)0) {
         // Child
-        iTermExec(argpath, argv, closeFileDescriptors, forkState, initialPwd, newEnviron);
+        iTermExec(argpath, argv, closeFileDescriptors, 1, forkState, initialPwd, newEnviron, 1);
         _exit(-1);
     }
     return fd;

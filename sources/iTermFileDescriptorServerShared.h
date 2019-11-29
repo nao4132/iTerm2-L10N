@@ -24,8 +24,12 @@ typedef union {
     } \
 } while (0)
 #else
+#if ITERM_SERVER
+#define FDLog(level, format, ...) syslog(level, "iTermServer(pid=%d) " format, getpid(), ##__VA_ARGS__)
+#else
 #define FDLog(level, format, ...) syslog(level, "Client(%d) " format, getpid(), ##__VA_ARGS__)
-#endif
+#endif  // ITERM_SERVER
+#endif  // DEBUG
 
 void iTermFileDescriptorServerLog(char *format, ...);
 int iTermFileDescriptorServerAccept(int socketFd);

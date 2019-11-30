@@ -32,6 +32,7 @@ typedef union {
 #endif  // DEBUG
 
 void iTermFileDescriptorServerLog(char *format, ...);
+int iTermFileDescriptorServerAcceptAndClose(int socketFd);
 int iTermFileDescriptorServerAccept(int socketFd);
 void SetRunningServer(void);
 
@@ -40,14 +41,17 @@ ssize_t iTermFileDescriptorServerSendMessageAndFileDescriptor(int connectionFd,
                                                               size_t bufferSize,
                                                               int fdToSend);
 
+// Socket only (e.g., unix-domain socket, not pipe)
 ssize_t iTermFileDescriptorServerSendMessage(int connectionFd,
                                              void *buffer,
                                              size_t bufferSize);
 
+// For use on a pipe or other non-socket
+ssize_t iTermFileDescriptorClientWrite(int fd, void *buffer, size_t bufferSize);
 
 // Takes an array of file descriptors and its length as input. `results` should be an array of
 // equal length. On return, the readable FDs will have the corresponding value in `results` set to
 // true. Takes care of EINTR. Return value is number of readable FDs.
-int iTermSelect(int *fds, int count, int *results);
+int iTermSelect(int *fds, int count, int *results, int wantErrors);
 
 #endif /* iTermFileDescriptorServerShared_h */

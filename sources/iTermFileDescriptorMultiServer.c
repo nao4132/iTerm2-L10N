@@ -486,7 +486,7 @@ static int HandleWait(int fd, iTermMultiServerRequestWait *wait) {
 static int ReadRequest(int fd, iTermMultiServerClientOriginatedMessage *out) {
     iTermClientServerProtocolMessage message;
     DLog("Reading a request...");
-    int status = iTermMultiServerRecv(fd, &message);
+    int status = iTermMultiServerRead(fd, &message);
     if (status) {
         goto done;
     }
@@ -503,19 +503,19 @@ done:
     return status;
 }
 
-static int ReadAndHandleRequest(int fd) {
+static int ReadAndHandleRequest(int readFd, int writeFd) {
     iTermMultiServerClientOriginatedMessage request;
-    if (ReadRequest(fd, &request)) {
+    if (ReadRequest(readFd, &request)) {
         return -1;
     }
     DLog("Handle request of type %d", (int)request.type);
     switch (request.type) {
         case iTermMultiServerRPCTypeHandshake:
-            return HandleHandshake(fd, &request.payload.handshake);
+            return HandleHandshake(writeFd, &request.payload.handshake);
         case iTermMultiServerRPCTypeWait:
-            return HandleWait(fd, &request.payload.wait);
+            return HandleWait(writeFd, &request.payload.wait);
         case iTermMultiServerRPCTypeLaunch:
-            return HandleLaunchRequest(fd, &request.payload.launch);
+            return HandleLaunchRequest(writeFd, &request.payload.launch);
         case iTermMultiServerRPCTypeTermination:
             DLog("Ignore termination message");
             break;
@@ -560,83 +560,123 @@ static void AcceptAndReject(int socket) {
 }
 
 // There is a client connected. Respond to requests from it until it disconnects, then return.
-static void SelectLoop(int socketFd, int connectionFd) {
+static void SelectLoop(int socketFd, int writeFd, int readFd) {
     DLog("Begin SelectLoop.");
     while (1) {
         static const int fdCount = 3;
-        int fds[fdCount] = { gPipe[0], connectionFd, socketFd };
+        int fds[fdCount] = { gPipe[0], socketFd, readFd };
         int results[fdCount];
         DLog("Calling select()");
-        iTermSelect(fds, sizeof(fds) / sizeof(*fds), results);
+        iTermSelect(fds, sizeof(fds) / sizeof(*fds), results, 1 /* wantErrors */);
+
         if (results[0]) {
+            // gPipe[0]
             DLog("select: SIGCHLD happened during select");
-            if (WaitForAllProcessesAndReportTerminations(connectionFd)) {
+            if (WaitForAllProcessesAndReportTerminations(writeFd)) {
                 break;
             }
         }
         if (results[1]) {
-            DLog("select: have data to read");
-            if (ReadAndHandleRequest(connectionFd)) {
-                break;
-            }
-        }
-        if (results[2]) {
+            // socketFd
             DLog("select: socket is readable");
             AcceptAndReject(socketFd);
         }
+        if (results[2]) {
+            // readFd
+            DLog("select: have data to read");
+            if (ReadAndHandleRequest(readFd, writeFd)) {
+                break;
+            }
+        }
     }
     FDLog(LOG_DEBUG, "Exited select loop.");
-    close(connectionFd);
+    close(writeFd);
+}
+
+static int MakeAndSendPipe(int unixDomainSocketFd) {
+    int fds[2];
+    if (pipe(fds) != 0) {
+        return -1;
+    }
+
+    int readPipe = fds[0];
+    int writePipe = fds[1];
+
+    const ssize_t rc = iTermFileDescriptorServerSendMessageAndFileDescriptor(unixDomainSocketFd, "", 0, writePipe);
+    if (rc == -1) {
+        close(readPipe);
+        readPipe = -1;
+    }
+
+    close(writePipe);
+    return readPipe;
 }
 
 // Alternates between running the select loop and accepting a new connection.
-static void MainLoop(char *path, int socketFd, int initialConnectionFd) {
+static void MainLoop(char *path, int acceptFd, int initialWriteFd, int initialReadFd) {
     FDLog(LOG_DEBUG, "Entering main loop.");
-    assert(socketFd >= 0);
-    assert(initialConnectionFd >= 0);
-    assert(socketFd != initialConnectionFd);
+    assert(acceptFd >= 0);
+    assert(initialWriteFd >= 0);
+    assert(initialReadFd >= 0);
+    assert(acceptFd != initialWriteFd);
 
-    int connectionFd = initialConnectionFd;
+    int writeFd = initialWriteFd;
+    int readFd = initialReadFd;
     do {
-        SelectLoop(socketFd, connectionFd);
+        SelectLoop(acceptFd, writeFd, readFd);
 
         // You get here after the connection is lost. Listen and accept.
         FDLog(LOG_DEBUG, "Calling accept");
-        connectionFd = iTermFileDescriptorServerAccept(socketFd);
-        if (connectionFd == -1) {
+        writeFd = iTermFileDescriptorServerAccept(acceptFd);
+        if (writeFd == -1) {
             FDLog(LOG_DEBUG, "accept failed: %s", strerror(errno));
         }
-    } while (connectionFd > 0);
+        readFd = MakeAndSendPipe(writeFd);
+    } while (writeFd >= 0 && readFd >= 0);
     DLog("Returning from MainLoop because of an error.");
 }
 
 #pragma mark - Bootstrap
 
-static int Initialize(char *path) {
-    openlog("iTerm2-Server", LOG_PID | LOG_NDELAY, LOG_USER);
-    setlogmask(LOG_UPTO(LOG_DEBUG));
-    FDLog(LOG_DEBUG, "Server starting Initialize()");
-    gPath = strdup(path);
-    // We get this when iTerm2 crashes. Ignore it.
-    FDLog(LOG_DEBUG, "Installing SIGHUP handler.");
-    signal(SIGHUP, SIG_IGN);
+static int MakeNonBlocking(int fd) {
+    int flags = fcntl(fd, F_GETFL);
+    int rc = 0;
+    do {
+        rc = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+    } while (rc == -1 && errno == EINTR);
+    return rc == -1;
+}
 
+static int MakeStandardFileDescriptorsNonBlocking(void) {
+    // Make all the passed-in file descriptors non-blocking.
+    for (int i = 0; i < 3; i++) {
+        if (MakeNonBlocking(i)) {
+            DLog("Failed to make fd %d nonblocking", i);
+        }
+    }
+    return 0;
+}
+
+static int MakePipe(void) {
     if (pipe(gPipe) < 0) {
         DLog("Failed to create pipe: %s", strerror(errno));
         return 1;
     }
+
     // Make pipes nonblocking
     for (int i = 0; i < 2; i++) {
-        int rc = 0;
-        do {
-            int flags = fcntl(gPipe[i], F_GETFL);
-            rc = fcntl(gPipe[i], F_SETFL, flags | O_NONBLOCK);
-        } while (rc == -1 && errno == EINTR);
-        if (rc == -1) {
+        if (MakeNonBlocking(gPipe[i])) {
             DLog("Failed to set gPipe[%d] nonblocking: %s", i, strerror(errno));
             return 2;
         }
     }
+    return 0;
+}
+
+static void InitializeSignals(void) {
+    // We get this when iTerm2 crashes. Ignore it.
+    FDLog(LOG_DEBUG, "Installing SIGHUP handler.");
+    signal(SIGHUP, SIG_IGN);
 
     FDLog(LOG_DEBUG, "Installing SIGCHLD handler.");
     signal(SIGCHLD, SigChildHandler);
@@ -647,11 +687,34 @@ static int Initialize(char *path) {
     sigaddset(&signal_set, SIGCHLD);
     FDLog(LOG_DEBUG, "Unblocking SIGCHLD.");
     sigprocmask(SIG_UNBLOCK, &signal_set, NULL);
+}
+
+static void InitializeLogging(void) {
+    openlog("iTerm2-Server", LOG_PID | LOG_NDELAY, LOG_USER);
+    setlogmask(LOG_UPTO(LOG_DEBUG));
+}
+
+static int Initialize(char *path) {
+    InitializeLogging();
+
+    FDLog(LOG_DEBUG, "Server starting Initialize()");
+
+    if (MakeStandardFileDescriptorsNonBlocking()) {
+        return 1;
+    }
+
+    gPath = strdup(path);
+
+    if (MakePipe()) {
+        return 1;
+    }
+
+    InitializeSignals();
 
     return 0;
 }
 
-static int iTermFileDescriptorMultiServerRun(char *path, int socketFd, int connectionFd) {
+static int iTermFileDescriptorMultiServerRun(char *path, int socketFd, int writeFD, int readFD) {
     SetRunningServer();
     // syslog raises sigpipe when the parent job dies on 10.12.
     signal(SIGPIPE, SIG_IGN);
@@ -659,7 +722,7 @@ static int iTermFileDescriptorMultiServerRun(char *path, int socketFd, int conne
     if (rc) {
         DLog("Initialize failed with code %d", rc);
     } else {
-        MainLoop(path, socketFd, connectionFd);
+        MainLoop(path, socketFd, writeFD, readFD);
         // MainLoop never returns, except by dying on a signal.
     }
     DLog("Cleaning up to exit");
@@ -670,14 +733,15 @@ static int iTermFileDescriptorMultiServerRun(char *path, int socketFd, int conne
 
 
 // On entry there should be three file descriptors:
-// 0: A socket we can accept() on.
-// 1: A connection we can recvmsg() and sendmsg() on.
-// 2: A pipe that can be used to detect this process's termination.
+// 0: A socket we can accept() on. listen() was already called on it.
+// 1: A connection we can sendmsg() on. accept() was already called on it.
+// 2: A pipe that can be used to detect this process's termination. Do nothing with it.
+// 3: A pipe we can recvmsg() on.
 //
 // There should be a single command-line argument, which is the path tot he unix-domain socket
 // I'll use.
 int main(int argc, char *argv[]) {
     assert(argc == 2);
-    iTermFileDescriptorMultiServerRun(argv[1], 0, 1);
+    iTermFileDescriptorMultiServerRun(argv[1], 0, 1, 3);
     return 1;
 }

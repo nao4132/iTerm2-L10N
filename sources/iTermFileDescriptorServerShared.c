@@ -37,6 +37,14 @@ void iTermFileDescriptorServerLog(char *format, ...) {
     va_end(args);
 }
 
+int iTermFileDescriptorServerAcceptAndClose(int socketFd) {
+    int fd = iTermFileDescriptorServerAccept(socketFd);
+    if (fd != -1) {
+        close(fd);
+    }
+    return fd;
+}
+
 int iTermFileDescriptorServerAccept(int socketFd) {
     // incoming unix domain socket connection to get FDs
     struct sockaddr_un remote;
@@ -47,14 +55,11 @@ int iTermFileDescriptorServerAccept(int socketFd) {
         connectionFd = accept(socketFd, (struct sockaddr *)&remote, &sizeOfRemote);
         FDLog(LOG_DEBUG, "accept() returned %d error=%s", connectionFd, strerror(errno));
     } while (connectionFd == -1 && errno == EINTR);
-    if (connectionFd != -1) {
-        close(socketFd);
-    }
     return connectionFd;
 }
 
 // Returns number of bytes sent, or -1 for error.
-ssize_t iTermFileDescriptorServerSendMessage(int connectionFd,
+ssize_t iTermFileDescriptorServerSendMessage(int fd,
                                              void *buffer,
                                              size_t bufferSize) {
     struct msghdr message;
@@ -67,9 +72,9 @@ ssize_t iTermFileDescriptorServerSendMessage(int connectionFd,
     message.msg_iovlen = 1;
 
     errno = 0;
-    ssize_t rc = sendmsg(connectionFd, &message, 0);
+    ssize_t rc = sendmsg(fd, &message, 0);
     while (rc == -1 && errno == EINTR) {
-        rc = sendmsg(connectionFd, &message, 0);
+        rc = sendmsg(fd, &message, 0);
     }
     if (rc == -1) {
         FDLog(LOG_DEBUG, "sendmsg failed with %s", strerror(errno));
@@ -77,6 +82,37 @@ ssize_t iTermFileDescriptorServerSendMessage(int connectionFd,
         FDLog(LOG_DEBUG, "send %d bytes to client", (int)rc);
     }
     return rc;
+}
+
+static ssize_t Write(int fd, void *buffer, size_t bufferSize) {
+    ssize_t rc = -1;
+    size_t offset = 0;
+    while (offset < bufferSize) {
+        do {
+            errno = 0;
+            rc = write(fd, buffer + offset, bufferSize - offset);
+        } while (rc == -1 && errno == EINTR);
+        if (rc <= 0) {
+            break;
+        }
+        offset += rc;
+    }
+    if (rc == -1) {
+        FDLog(LOG_DEBUG, "write failed with %s", strerror(errno));
+    } else {
+        FDLog(LOG_DEBUG, "write %d bytes to server", (int)rc);
+    }
+    return rc;
+}
+
+ssize_t iTermFileDescriptorClientWrite(int fd, void *buffer, size_t bufferSize) {
+    size_t length = bufferSize;
+    ssize_t n = Write(fd, (void *)&length, sizeof(length));
+    if (n != sizeof(length)) {
+        return n;
+    }
+
+    return Write(fd, buffer, bufferSize);
 }
 
 ssize_t iTermFileDescriptorServerSendMessageAndFileDescriptor(int connectionFd,
@@ -115,28 +151,38 @@ ssize_t iTermFileDescriptorServerSendMessageAndFileDescriptor(int connectionFd,
     return rc;
 }
 
-int iTermSelect(int *fds, int count, int *results) {
+int iTermSelect(int *fds, int count, int *results, int wantErrors) {
     int result;
     int theError;
     fd_set readset;
+    fd_set errorset;
     do {
         FD_ZERO(&readset);
+        FD_ZERO(&errorset);
         int max = 0;
         for (int i = 0; i < count; i++) {
             if (fds[i] > max) {
                 max = fds[i];
             }
             FD_SET(fds[i], &readset);
+            if (wantErrors) {
+                FD_SET(fds[i], &errorset);
+            }
         }
         FDLog(LOG_DEBUG, "Calling select...");
-        result = select(max + 1, &readset, NULL, NULL, NULL);
+        result = select(max + 1, &readset, NULL, wantErrors ? &errorset : NULL, NULL);
+#warning DNS
+        static int forceReturn = 0;
+        if (forceReturn) {
+            return 0;
+        }
         theError = errno;
         FDLog(LOG_DEBUG, "select returned %d, error = %s", result, strerror(theError));
     } while (result == -1 && theError == EINTR);
 
     int n = 0;
     for (int i = 0; i < count; i++) {
-        results[i] = FD_ISSET(fds[i], &readset);
+        results[i] = FD_ISSET(fds[i], &readset) || (wantErrors && FD_ISSET(fds[i], &errorset));
         if (results[i]) {
             n++;
         }

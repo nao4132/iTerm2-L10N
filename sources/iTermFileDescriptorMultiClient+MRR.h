@@ -16,6 +16,13 @@ typedef NS_ENUM(NSUInteger, iTermFileDescriptorMultiClientAttachStatus) {
     iTermFileDescriptorMultiClientAttachStatusFatalError
 };
 
+iTermFileDescriptorMultiClientAttachStatus iTermConnectToUnixDomainSocket(const char *path, int *fdOut);
+int iTermCreateConnectedUnixDomainSocket(const char *path,
+                                         int closeAfterAccept,
+                                         int *listenFDOut,
+                                         int *acceptedFDOut,
+                                         int *connectFDOut);
+
 @interface iTermFileDescriptorMultiClient (Private)
 - (iTermFileDescriptorMultiClientAttachStatus)tryAttach;
 @end

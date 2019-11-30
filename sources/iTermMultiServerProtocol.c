@@ -11,6 +11,9 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/uio.h>
+#include <unistd.h>
 
 static int ParseHandshakeRequest(iTermClientServerProtocolMessageParser *parser,
                                  iTermMultiServerRequestHandshake *out) {
@@ -302,8 +305,8 @@ int iTermMultiServerProtocolParseMessageFromClient(iTermClientServerProtocolMess
     return -1;
 }
 
-static int GetFileDescriptor(iTermClientServerProtocolMessage *message,
-                             int *receivedFileDescriptorPtr) {
+int iTermMultiServerProtocolGetFileDescriptor(iTermClientServerProtocolMessage *message,
+                                              int *receivedFileDescriptorPtr) {
     // Should be this:
 //    struct cmsghdr *messageHeader = CMSG_FIRSTHDR(&message->message);
     // But because the structure is copied you can't trust the pointer.
@@ -339,7 +342,7 @@ int iTermMultiServerProtocolParseMessageFromServer(iTermClientServerProtocolMess
             if (ParseLaunchResponse(&parser, &out->payload.launch)) {
                 return -1;
             }
-            if (GetFileDescriptor(message, &out->payload.launch.fd)) {
+            if (iTermMultiServerProtocolGetFileDescriptor(message, &out->payload.launch.fd)) {
                 return -1;
             }
             return 0;
@@ -348,7 +351,7 @@ int iTermMultiServerProtocolParseMessageFromServer(iTermClientServerProtocolMess
             if (ParseReportChild(&parser, &out->payload.reportChild)) {
                 return -1;
             }
-            if (GetFileDescriptor(message, &out->payload.reportChild.fd)) {
+            if (iTermMultiServerProtocolGetFileDescriptor(message, &out->payload.reportChild.fd)) {
                 return -1;
             }
             return 0;
@@ -523,6 +526,25 @@ static ssize_t RecvMsg(int fd,
     return n;
 }
 
+static ssize_t Read(int fd,
+                    char *buffer,
+                    size_t length) {
+    assert(length > 0);
+    ssize_t n = -1;
+    ssize_t offset = 0;
+    while (offset < length) {
+        do {
+            n = read(fd, buffer + offset, length - offset);
+        } while (n < 0 && errno == EINTR);
+        if (n <= 0) {
+            return n;
+        }
+        offset += n;
+    }
+
+    return n;
+}
+
 int iTermMultiServerRecv(int fd, iTermClientServerProtocolMessage *message) {
     iTermClientServerProtocolMessageInitialize(message);
 
@@ -533,4 +555,33 @@ int iTermMultiServerRecv(int fd, iTermClientServerProtocolMessage *message) {
     }
 
     return 0;
+}
+
+int iTermMultiServerRead(int fd, iTermClientServerProtocolMessage *message) {
+    iTermClientServerProtocolMessageInitialize(message);
+
+    size_t length = 0;
+    ssize_t actuallyRead = Read(fd, (char *)&length, sizeof(length));
+    int status = 1;
+    if (actuallyRead < sizeof(length)) {
+        goto done;
+    }
+
+    if (length <= 0 || length > message->ioVectors[0].iov_len) {
+        goto done;
+    }
+
+    actuallyRead = Read(fd, message->ioVectors[0].iov_base, length);
+    if (actuallyRead < length) {
+        goto done;
+    }
+
+    status = 0;
+
+done:
+    if (status) {
+        iTermClientServerProtocolMessageFree(message);
+    }
+
+    return status;
 }

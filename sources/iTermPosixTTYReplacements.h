@@ -18,6 +18,7 @@ typedef struct {
     int connectionFd;
     int deadMansPipe[2];
     int numFileDescriptorsToPreserve;
+    int writeFd;  // For multi-server, use this file descriptor for writing.
 } iTermForkState;
 
 // Just like forkpty but fd 0 the master and fd 1 the slave.

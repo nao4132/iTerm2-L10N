@@ -222,6 +222,14 @@ int iTermMultiServerProtocolEncodeMessageFromServer(iTermMultiServerServerOrigin
 void iTermMultiServerClientOriginatedMessageFree(iTermMultiServerClientOriginatedMessage *obj);
 void iTermMultiServerServerOriginatedMessageFree(iTermMultiServerServerOriginatedMessage *obj);
 
-// Reads a message from the file descriptor. Returns 0 on success. When successful, the message
+// Reads a message from the UDS. Returns 0 on success. When successful, the message
 // must be freed by the caller with iTermClientServerProtocolMessageFree().
 int iTermMultiServerRecv(int fd, iTermClientServerProtocolMessage *message);
+
+// Reads text from a file descriptor.
+int iTermMultiServerRead(int fd, iTermClientServerProtocolMessage *message);
+
+// Get a file descriptor from a received message. Returns nonzero on error. On success,
+// sets *receivedFileDescriptorPtr to the file derscriptor you now own.
+int iTermMultiServerProtocolGetFileDescriptor(iTermClientServerProtocolMessage *message,
+                                              int *receivedFileDescriptorPtr);

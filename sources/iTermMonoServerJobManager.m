@@ -179,7 +179,10 @@
         [self attachToServer:general task:task];
         DLog(@"attached. Set nonblocking");
         self.tty = [NSString stringWithUTF8String:ttyState.tty];
-        fcntl(_fd, F_SETFL, O_NONBLOCK);
+
+        int flags = fcntl(_fd, F_GETFL);
+        fcntl(_fd, F_SETFL, flags | O_NONBLOCK);
+
         DLog(@"fini");
         completion(iTermJobManagerForkAndExecStatusSuccess);
     } else {

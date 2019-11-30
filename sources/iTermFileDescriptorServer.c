@@ -59,7 +59,7 @@ static int SendFileDescriptorAndWait(int connectionFd) {
     FDLog(LOG_DEBUG, "All done. Waiting for client to disconnect or child to die.");
     int fds[2] = { gPipe[0], connectionFd };
     int results[2];
-    iTermSelect(fds, sizeof(fds) / sizeof(*fds), results);
+    iTermSelect(fds, sizeof(fds) / sizeof(*fds), results, 0);
     FDLog(LOG_DEBUG, "select returned. child dead=%d, connection closed=%d", results[0], results[1]);
     close(connectionFd);
 
@@ -71,7 +71,7 @@ static int SendFileDescriptorAndWait(int connectionFd) {
 }
 
 static int PerformAcceptActivity(int socketFd) {
-    int connectionFd = iTermFileDescriptorServerAccept(socketFd);
+    int connectionFd = iTermFileDescriptorServerAcceptAndClose(socketFd);
     if (connectionFd == -1) {
         FDLog(LOG_DEBUG, "accept failed %s", strerror(errno));
         return 0;

@@ -124,32 +124,56 @@ typedef void (^LaunchCallback)(iTermFileDescriptorMultiClientChild * _Nullable, 
     if (self) {
         _children = [NSMutableArray array];
         _socketPath = [path copy];
-        _socketFD = -1;
+        _readFD = -1;
+        _writeFD = -1;
         _queue = dispatch_queue_create("com.iterm2.multi-client", DISPATCH_QUEUE_SERIAL);
         _pendingLaunches = [NSMutableDictionary dictionary];
     }
     return self;
 }
 
-extern WTF(const char *);
+#warning DNS
+//void WTF(void) {
+//    int connectedFd = -1;
+//    int listenFD = -1;
+//    int acceptedFD = -1;
+//    BOOL ok = iTermCreateConnectedUnixDomainSocket("/tmp/wtf.socket", &listenFD, &acceptedFD, &connectedFd);
+//    assert(ok);
+//    assert(connectedFd != -1);
+//    assert(listenFD != -1);
+//    assert(acceptedFD != -1);
+//}
+//
 - (BOOL)attachOrLaunchServer {
     switch ([self tryAttach]) {
         case iTermFileDescriptorMultiClientAttachStatusSuccess:
-            assert(_socketFD >= 0);
+            assert(_readFD >= 0);
+            assert(_writeFD >= 0);
             return YES;
+
         case iTermFileDescriptorMultiClientAttachStatusConnectFailed:
-            assert(_socketFD < 0);
-            if (![self launch]) {
-                assert(_socketFD < 0);
-                return NO;
-            }
-            break;
+            return [self launchAndHandshake];
+
         case iTermFileDescriptorMultiClientAttachStatusFatalError:
-            assert(_socketFD < 0);
+            assert(_readFD < 0);
+            assert(_writeFD < 0);
             return NO;
     }
+}
 
-    assert(_socketFD >= 0);
+- (BOOL)launchAndHandshake {
+    assert(_readFD < 0);
+    assert(_writeFD < 0);
+
+    if (![self launch]) {
+        assert(_readFD < 0);
+        assert(_writeFD < 0);
+        return NO;
+    }
+
+    // Just launched the server. Now handshake with it.
+    assert(_readFD >= 0);
+    assert(_writeFD >= 0);
     BOOL ok = [self handshakeWithChildDiscoveryBlock:^(iTermMultiServerReportChild *child) {
         [self addChild:[[iTermFileDescriptorMultiClientChild alloc] initWithReport:child]];
     }];
@@ -164,9 +188,14 @@ extern WTF(const char *);
 }
 
 - (void)close {
-    assert(_socketFD >= 0);
-    close(_socketFD);
-    _socketFD = -1;
+    assert(_readFD >= 0);
+    assert(_writeFD >= 0);
+
+    close(_readFD);
+    close(_writeFD);
+
+    _readFD = -1;
+    _writeFD = -1;
 }
 
 - (void)addChild:(iTermFileDescriptorMultiClientChild *)child {
@@ -186,13 +215,13 @@ extern WTF(const char *);
 - (BOOL)readSynchronously:(BOOL)synchronously
                     queue:(dispatch_queue_t)queue
                completion:(void (^)(BOOL ok, iTermMultiServerServerOriginatedMessage *message))block {
-    if (_socketFD < 0) {
+    if (_readFD < 0) {
         return NO;
     }
 
     if (synchronously) {
         iTermClientServerProtocolMessage encodedMessage;
-        const int status = iTermMultiServerRecv(_socketFD, &encodedMessage);
+        const int status = iTermMultiServerRecv(_readFD, &encodedMessage);
         [self didFinishReadingWithStatus:status
                                  message:encodedMessage
                               completion:block];
@@ -209,7 +238,8 @@ extern WTF(const char *);
 - (void)recvWithCompletion:(void (^)(BOOL ok, iTermMultiServerServerOriginatedMessage *message))block {
     __block iTermClientServerProtocolMessage encodedMessage;
     memset(&encodedMessage, 0, sizeof(encodedMessage));
-    const int status = iTermMultiServerRecv(_socketFD, &encodedMessage);
+    assert(_readFD >= 0);
+    const int status = iTermMultiServerRecv(_readFD, &encodedMessage);
 
     __weak __typeof(self) weakSelf = self;
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -253,7 +283,7 @@ done:
 }
 
 - (BOOL)send:(iTermMultiServerClientOriginatedMessage *)message {
-    if (_socketFD < 0) {
+    if (_writeFD < 0) {
         return NO;
     }
     iTermClientServerProtocolMessage obj;
@@ -267,7 +297,7 @@ done:
     }
 
     errno = 0;
-    const ssize_t bytesWritten = iTermFileDescriptorServerSendMessage(_socketFD, obj.ioVectors[0].iov_base, obj.ioVectors[0].iov_len);
+    const ssize_t bytesWritten = iTermFileDescriptorClientWrite(_writeFD, obj.ioVectors[0].iov_base, obj.ioVectors[0].iov_len);
 
     if (bytesWritten <= 0) {
         status = 1;
@@ -343,8 +373,10 @@ done:
     return YES;
 }
 
+#warning TODO: Make this async
 - (BOOL)handshakeWithChildDiscoveryBlock:(void (^)(iTermMultiServerReportChild *))block {
-    assert(_socketFD >= 0);
+    assert(_readFD >= 0);
+    assert(_writeFD >= 0);
 
     if (![self sendHandshakeRequest]) {
         return NO;
@@ -365,65 +397,36 @@ done:
 }
 
 // This is copypasta from iTermFileDescriptorClient.c's iTermFileDescriptorClientConnect()
-// NOTE: Sets _socketFD as a side-effect.
+// NOTE: Sets _readFD and_writeFD as a side-effect.
+#warning TODO: Make this async
 - (iTermFileDescriptorMultiClientAttachStatus)tryAttach {
-    assert(_socketFD < 0);
-    int interrupted = 0;
-    int socketFd;
-    int flags;
-
-    FDLog(LOG_DEBUG, "Trying to connect to %s", _socketPath.UTF8String);
-    do {
-        FDLog(LOG_DEBUG, "Calling socket()");
-        socketFd = socket(AF_UNIX, SOCK_STREAM, 0);
-        if (socketFd == -1) {
-            FDLog(LOG_NOTICE, "Failed to create socket: %s\n", strerror(errno));
-            return iTermFileDescriptorMultiClientAttachStatusFatalError;
-        }
-
-        struct sockaddr_un remote;
-        remote.sun_family = AF_UNIX;
-        strcpy(remote.sun_path, _socketPath.UTF8String);
-        int len = strlen(remote.sun_path) + sizeof(remote.sun_family) + 1;
-        FDLog(LOG_DEBUG, "Calling fcntl() 1");
-        flags = fcntl(socketFd, F_GETFL, 0);
-
-        // Put the socket in nonblocking mode so connect can fail fast if another iTerm2 is connected
-        // to this server.
-        FDLog(LOG_DEBUG, "Calling fcntl() 2");
-        fcntl(socketFd, F_SETFL, flags | O_NONBLOCK);
-
-        FDLog(LOG_DEBUG, "Calling connect()");
-        int rc = connect(socketFd, (struct sockaddr *)&remote, len);
-        if (rc == -1) {
-            interrupted = (errno == EINTR);
-            FDLog(LOG_DEBUG, "Connect failed: %s\n", strerror(errno));
-            close(socketFd);
-            if (!interrupted) {
-                return iTermFileDescriptorMultiClientAttachStatusConnectFailed;
-            }
-            FDLog(LOG_DEBUG, "Trying again because connect returned EINTR.");
-        } else {
-            // Make socket block again.
-            interrupted = 0;
-            FDLog(LOG_DEBUG, "Connected. Calling fcntl() 3");
-            fcntl(socketFd, F_SETFL, flags & ~O_NONBLOCK);
-        }
-    } while (interrupted);
-
-    _socketFD = socketFd;
+    assert(_readFD < 0);
+    iTermFileDescriptorMultiClientAttachStatus status = iTermConnectToUnixDomainSocket(_socketPath.UTF8String, &_readFD);
+    if (status != iTermFileDescriptorMultiClientAttachStatusSuccess) {
+        return status;
+    }
+    iTermClientServerProtocolMessage message;
+    iTermClientServerProtocolMessageInitialize(&message);
+    if (iTermMultiServerRecv(_readFD, &message) ||
+        iTermMultiServerProtocolGetFileDescriptor(&message, &_writeFD)) {
+        close(_readFD);
+        _readFD = -1;
+#warning TODO: Test this and make sure FDs are closed exactly once and that the client is notified.
+        return iTermFileDescriptorMultiClientAttachStatusConnectFailed;
+    }
     return iTermFileDescriptorMultiClientAttachStatusSuccess;
 }
 
 - (BOOL)launch {
-    assert(_socketFD < 0);
+    assert(_readFD < 0);
     NSString *executable = [[NSBundle bundleForClass:[self class]] pathForResource:@"iTermServer" ofType:nil];
     assert(executable);
     iTermForkState forkState = [self launchWithSocketPath:_socketPath executable:executable];
     if (forkState.pid < 0) {
         return NO;
     }
-    assert(_socketFD >= 0);
+    assert(_readFD >= 0);
+    assert(_writeFD >= 0);
 
     return YES;
 }

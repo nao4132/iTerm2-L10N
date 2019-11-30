@@ -44,7 +44,7 @@ int iTermForkAndExecToRunJobInServer(iTermForkState *forkState,
     iTermFileDescriptorServerLog("Kicking off a background job to accept() in the server");
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         iTermFileDescriptorServerLog("Now running the accept queue block");
-        serverConnectionFd = iTermFileDescriptorServerAccept(serverSocketFd);
+        serverConnectionFd = iTermFileDescriptorServerAcceptAndClose(serverSocketFd);
 
         // Let the main thread go. This is necessary to ensure that
         // serverConnectionFd is written to before the main thread uses it.

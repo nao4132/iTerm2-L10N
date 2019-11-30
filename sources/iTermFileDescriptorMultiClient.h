@@ -51,7 +51,8 @@ typedef NS_ENUM(NSUInteger, iTermFileDescriptorMultiClientErrorCode) {
 
 @interface iTermFileDescriptorMultiClient : NSObject {
 #warning TODO: Make this private
-    int _socketFD;
+    int _readFD;
+    int _writeFD;
 }
 
 @property (nonatomic, weak) id<iTermFileDescriptorMultiClientDelegate> delegate;

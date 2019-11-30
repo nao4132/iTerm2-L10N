@@ -202,7 +202,7 @@ int iTermCreateConnectedUnixDomainSocket(const char *path,
 
         case 0: {
             // child
-
+            close(pipeFds[1]);
             iTermPosixMoveFileDescriptors(fds, numberOfFileDescriptorsToPreserve);
             iTermExec(argpath, (const char **)cargv, NO, YES, &forkState, "/", cenv, 1);
             _exit(-1);

@@ -51,7 +51,7 @@ int iTermFileDescriptorServerAccept(int socketFd) {
     socklen_t sizeOfRemote = sizeof(remote);
     int connectionFd = -1;
     do {
-        FDLog(LOG_DEBUG, "accept()");
+        FDLog(LOG_DEBUG, "Calling accept()...");
         connectionFd = accept(socketFd, (struct sockaddr *)&remote, &sizeOfRemote);
         FDLog(LOG_DEBUG, "accept() returned %d error=%s", connectionFd, strerror(errno));
     } while (connectionFd == -1 && errno == EINTR);

@@ -7,6 +7,8 @@
 
 #import "iTermMultiServerProtocol.h"
 
+#import "DebugLogging.h"
+
 #include <assert.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -537,6 +539,7 @@ static ssize_t Read(int fd,
             n = read(fd, buffer + offset, length - offset);
         } while (n < 0 && errno == EINTR);
         if (n <= 0) {
+            CLog("read returned %d: %s", n, strerror(errno));
             return n;
         }
         offset += n;
@@ -561,8 +564,8 @@ int iTermMultiServerRead(int fd, iTermClientServerProtocolMessage *message) {
     iTermClientServerProtocolMessageInitialize(message);
 
     size_t length = 0;
-    ssize_t actuallyRead = Read(fd, (char *)&length, sizeof(length));
     int status = 1;
+    ssize_t actuallyRead = Read(fd, (char *)&length, sizeof(length));
     if (actuallyRead < sizeof(length)) {
         goto done;
     }

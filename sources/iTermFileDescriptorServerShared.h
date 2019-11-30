@@ -54,4 +54,9 @@ ssize_t iTermFileDescriptorClientWrite(int fd, void *buffer, size_t bufferSize);
 // true. Takes care of EINTR. Return value is number of readable FDs.
 int iTermSelect(int *fds, int count, int *results, int wantErrors);
 
+// Create a socket and listen on it. Returns the socket's file descriptor.
+// This is used for connecting a client and server prior to fork.
+// Follow it with a call to iTermFileDescriptorServerAcceptAndClose().
+int iTermFileDescriptorServerSocketBindListen(const char *path);
+
 #endif /* iTermFileDescriptorServerShared_h */

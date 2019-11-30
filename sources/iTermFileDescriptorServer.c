@@ -14,8 +14,6 @@
 #include <syslog.h>
 #include <unistd.h>
 
-static const int kMaxConnections = 1;
-
 // These variables are global because signal handlers use them.
 static pid_t gChildPid;
 static char *gPath;
@@ -78,38 +76,6 @@ static int PerformAcceptActivity(int socketFd) {
     }
 
     return SendFileDescriptorAndWait(connectionFd);
-}
-
-// CAREFUL! This is also used by the multi-server.
-int iTermFileDescriptorServerSocketBindListen(const char *path) {
-    int socketFd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (socketFd == -1) {
-        FDLog(LOG_NOTICE, "socket() failed: %s", strerror(errno));
-        return -1;
-    }
-    // Mask off all permissions for group and other. Only user can use this socket.
-    mode_t oldMask = umask(S_IRWXG | S_IRWXO);
-
-    struct sockaddr_un local;
-    local.sun_family = AF_UNIX;
-    assert(strlen(path) + 1 < sizeof(local.sun_path));
-    strcpy(local.sun_path, path);
-    unlink(local.sun_path);
-    int len = strlen(local.sun_path) + sizeof(local.sun_family) + 1;
-    if (bind(socketFd, (struct sockaddr *)&local, len) == -1) {
-        FDLog(LOG_NOTICE, "bind() failed: %s", strerror(errno));
-        umask(oldMask);
-        return -1;
-    }
-    FDLog(LOG_DEBUG, "bind() created %s", local.sun_path);
-
-    if (listen(socketFd, kMaxConnections) == -1) {
-        FDLog(LOG_DEBUG, "listen() failed: %s", strerror(errno));
-        umask(oldMask);
-        return -1;
-    }
-    umask(oldMask);
-    return socketFd;
 }
 
 static int Initialize(char *path, pid_t childPid) {

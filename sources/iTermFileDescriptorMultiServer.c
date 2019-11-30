@@ -19,6 +19,18 @@
 #error ITERM_SERVER not defined. Build process is broken.
 #endif
 
+// On entry there should be three file descriptors:
+// 0: A socket we can accept() on. listen() was already called on it.
+// 1: A connection we can sendmsg() on. accept() was already called on it.
+// 2: A pipe that can be used to detect this process's termination. Do nothing with it.
+// 3: A pipe we can recvmsg() on.
+typedef enum {
+    iTermMultiServerFileDescriptorAcceptSocket = 0,
+    iTermMultiServerFileDescriptorInitialWrite = 1,
+    iTermMultiServerFileDescriptorDeadMansPipe = 2,
+    iTermMultiServerFileDescriptorInitialRead = 3
+} iTermMultiServerFileDescriptor;
+
 static void DLogImpl(const char *func, const char *file, int line, const char *format, ...) {
     va_list args;
     va_start(args, format);
@@ -364,6 +376,7 @@ static int WaitForAllProcesses(int connectionFd) {
         }
         const pid_t pid = WaitPidNoHang(children[i].pid, &children[i].status);
         if (pid > 0) {
+            DLog("Child with pid %d exited with status %d", (int)pid, children[i].status);
             children[i].terminated = 1;
             if (connectionFd >= 0 && ReportTermination(connectionFd, children[i].pid)) {
                 DLog("ReportTermination returned an error");
@@ -539,11 +552,6 @@ static void AcceptAndReject(int socket) {
         DLog("Don't send message: accept failed");
         return;
     }
-    if (MakeBlocking(fd)) {
-        DLog("Failed to make socket blocking");
-        close(fd);
-        return;
-    }
 
     DLog("Received connection attempt while already connected. Send rejection.");
 
@@ -568,11 +576,11 @@ static void AcceptAndReject(int socket) {
 }
 
 // There is a client connected. Respond to requests from it until it disconnects, then return.
-static void SelectLoop(int socketFd, int writeFd, int readFd) {
+static void SelectLoop(int acceptFd, int writeFd, int readFd) {
     DLog("Begin SelectLoop.");
     while (1) {
         static const int fdCount = 3;
-        int fds[fdCount] = { gPipe[0], socketFd, readFd };
+        int fds[fdCount] = { gPipe[0], acceptFd, readFd };
         int results[fdCount];
         DLog("Calling select()");
         iTermSelect(fds, sizeof(fds) / sizeof(*fds), results, 1 /* wantErrors */);
@@ -598,7 +606,7 @@ static void SelectLoop(int socketFd, int writeFd, int readFd) {
         if (results[1]) {
             // socketFd
             DLog("select: socket is readable");
-            AcceptAndReject(socketFd);
+            AcceptAndReject(acceptFd);
         }
     }
     DLog("Exited select loop.");
@@ -628,19 +636,27 @@ static int MakeAndSendPipe(int unixDomainSocketFd) {
 
 static int iTermMultiServerAccept(int socketFd) {
     // incoming unix domain socket connection to get FDs
-    struct sockaddr_un remote;
-    socklen_t sizeOfRemote = sizeof(remote);
     int connectionFd = -1;
-    do {
-        FDLog(LOG_DEBUG, "Calling accept()...");
-        connectionFd = accept(socketFd, (struct sockaddr *)&remote, &sizeOfRemote);
-        if (connectionFd == -1 && errno == EINTR) {
-            FDLog(LOG_DEBUG, "accept() returned EINTR. Checking for children that need to be wait()ed on.");
+    while (1) {
+        int fds[] = { socketFd, gPipe[0] };
+        int results[2] = { 0, 0 };
+        DLog("iTermMultiServerAccept calling iTermSelect...");
+        iTermSelect(fds, sizeof(fds) / sizeof(*fds), results, 1);
+        DLog("iTermSelect returned.");
+        if (results[1]) {
+            DLog("SIGCHLD pipe became readable while waiting for connection. Calling wait...");
             WaitForAllProcesses(-1);
-            continue;
+            DLog("Done wait()ing on all children");
         }
-        FDLog(LOG_DEBUG, "accept() returned %d error=%s", connectionFd, strerror(errno));
-    } while (connectionFd == -1 && errno == EINTR);
+        if (results[0]) {
+            DLog("Socket became readable. Calling accept()...");
+            connectionFd = iTermFileDescriptorServerAccept(socketFd);
+            if (connectionFd != -1) {
+                break;
+            }
+        }
+        DLog("accept() returned %d error=%s", connectionFd, strerror(errno));
+    }
     return connectionFd;
 }
 
@@ -648,20 +664,47 @@ static int iTermMultiServerAccept(int socketFd) {
 static void MainLoop(char *path, int acceptFd, int initialWriteFd, int initialReadFd) {
     DLog("Entering main loop.");
     assert(acceptFd >= 0);
-    assert(initialWriteFd >= 0);
-    assert(initialReadFd >= 0);
     assert(acceptFd != initialWriteFd);
 
+    if (initialReadFd < 0) {
+        printf("Debug mode detected! Launching login.");
+        const char *argv[] = { "login", "-fp", "gnachman", NULL };
+        const char *envp[] = { "PATH=/bin:/usr/bin", NULL };
+        iTermMultiServerRequestLaunch request = {
+            .path = "login",
+            .argv = argv,
+            .argc = 3,
+            .envp = envp,
+            .envc = 1,
+            .width = 80,
+            .height = 25,
+            .isUTF8 = 1,
+            .pwd = NULL,
+            .uniqueId = 1234
+        };
+        iTermForkState forkState;
+        memset(&forkState, 0, sizeof(forkState));
+        iTermTTYState ttyState;
+        memset(&ttyState, 0, sizeof(ttyState));
+        int error = 0;
+        int fd = Launch(&request, &forkState, &ttyState, &error);
+        if (fd < 0) {
+            printf("Launch failed. error is %d\n", error);
+            return;
+        }
+    }
     int writeFd = initialWriteFd;
     int readFd = initialReadFd;
     do {
-        SelectLoop(acceptFd, writeFd, readFd);
+        if (writeFd >= 0 && readFd >= 0) {
+            SelectLoop(acceptFd, writeFd, readFd);
+        }
 
         // You get here after the connection is lost. Listen and accept.
-        DLog("Calling accept");
+        DLog("Calling iTermMultiServerAccept");
         writeFd = iTermMultiServerAccept(acceptFd);
         if (writeFd == -1) {
-            DLog("accept failed: %s", strerror(errno));
+            DLog("iTermMultiServerAccept failed: %s", strerror(errno));
             break;
         }
         DLog("Accept returned a valid file descriptor %d", writeFd);
@@ -690,17 +733,10 @@ static int MakeBlocking(int fd) {
     return rc == -1;
 }
 
-typedef enum {
-    iTermMultiServerFileDescriptorAcceptSocket = 0,
-    iTermMultiServerFileDescriptorInitialWrite = 1,
-    iTermMultiServerFileDescriptorDeadMansPipe = 2,
-    iTermMultiServerFileDescriptorInitialRead
-} iTermMultiServerFileDescriptor;
-
 static int MakeStandardFileDescriptorsNonBlocking(void) {
     int status = 1;
 
-    if (MakeBlocking(iTermMultiServerFileDescriptorAcceptSocket)) {
+    if (MakeNonBlocking(iTermMultiServerFileDescriptorAcceptSocket)) {
         goto done;
     }
     if (MakeBlocking(iTermMultiServerFileDescriptorInitialWrite)) {
@@ -809,17 +845,27 @@ static int iTermFileDescriptorMultiServerRun(char *path, int socketFd, int write
 }
 
 
-// On entry there should be three file descriptors:
-// 0: A socket we can accept() on. listen() was already called on it.
-// 1: A connection we can sendmsg() on. accept() was already called on it.
-// 2: A pipe that can be used to detect this process's termination. Do nothing with it.
-// 3: A pipe we can recvmsg() on.
-//
-// There should be a single command-line argument, which is the path tot he unix-domain socket
+// There should be a single command-line argument, which is the path to the unix-domain socket
 // I'll use.
 int main(int argc, char *argv[]) {
-    sleep(5);
+    if (argc == 1) {
+        printf("In debug mode! Will spawn login -fp gnachman\n");
+        const char *path = "/tmp/debug.socket";
+        unlink(path);
+        int acceptFd = iTermFileDescriptorServerSocketBindListen(path);
+        if (acceptFd < 0) {
+            printf("socket-bind-listen on %s failed", path);
+            return 1;
+        }
+        iTermFileDescriptorMultiServerRun("/tmp/debug.socket",
+                                          acceptFd,
+                                          -1, /* write */
+                                          -1); /* read */
+    }
     assert(argc == 2);
-    iTermFileDescriptorMultiServerRun(argv[1], 0, 1, 3);
+    iTermFileDescriptorMultiServerRun(argv[1],
+                                      iTermMultiServerFileDescriptorAcceptSocket,
+                                      iTermMultiServerFileDescriptorInitialWrite,
+                                      iTermMultiServerFileDescriptorInitialRead);
     return 1;
 }

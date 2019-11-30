@@ -19,6 +19,8 @@
 #error ITERM_SERVER not defined. Build process is broken.
 #endif
 
+static int gDebugMode = 0;
+
 // On entry there should be three file descriptors:
 // 0: A socket we can accept() on. listen() was already called on it.
 // 1: A connection we can sendmsg() on. accept() was already called on it.
@@ -660,39 +662,190 @@ static int iTermMultiServerAccept(int socketFd) {
     return connectionFd;
 }
 
+static pid_t LaunchTrivialChildForDebugging(void) {
+    pid_t pid = fork();
+    if (pid == 0) {
+        // Do not start the new process with a signal handler.
+        for (int i = 1; i < 32; i++) {
+            signal(i, SIG_DFL);
+        }
+
+        // Unblock all signals.
+        sigset_t signals;
+        sigemptyset(&signals);
+        sigprocmask(SIG_SETMASK, &signals, NULL);
+        sleep(999999);
+    } else if (pid < 1) {
+        printf("fork failed\n");
+    } else {
+        printf("forked. child is %d\n", (int)pid);
+    }
+    return pid;
+}
+
+static pid_t LaunchLoginStandardlyForDebugging(void) {
+    printf("Debug mode detected! Launching login.\n");
+    const char *argv[] = { "login", "-fp", "gnachman", NULL };
+    const char *envp[] = { "PATH=/bin:/usr/bin", NULL };
+    iTermMultiServerRequestLaunch request = {
+        .path = "login",
+        .argv = argv,
+        .argc = 3,
+        .envp = envp,
+        .envc = 1,
+        .width = 80,
+        .height = 25,
+        .isUTF8 = 1,
+        .pwd = NULL,
+        .uniqueId = 1234
+    };
+    iTermForkState forkState;
+    memset(&forkState, 0, sizeof(forkState));
+    iTermTTYState ttyState;
+    memset(&ttyState, 0, sizeof(ttyState));
+    int error = 0;
+    int fd = Launch(&request, &forkState, &ttyState, &error);
+    if (fd < 0) {
+        printf("Launch failed. error is %d\n", error);
+        return -1;
+    }
+
+    printf("Launched login with pid %d\n", (int)forkState.pid);
+    return forkState.pid;
+}
+
+#define iTermTTYMakeControlKey(x) (x - 'A' + 1)
+
+static pid_t LaunchLoginForDebugging(void) {
+    // Do not start the new process with a signal handler.
+    for (int i = 1; i < 32; i++) {
+        signal(i, SIG_DFL);
+    }
+
+    // Unblock all signals.
+    sigset_t signals;
+    sigemptyset(&signals);
+    sigprocmask(SIG_SETMASK, &signals, NULL);
+
+    int master;
+    pid_t pid;
+    char tty[PATH_MAX];
+    struct termios term;
+    memset(&term, 0, sizeof(term));
+    term.c_iflag = ICRNL | IXON | IXANY | IMAXBEL | BRKINT | IUTF8;
+    term.c_oflag = OPOST | ONLCR;
+    term.c_cflag = CREAD | CS8 | HUPCL;
+    term.c_lflag = ICANON | ISIG | IEXTEN | ECHO | ECHOE | ECHOK | ECHOKE | ECHOCTL;
+    term.c_cc[VEOF] = iTermTTYMakeControlKey('D');
+    term.c_cc[VEOL] = -1;
+    term.c_cc[VEOL2] = -1;
+    term.c_cc[VERASE] = 0x7f;
+    term.c_cc[VWERASE] = iTermTTYMakeControlKey('W');
+    term.c_cc[VKILL] = iTermTTYMakeControlKey('U');
+    term.c_cc[VREPRINT] = iTermTTYMakeControlKey('R');
+    term.c_cc[VINTR] = iTermTTYMakeControlKey('C');
+    term.c_cc[VQUIT] = 0x1c;
+    term.c_cc[VSUSP] = iTermTTYMakeControlKey('Z');
+    term.c_cc[VDSUSP] = iTermTTYMakeControlKey('Y');
+    term.c_cc[VSTART] = iTermTTYMakeControlKey('Q');
+    term.c_cc[VSTOP] = iTermTTYMakeControlKey('S');
+    term.c_cc[VLNEXT] = iTermTTYMakeControlKey('V');
+    term.c_cc[VDISCARD] = iTermTTYMakeControlKey('O');
+    term.c_cc[VMIN] = 1;
+    term.c_cc[VTIME] = 0;
+    term.c_cc[VSTATUS] = iTermTTYMakeControlKey('T');
+    term.c_ispeed = B38400;
+    term.c_ospeed = B38400;
+
+    struct winsize win;
+    win.ws_row = 25;
+    win.ws_col = 80;
+    win.ws_xpixel = 0;
+    win.ws_ypixel = 0;
+
+    const int fdsToClose = getdtablesize();
+
+    pid = forkpty(&master, tty, &term, &win);
+
+    if (pid < 0) {
+        // fork failed
+        return -1;
+    }
+
+    if (pid == 0) {
+        // child
+
+        for (int i = 3; i < fdsToClose; i++) {
+            close(i);
+        }
+
+        char *args[] = { "login", "-fp", "gnachman", NULL };
+
+        // run the BC calculator
+        execvp("/usr/bin/login", args);
+        // exec failed
+        return -1;
+    }
+
+    printf("Child pid is %d\n", (int)pid);
+    // parent
+    return pid;
+}
+
+static void ReadAndPrintUntilEOF(int master) {
+    while (1) {
+        char buffer[1025];
+        ssize_t n = read(master, buffer, 1024);
+        if (n == -1 && errno != EINTR && errno != EAGAIN) {
+            break;
+        }
+        if (n == 0) {
+            printf("eof\n");
+            int status=0;
+            pid_t waited = wait(&status);
+            if (waited > 0) {
+                printf("Waited successfully. Status is %d\n", status);
+            } else {
+                printf("No luck with wait: %s\n", strerror(errno));
+            }
+            break;
+        }
+        buffer[n] = 0;
+        printf("READ: %s\n", buffer);
+    }
+}
+
 // Alternates between running the select loop and accepting a new connection.
 static void MainLoop(char *path, int acceptFd, int initialWriteFd, int initialReadFd) {
     DLog("Entering main loop.");
     assert(acceptFd >= 0);
     assert(acceptFd != initialWriteFd);
+    if (!gDebugMode) {
+        assert(initialWriteFd >= 0);
+        assert(initialReadFd >= 0);
+    }
 
-    if (initialReadFd < 0) {
-        printf("Debug mode detected! Launching login.");
-        const char *argv[] = { "login", "-fp", "gnachman", NULL };
-        const char *envp[] = { "PATH=/bin:/usr/bin", NULL };
-        iTermMultiServerRequestLaunch request = {
-            .path = "login",
-            .argv = argv,
-            .argc = 3,
-            .envp = envp,
-            .envc = 1,
-            .width = 80,
-            .height = 25,
-            .isUTF8 = 1,
-            .pwd = NULL,
-            .uniqueId = 1234
-        };
-        iTermForkState forkState;
-        memset(&forkState, 0, sizeof(forkState));
-        iTermTTYState ttyState;
-        memset(&ttyState, 0, sizeof(ttyState));
-        int error = 0;
-        int fd = Launch(&request, &forkState, &ttyState, &error);
-        if (fd < 0) {
-            printf("Launch failed. error is %d\n", error);
-            return;
+    if (gDebugMode) {
+        pid_t childPid = LaunchLoginForDebugging();
+//        kill(childPid, SIGHUP);
+        printf("Looping forever, waiting for gPipe to become readable\n");
+        while (1) {
+            char c;
+            ssize_t rc = read(gPipe[0], &c, 1);
+            if (rc > 0) {
+                printf("SigChild received, wait on child.");
+                int status;
+                pid_t pid = wait(&status);
+                printf("wait() returned pid %d\n", (int)pid);
+            } else if (rc == 0) {
+                printf("gPipe closed. wtf?\n");
+            } else {
+                printf("read returned error %s\n", strerror(errno));
+            }
+            sleep(1);
         }
     }
+
     int writeFd = initialWriteFd;
     int readFd = initialReadFd;
     do {
@@ -830,7 +983,7 @@ static int Initialize(char *path) {
 static int iTermFileDescriptorMultiServerRun(char *path, int socketFd, int writeFD, int readFD) {
     SetRunningServer();
     // syslog raises sigpipe when the parent job dies on 10.12.
-    signal(SIGPIPE, SIG_IGN);
+//    signal(SIGPIPE, SIG_IGN);
     int rc = Initialize(path);
     if (rc) {
         DLog("Initialize failed with code %d", rc);
@@ -849,7 +1002,7 @@ static int iTermFileDescriptorMultiServerRun(char *path, int socketFd, int write
 // I'll use.
 int main(int argc, char *argv[]) {
     if (argc == 1) {
-        printf("In debug mode! Will spawn login -fp gnachman\n");
+        printf("In debug mode! Will spawn login -fp gnachman\nFYI my pid is %d\n", (int)getpid());
         const char *path = "/tmp/debug.socket";
         unlink(path);
         int acceptFd = iTermFileDescriptorServerSocketBindListen(path);
@@ -857,6 +1010,7 @@ int main(int argc, char *argv[]) {
             printf("socket-bind-listen on %s failed", path);
             return 1;
         }
+        gDebugMode = 1;
         iTermFileDescriptorMultiServerRun("/tmp/debug.socket",
                                           acceptFd,
                                           -1, /* write */

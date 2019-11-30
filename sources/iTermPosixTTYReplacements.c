@@ -134,12 +134,14 @@ void iTermExec(const char *argpath,
     // See man sigaction for the list of legal function calls to make between fork and exec.
 
     // Do not start the new process with a signal handler.
-    signal(SIGCHLD, SIG_DFL);
-    signal(SIGPIPE, SIG_DFL);
+    for (int i = 1; i < 32; i++) {
+        signal(i, SIG_DFL);
+    }
+
+    // Unblock all signals.
     sigset_t signals;
     sigemptyset(&signals);
-    sigaddset(&signals, SIGPIPE);
-    sigprocmask(SIG_UNBLOCK, &signals, NULL);
+    sigprocmask(SIG_SETMASK, &signals, NULL);
 
     // Apple opens files without the close-on-exec flag (e.g., Extras2.rsrc).
     // See issue 2662.
@@ -160,7 +162,9 @@ void iTermExec(const char *argpath,
         iTermResourceLimitsHelperRestoreSavedLimits();
     }
 
-    chdir(initialPwd);
+    if (initialPwd) {
+        chdir(initialPwd);
+    }
 
     // Sub in our environ for the existing one. Since Mac OS doesn't have execvpe, this hack
     // does the job.

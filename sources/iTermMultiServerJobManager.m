@@ -134,7 +134,8 @@
 
 - (void)fileDescriptorMultiClient:(iTermFileDescriptorMultiClient *)client
                  didDiscoverChild:(iTermFileDescriptorMultiClientChild *)child {
-        [_unattachedChildren addObject:child];
+    [_unattachedChildren addObject:child];
+#warning TODO: Handle orphans. Restore windows and call attachToProcessID:.
 }
 
 - (void)fileDescriptorMultiClientDidFinishHandshake:(iTermFileDescriptorMultiClient *)client {

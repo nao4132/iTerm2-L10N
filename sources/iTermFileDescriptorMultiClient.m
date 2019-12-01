@@ -147,9 +147,7 @@ typedef void (^LaunchCallback)(iTermFileDescriptorMultiClientChild * _Nullable, 
 - (BOOL)attachOrLaunchServer {
     switch ([self tryAttach]) {
         case iTermFileDescriptorMultiClientAttachStatusSuccess:
-            assert(_readFD >= 0);
-            assert(_writeFD >= 0);
-            return YES;
+            return [self handshake];
 
         case iTermFileDescriptorMultiClientAttachStatusConnectFailed:
             return [self launchAndHandshake];
@@ -171,6 +169,10 @@ typedef void (^LaunchCallback)(iTermFileDescriptorMultiClientChild * _Nullable, 
         return NO;
     }
 
+    return [self handshake];
+}
+
+- (BOOL)handshake {
     // Just launched the server. Now handshake with it.
     assert(_readFD >= 0);
     assert(_writeFD >= 0);
@@ -255,11 +257,12 @@ typedef void (^LaunchCallback)(iTermFileDescriptorMultiClientChild * _Nullable, 
 }
 
 // Main queue
-- (void)didFinishReadingWithStatus:(int)status
+- (void)didFinishReadingWithStatus:(int)initialStatus
                            message:(iTermClientServerProtocolMessage)encodedMessage
                              completion:(void (^)(BOOL ok, iTermMultiServerServerOriginatedMessage *message))block {
     BOOL mustFreeEncodedMessage = NO;
-    if (status) {
+    int status = initialStatus;
+    if (initialStatus) {
         goto done;
     }
     mustFreeEncodedMessage = YES;

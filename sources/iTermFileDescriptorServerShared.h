@@ -20,14 +20,14 @@ typedef union {
 #if DEBUG
 #define FDLog(level, format, ...) do { \
     if (level < LOG_DEBUG) { \
-        syslog(level, "Client(%d) " format, getpid(), ##__VA_ARGS__); \
+        syslog(level, "iTermServer-Client(%d) " format, getpid(), ##__VA_ARGS__); \
     } \
 } while (0)
 #else
 #if ITERM_SERVER
 #define FDLog(level, format, ...) syslog(level, "iTermServer(pid=%d) " format, getpid(), ##__VA_ARGS__)
 #else
-#define FDLog(level, format, ...) syslog(level, "Client(%d) " format, getpid(), ##__VA_ARGS__)
+#define FDLog(level, format, ...) syslog(level, "iTermServer-Client(%d) " format, getpid(), ##__VA_ARGS__)
 #endif  // ITERM_SERVER
 #endif  // DEBUG
 
@@ -44,7 +44,8 @@ ssize_t iTermFileDescriptorServerSendMessageAndFileDescriptor(int connectionFd,
 // Socket only (e.g., unix-domain socket, not pipe)
 ssize_t iTermFileDescriptorServerSendMessage(int connectionFd,
                                              void *buffer,
-                                             size_t bufferSize);
+                                             size_t bufferSize,
+                                             int *errorOut);
 
 // For use on a pipe or other non-socket
 ssize_t iTermFileDescriptorClientWrite(int fd, void *buffer, size_t bufferSize);

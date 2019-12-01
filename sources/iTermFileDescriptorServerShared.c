@@ -64,7 +64,8 @@ int iTermFileDescriptorServerAccept(int socketFd) {
 // Returns number of bytes sent, or -1 for error.
 ssize_t iTermFileDescriptorServerSendMessage(int fd,
                                              void *buffer,
-                                             size_t bufferSize) {
+                                             size_t bufferSize,
+                                             int *errorOut) {
     struct msghdr message;
     memset(&message, 0, sizeof(message));
 
@@ -80,8 +81,14 @@ ssize_t iTermFileDescriptorServerSendMessage(int fd,
         rc = sendmsg(fd, &message, 0);
     }
     if (rc == -1) {
+        if (errorOut) {
+            *errorOut = errno;
+        }
         FDLog(LOG_DEBUG, "sendmsg failed with %s", strerror(errno));
     } else {
+        if (errorOut) {
+            *errorOut = 0;
+        }
         FDLog(LOG_DEBUG, "send %d bytes to client", (int)rc);
     }
     return rc;

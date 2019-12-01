@@ -245,9 +245,14 @@ static int SendLaunchResponse(int fd, int status, pid_t pid, int masterFd, const
     } else {
         // Error happened. Don't send a file descriptor.
         DLog("ERROR: *not* sending file descriptor");
+        int error;
         result = iTermFileDescriptorServerSendMessage(fd,
                                                       obj.ioVectors[0].iov_base,
-                                                      obj.ioVectors[0].iov_len);
+                                                      obj.ioVectors[0].iov_len,
+                                                      &error);
+        if (result < 0) {
+            DLog("SendMsg failed with %s", strerror(error));
+        }
     }
     iTermClientServerProtocolMessageFree(&obj);
     return result == -1;
@@ -302,9 +307,14 @@ static int ReportTermination(int fd, pid_t pid) {
     };
     iTermMultiServerProtocolEncodeMessageFromServer(&message, &obj);
 
+    int error;
     ssize_t result = iTermFileDescriptorServerSendMessage(fd,
                                                           obj.ioVectors[0].iov_base,
-                                                          obj.ioVectors[0].iov_len);
+                                                          obj.ioVectors[0].iov_len,
+                                                          &error);
+    if (result < 0) {
+        DLog("SendMsg failed with %s", strerror(error));
+    }
     iTermClientServerProtocolMessageFree(&obj);
     return result == -1;
 }
@@ -344,8 +354,11 @@ static int ReportChild(int fd, const iTermMultiServerChild *child, int isLast) {
                                                                           obj.ioVectors[0].iov_base,
                                                                           obj.ioVectors[0].iov_len,
                                                                           child->masterFd);
+    if (bytes < 0) {
+        DLog("SendMsg failed with %s", strerror(errno));
+    }
     iTermClientServerProtocolMessageFree(&obj);
-    return bytes >= 0;
+    return bytes < 0;
 }
 
 #pragma mark - Termination Handling
@@ -397,6 +410,7 @@ static int ReportChildren(int fd) {
     // Iterate backwards because ReportAndRemoveDeadChild deletes the index passed to it.
     for (int i = numberOfChildren - 1; i >= 0; i--) {
         if (ReportChild(fd, &children[i], i + 1 == numberOfChildren)) {
+            DLog("ReportChild returned an error code");
             return -1;
         }
     }
@@ -431,9 +445,15 @@ static int HandleHandshake(int fd, iTermMultiServerRequestHandshake *handshake) 
          message.payload.handshake.protocolVersion,
          message.payload.handshake.numChildren,
          message.payload.handshake.pid);
+    int error;
     ssize_t bytes = iTermFileDescriptorServerSendMessage(fd,
                                                          obj.ioVectors[0].iov_base,
-                                                         obj.ioVectors[0].iov_len);
+                                                         obj.ioVectors[0].iov_len,
+                                                         &error);
+    if (bytes < 0) {
+        DLog("SendMsg failed with %s", strerror(error));
+    }
+
     iTermClientServerProtocolMessageFree(&obj);
     if (bytes < 0) {
         return -1;
@@ -484,9 +504,15 @@ static int HandleWait(int fd, iTermMultiServerRequestWait *wait) {
          message.payload.wait.pid,
          message.payload.wait.status,
          message.payload.wait.errorNumber);
+    int error;
     ssize_t bytes = iTermFileDescriptorServerSendMessage(fd,
                                                          obj.ioVectors[0].iov_base,
-                                                         obj.ioVectors[0].iov_len);
+                                                         obj.ioVectors[0].iov_len,
+                                                         &error);
+    if (bytes < 0) {
+        DLog("SendMsg failed with %s", strerror(error));
+    }
+
     iTermClientServerProtocolMessageFree(&obj);
     if (bytes < 0) {
         return -1;
@@ -569,9 +595,15 @@ static void AcceptAndReject(int socket) {
     iTermClientServerProtocolMessage obj;
     iTermClientServerProtocolMessageInitialize(&obj);
     iTermMultiServerProtocolEncodeMessageFromServer(&message, &obj);
-    iTermFileDescriptorServerSendMessage(fd,
-                                         obj.ioVectors[0].iov_base,
-                                         obj.ioVectors[0].iov_len);
+    int error;
+    const ssize_t result = iTermFileDescriptorServerSendMessage(fd,
+                                                                obj.ioVectors[0].iov_base,
+                                                                obj.ioVectors[0].iov_len,
+                                                                &error);
+    if (result < 0) {
+        DLog("SendMsg failed with %s", strerror(error));
+    }
+
     iTermClientServerProtocolMessageFree(&obj);
     
     close(fd);
@@ -591,6 +623,7 @@ static void SelectLoop(int acceptFd, int writeFd, int readFd) {
             // readFd
             DLog("select: have data to read");
             if (ReadAndHandleRequest(readFd, writeFd)) {
+                DLog("ReadAndHandleRequest returned failure code.");
                 if (results[0]) {
                     DLog("Client hung up and also have SIGCHLD to deal with. Wait for processes.");
                     WaitForAllProcesses(-1);

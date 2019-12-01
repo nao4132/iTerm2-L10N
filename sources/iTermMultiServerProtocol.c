@@ -552,7 +552,9 @@ int iTermMultiServerRecv(int fd, iTermClientServerProtocolMessage *message) {
     iTermClientServerProtocolMessageInitialize(message);
 
     const ssize_t recvStatus = RecvMsg(fd, message);
-    if (recvStatus <= 0) {
+    // NOTE: a status of 0 is not EOF! You could have zero bytes and a file descriptor, and it would
+    // return 0.
+    if (recvStatus < 0) {
         iTermClientServerProtocolMessageFree(message);
         return 1;
     }

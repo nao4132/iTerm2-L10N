@@ -61,6 +61,12 @@ NSString *const iTermFileDescriptorMultiClientErrorDomain = @"iTermFileDescripto
     return self;
 }
 
+- (void)willWaitPreemptively {
+    assert(!_haveSentPreemptiveWait);
+    _haveSentPreemptiveWait = YES;
+    [self didTerminate];
+}
+
 - (void)setTerminationStatus:(int)status {
     assert(_hasTerminated);
     _haveWaited = YES;
@@ -132,18 +138,6 @@ typedef void (^LaunchCallback)(iTermFileDescriptorMultiClientChild * _Nullable, 
     return self;
 }
 
-#warning DNS
-//void WTF(void) {
-//    int connectedFd = -1;
-//    int listenFD = -1;
-//    int acceptedFD = -1;
-//    BOOL ok = iTermCreateConnectedUnixDomainSocket("/tmp/wtf.socket", &listenFD, &acceptedFD, &connectedFd);
-//    assert(ok);
-//    assert(connectedFd != -1);
-//    assert(listenFD != -1);
-//    assert(acceptedFD != -1);
-//}
-//
 - (BOOL)attachOrLaunchServer {
     switch ([self tryAttach]) {
         case iTermFileDescriptorMultiClientAttachStatusSuccess:
@@ -176,8 +170,9 @@ typedef void (^LaunchCallback)(iTermFileDescriptorMultiClientChild * _Nullable, 
     // Just launched the server. Now handshake with it.
     assert(_readFD >= 0);
     assert(_writeFD >= 0);
-    BOOL ok = [self handshakeWithChildDiscoveryBlock:^(iTermMultiServerReportChild *child) {
-        [self addChild:[[iTermFileDescriptorMultiClientChild alloc] initWithReport:child]];
+    BOOL ok = [self handshakeWithChildDiscoveryBlock:^(iTermMultiServerReportChild *report) {
+        iTermFileDescriptorMultiClientChild *child = [[iTermFileDescriptorMultiClientChild alloc] initWithReport:report];
+        [self addChild:child];
     }];
     if (!ok) {
         [self close];
@@ -186,7 +181,10 @@ typedef void (^LaunchCallback)(iTermFileDescriptorMultiClientChild * _Nullable, 
 }
 
 - (BOOL)attach {
-    return [self tryAttach] == iTermFileDescriptorMultiClientAttachStatusSuccess;
+    if ([self tryAttach] != iTermFileDescriptorMultiClientAttachStatusSuccess) {
+        return NO;
+    }
+    return [self handshake];
 }
 
 - (void)close {
@@ -198,6 +196,8 @@ typedef void (^LaunchCallback)(iTermFileDescriptorMultiClientChild * _Nullable, 
 
     _readFD = -1;
     _writeFD = -1;
+
+    [self.delegate fileDescriptorMultiClientDidClose:self];
 }
 
 - (void)addChild:(iTermFileDescriptorMultiClientChild *)child {
@@ -415,7 +415,8 @@ done:
         close(_readFD);
         _readFD = -1;
 #warning TODO: Test this and make sure FDs are closed exactly once and that the client is notified.
-        return iTermFileDescriptorMultiClientAttachStatusConnectFailed;
+        // The most likely reason to get here is that the server is already connected.
+        return iTermFileDescriptorMultiClientAttachStatusFatalError;
     }
     return iTermFileDescriptorMultiClientAttachStatusSuccess;
 }
@@ -505,13 +506,23 @@ static long long MakeUniqueID(void) {
 }
 
 - (void)waitForChild:(iTermFileDescriptorMultiClientChild *)child
+  removePreemptively:(BOOL)removePreemptively
           completion:(void (^)(int, NSError * _Nullable))completion {
+    if (removePreemptively) {
+        if (child.haveSentPreemptiveWait) {
+            completion(0, [self waitError:1]);
+            return;
+        }
+        [child willWaitPreemptively];
+    }
+
     assert(!child.haveWaited);
     iTermMultiServerClientOriginatedMessage message = {
         .type = iTermMultiServerRPCTypeWait,
         .payload = {
             .wait = {
-                .pid = child.pid
+                .pid = child.pid,
+                .removePreemptively = removePreemptively
             }
         }
     };
@@ -547,6 +558,7 @@ static long long MakeUniqueID(void) {
 }
 
 - (void)killServerAndAllChildren {
+#warning TODO
     // TODO
 }
 
@@ -647,12 +659,17 @@ static long long MakeUniqueID(void) {
 - (NSError *)waitError:(int)errorNumber {
     iTermFileDescriptorMultiClientErrorCode code = iTermFileDescriptorMultiClientErrorCodeUnknown;
     switch (errorNumber) {
+        case 1:
+            code = iTermFileDescriptorMultiClientErrorCodePreemptiveWaitResponse;
+            break;
         case 0:
             return nil;
         case -1:
             code = iTermFileDescriptorMultiClientErrorCodeNoSuchChild;
+            break;
         case -2:
             code = iTermFileDescriptorMultiClientErrorCodeCanNotWait;
+            break;
     }
     return [NSError errorWithDomain:iTermFileDescriptorMultiClientErrorDomain
                                code:code

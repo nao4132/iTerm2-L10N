@@ -200,6 +200,11 @@ int iTermSelect(int *fds, int count, int *results, int wantErrors) {
     return n;
 }
 
+static socklen_t SizeTToSockLenT(size_t size) {
+    assert(size <= INT32_MAX);
+    return (socklen_t)size;
+}
+
 int iTermFileDescriptorServerSocketBindListen(const char *path) {
     int socketFd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (socketFd == -1) {
@@ -211,10 +216,10 @@ int iTermFileDescriptorServerSocketBindListen(const char *path) {
 
     struct sockaddr_un local;
     local.sun_family = AF_UNIX;
-    assert(strlen(path) + 1 < sizeof(local.sun_path));
+    assert((uint64_t)strlen(path) + 1 < (uint64_t)sizeof(local.sun_path));
     strcpy(local.sun_path, path);
     unlink(local.sun_path);
-    int len = strlen(local.sun_path) + sizeof(local.sun_family) + 1;
+    socklen_t len = SizeTToSockLenT(strlen(local.sun_path)) + SizeTToSockLenT(sizeof(local.sun_family)) + 1;
     if (bind(socketFd, (struct sockaddr *)&local, len) == -1) {
         FDLog(LOG_NOTICE, "bind() failed: %s", strerror(errno));
         umask(oldMask);

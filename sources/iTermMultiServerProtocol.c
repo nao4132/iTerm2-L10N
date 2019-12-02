@@ -161,12 +161,18 @@ static int ParseWaitRequest(iTermClientServerProtocolMessageParser *parser,
     if (iTermClientServerProtocolParseTaggedInt(parser, &out->pid, sizeof(out->pid), iTermMultiServerTagWaitRequestPid)) {
         return -1;
     }
+    if (iTermClientServerProtocolParseTaggedInt(parser, &out->removePreemptively, sizeof(out->removePreemptively), iTermMultiServerTagWaitRequestRemovePreemptively)) {
+        return -1;
+    }
     return 0;
 }
 
 static int EncodeWaitRequest(iTermClientServerProtocolMessageEncoder *encoder,
                              iTermMultiServerRequestWait *wait) {
     if (iTermClientServerProtocolEncodeTaggedInt(encoder, &wait->pid, sizeof(wait->pid), iTermMultiServerTagWaitRequestPid)) {
+        return -1;
+    }
+    if (iTermClientServerProtocolEncodeTaggedInt(encoder, &wait->removePreemptively, sizeof(wait->removePreemptively), iTermMultiServerTagWaitRequestRemovePreemptively)) {
         return -1;
     }
     return 0;
@@ -328,9 +334,12 @@ int iTermMultiServerProtocolGetFileDescriptor(iTermClientServerProtocolMessage *
 
 int iTermMultiServerProtocolParseMessageFromServer(iTermClientServerProtocolMessage *message,
                                                    iTermMultiServerServerOriginatedMessage *out) {
+    iTermClientServerProtocolMessage temp = *message;
+    // This pointer can dangle if the struct gets copied, so ensure it's a legit internal pointer.
+    temp.message.msg_iov = message->ioVectors;
     iTermClientServerProtocolMessageParser parser = {
         .offset = 0,
-        .message = message
+        .message = &temp
     };
 
     if (iTermClientServerProtocolParseTaggedInt(&parser, &out->type, sizeof(out->type), iTermMultiServerTagType)) {
@@ -539,7 +548,7 @@ static ssize_t Read(int fd,
             n = read(fd, buffer + offset, length - offset);
         } while (n < 0 && errno == EINTR);
         if (n <= 0) {
-            CLog("read returned %d: %s", n, strerror(errno));
+            CLog("read returned %d: %s", n, errno ? strerror(errno) : "EOF");
             return n;
         }
         offset += n;

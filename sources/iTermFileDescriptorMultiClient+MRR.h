@@ -13,7 +13,7 @@ NS_ASSUME_NONNULL_BEGIN
 typedef NS_ENUM(NSUInteger, iTermFileDescriptorMultiClientAttachStatus) {
     iTermFileDescriptorMultiClientAttachStatusSuccess,
     iTermFileDescriptorMultiClientAttachStatusConnectFailed,
-    iTermFileDescriptorMultiClientAttachStatusFatalError
+    iTermFileDescriptorMultiClientAttachStatusFatalError  // includes rejection, unexpected errors
 };
 
 iTermFileDescriptorMultiClientAttachStatus iTermConnectToUnixDomainSocket(const char *path, int *fdOut);

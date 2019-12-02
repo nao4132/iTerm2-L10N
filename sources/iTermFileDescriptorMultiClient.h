@@ -20,7 +20,8 @@ typedef NS_ENUM(NSUInteger, iTermFileDescriptorMultiClientErrorCode) {
     iTermFileDescriptorMultiClientErrorCodeNoSuchChild,
     iTermFileDescriptorMultiClientErrorCodeCanNotWait,  // child not terminated
     iTermFileDescriptorMultiClientErrorCodeUnknown,
-    iTermFileDescriptorMultiClientErrorCodeForkFailed
+    iTermFileDescriptorMultiClientErrorCodeForkFailed,
+    iTermFileDescriptorMultiClientErrorCodePreemptiveWaitResponse
 };
 
 @interface iTermFileDescriptorMultiClientChild : NSObject
@@ -31,7 +32,8 @@ typedef NS_ENUM(NSUInteger, iTermFileDescriptorMultiClientErrorCode) {
 @property (nonatomic, readonly) BOOL utf8;
 @property (nonatomic, readonly) NSString *initialDirectory;
 @property (nonatomic, readonly) BOOL hasTerminated;
-@property (nonatomic, readonly) BOOL haveWaited;
+@property (nonatomic, readonly) BOOL haveWaited;  // only for non-preemptive waits
+@property (nonatomic, readonly) BOOL haveSentPreemptiveWait;
 @property (nonatomic, readonly) int terminationStatus;  // only defined if haveWaited is YES
 @property (nonatomic, readonly) int fd;
 @property (nonatomic, readonly) NSString *tty;
@@ -46,6 +48,8 @@ typedef NS_ENUM(NSUInteger, iTermFileDescriptorMultiClientErrorCode) {
 
 - (void)fileDescriptorMultiClient:(iTermFileDescriptorMultiClient *)client
                 childDidTerminate:(iTermFileDescriptorMultiClientChild *)child;
+
+- (void)fileDescriptorMultiClientDidClose:(iTermFileDescriptorMultiClient *)client;
 
 @end
 
@@ -72,6 +76,7 @@ typedef NS_ENUM(NSUInteger, iTermFileDescriptorMultiClientErrorCode) {
                            completion:(void (^)(iTermFileDescriptorMultiClientChild * _Nullable child, NSError * _Nullable))completion;
 
 - (void)waitForChild:(iTermFileDescriptorMultiClientChild *)child
+  removePreemptively:(BOOL)removePreemptively
           completion:(void (^)(int status, NSError * _Nullable))completion;
 
 - (void)killServerAndAllChildren;

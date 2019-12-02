@@ -31,6 +31,7 @@ typedef enum {
     iTermMultiServerTagLaunchRequestUniqueId,
 
     iTermMultiServerTagWaitRequestPid,
+    iTermMultiServerTagWaitRequestRemovePreemptively,
 
     iTermMultiServerTagWaitResponsePid,
     iTermMultiServerTagWaitResponseStatus,
@@ -122,6 +123,9 @@ typedef struct {
 typedef struct {
     // iTermMultiServerTagWaitRequestPid
     pid_t pid;
+
+    // iTermMultiServerTagWaitRequestRemovePreemptively
+    int removePreemptively;
 } iTermMultiServerRequestWait;
 
 typedef struct {
@@ -133,6 +137,7 @@ typedef struct {
     int status;
 
     // iTermMultiServerTagWaitResponseErrno
+    // 1: Child marked as future termination for preemptive wait.
     // 0: No error. Status is valid. Child has been removed.
     // -1: No such child
     // -2: Child not terminated

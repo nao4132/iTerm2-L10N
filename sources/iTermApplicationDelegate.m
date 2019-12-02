@@ -62,6 +62,7 @@
 #import "iTermPythonRuntimeDownloader.h"
 #import "iTermScriptHistory.h"
 #import "iTermScriptImporter.h"
+#import "iTermSessionFactory.h"
 #import "iTermAdvancedSettingsModel.h"
 #import "iTermOpenQuicklyWindowController.h"
 #import "iTermOrphanServerAdopter.h"
@@ -148,7 +149,7 @@ static BOOL gStartupActivitiesPerformed = NO;
 static NSString *LEGACY_DEFAULT_ARRANGEMENT_NAME = @"Default";
 static BOOL hasBecomeActive = NO;
 
-@interface iTermApplicationDelegate () <iTermPasswordManagerDelegate, iTermObject>
+@interface iTermApplicationDelegate () <iTermOrphanServerAdopterDelegate, iTermPasswordManagerDelegate, iTermObject>
 
 @property(nonatomic, readwrite) BOOL workspaceSessionActive;
 
@@ -288,7 +289,7 @@ static BOOL hasBecomeActive = NO;
                                                            andSelector:@selector(getUrl:withReplyEvent:)
                                                          forEventClass:kInternetEventClass
                                                             andEventID:kAEGetURL];
-
+        [[iTermOrphanServerAdopter sharedInstance] setDelegate:self];
         launchTime_ = [[NSDate date] retain];
         _workspaceSessionActive = YES;
     }
@@ -2407,6 +2408,50 @@ static BOOL hasBecomeActive = NO;
 
 - (iTermVariableScope *)objectScope {
     return [iTermVariableScope globalsScope];
+}
+
+#pragma mark - iTermOrphanServerAdopterDelegate
+
+- (id)orphanServerAdopterOpenSessionForConnection:(iTermGeneralServerConnection)generalConnection
+                                         inWindow:(id)desiredWindow {
+    assert([iTermAdvancedSettingsModel runJobsInServers]);
+    Profile *defaultProfile = [[ProfileModel sharedInstance] defaultBookmark];
+    PTYSession *aSession =
+        [[iTermController sharedInstance] launchBookmark:nil
+                                              inTerminal:desiredWindow
+                                                 withURL:nil
+                                        hotkeyWindowType:iTermHotkeyWindowTypeNone
+                                                 makeKey:NO
+                                             canActivate:NO
+                                      respectTabbingMode:NO
+                                                 command:nil
+                                                   block:
+         ^PTYSession *(Profile *profile, PseudoTerminal *term) {
+            PTYSession *session = [term.sessionFactory newSessionWithProfile:defaultProfile];
+            [term addSessionInNewTab:session];
+            iTermGeneralServerConnection temp = generalConnection;
+            const BOOL ok = [term.sessionFactory attachOrLaunchCommandInSession:session
+                                                                      canPrompt:NO
+                                                                     objectType:iTermWindowObject
+                                                               serverConnection:&temp
+                                                                      urlString:nil
+                                                                   allowURLSubs:NO
+                                                                    environment:@{}
+                                                                    customShell:[ITAddressBookMgr customShellForProfile:defaultProfile]
+                                                                         oldCWD:nil
+                                                                 forceUseOldCWD:NO
+                                                                        command:nil
+                                                                         isUTF8:nil
+                                                                  substitutions:nil
+                                                               windowController:term
+                                                                    synchronous:NO
+                                                                     completion:nil];
+            return ok ? session : nil;
+        }
+                                             synchronous:NO
+                                              completion:nil];
+    [aSession showOrphanAnnouncement];
+    return [[iTermController sharedInstance] terminalWithSession:aSession];
 }
 
 @end

@@ -9,146 +9,12 @@
 
 #import "DebugLogging.h"
 #import "iTermFileDescriptorMultiClient.h"
+#import "iTermMultiServerConnection.h"
 #import "iTermNotificationCenter.h"
 #import "iTermProcessCache.h"
 #import "NSArray+iTerm.h"
 #import "NSFileManager+iTerm.h"
 #import "TaskNotifier.h"
-
-@interface iTermMultiServerConnection: NSObject<iTermFileDescriptorMultiClientDelegate>
-
-@property (nonatomic, readonly) pid_t pid;
-
-+ (instancetype)primaryConnection;
-
-- (void)launchWithTTYState:(iTermTTYState *)ttyStatePtr
-                   argpath:(const char *)argpath
-                      argv:(const char **)argv
-                initialPwd:(const char *)initialPwd
-                newEnviron:(const char **)newEnviron
-                completion:(void (^)(iTermFileDescriptorMultiClientChild *child,
-                                     NSError *error))completion;
-
-@end
-
-@implementation iTermMultiServerConnection {
-    iTermFileDescriptorMultiClient *_client;
-    BOOL _isPrimary;
-    NSMutableArray<iTermFileDescriptorMultiClientChild *> *_unattachedChildren;
-}
-
-+ (instancetype)primaryConnection {
-    static dispatch_once_t onceToken;
-    static iTermMultiServerConnection *instance;
-    dispatch_once(&onceToken, ^{
-        int i = 0;
-        while (1) {
-            instance = [[iTermMultiServerConnection alloc] initPrimary:YES
-                                                                number:i++];
-            assert(instance);
-            const BOOL ok = [instance->_client attachOrLaunchServer];
-            if (ok) {
-                break;
-            }
-            i++;
-        }
-        self.registry[@(i)] = instance;
-    });
-    return instance;
-}
-
-+ (NSMutableDictionary<NSNumber *, iTermMultiServerConnection *> *)registry {
-    static NSMutableDictionary<NSNumber *, iTermMultiServerConnection *> *registry;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        registry = [NSMutableDictionary dictionary];
-    });
-    return registry;
-}
-
-+ (instancetype)connectionForSocketNumber:(int)number {
-    iTermMultiServerConnection *result = self.registry[@(number)];
-    if (result) {
-        return result;
-    }
-    result = [[self alloc] initPrimary:NO number:number];
-    assert(result);
-    if (![result->_client attach]) {
-        return nil;
-    }
-    self.registry[@(number)] = result;
-    return result;
-}
-
-+ (NSString *)pathForNumber:(int)number {
-    NSString *appSupportPath = [[NSFileManager defaultManager] applicationSupportDirectory];
-    NSString *filename = [NSString stringWithFormat:@"daemon-%d.socket", number];
-    NSURL *url = [[NSURL fileURLWithPath:appSupportPath] URLByAppendingPathComponent:filename];
-    return url.path;
-}
-
-- (instancetype)initPrimary:(BOOL)primary number:(int)number {
-    self = [super init];
-    if (self) {
-        _unattachedChildren = [NSMutableArray array];
-        _isPrimary = primary;
-        NSString *const path = [self.class pathForNumber:number];
-        _client = [[iTermFileDescriptorMultiClient alloc] initWithPath:path];
-        _client.delegate = self;
-    }
-    return self;
-}
-
-- (void)launchWithTTYState:(iTermTTYState *)ttyStatePtr
-                   argpath:(const char *)argpath
-                      argv:(const char **)argv
-                initialPwd:(const char *)initialPwd
-                newEnviron:(const char **)newEnviron
-                completion:(void (^)(iTermFileDescriptorMultiClientChild *child,
-                                     NSError *error))completion {
-    [_client launchChildWithExecutablePath:argpath
-                                      argv:argv
-                               environment:newEnviron
-                                       pwd:initialPwd
-                                  ttyState:ttyStatePtr
-                                completion:^(iTermFileDescriptorMultiClientChild * _Nonnull child, NSError * _Nullable error) {
-        if (error) {
-            DLog(@"While creating child: %@", error);
-        }
-        completion(child, error);
-    }];
-}
-
-- (iTermFileDescriptorMultiClientChild *)attachToProcessID:(pid_t)pid {
-    iTermFileDescriptorMultiClientChild *child = [_unattachedChildren objectPassingTest:^BOOL(iTermFileDescriptorMultiClientChild *element, NSUInteger index, BOOL *stop) {
-        return element.pid == pid;
-    }];
-    if (!child) {
-        return nil;
-    }
-    [_unattachedChildren removeObject:child];
-    return child;
-}
-
-#pragma mark - iTermFileDescriptorMultiClientDelegate
-
-- (void)fileDescriptorMultiClient:(iTermFileDescriptorMultiClient *)client
-                 didDiscoverChild:(iTermFileDescriptorMultiClientChild *)child {
-    [_unattachedChildren addObject:child];
-#warning TODO: Handle orphans. Restore windows and call attachToProcessID:.
-}
-
-- (void)fileDescriptorMultiClientDidFinishHandshake:(iTermFileDescriptorMultiClient *)client {
-#warning todo
-}
-
-- (void)fileDescriptorMultiClient:(iTermFileDescriptorMultiClient *)client
-                childDidTerminate:(iTermFileDescriptorMultiClientChild *)child {
-    [[iTermMultiServerChildDidTerminateNotification notificationWithProcessID:child.pid
-                                                            terminationStatus:child.terminationStatus] post];
-}
-
-@end
 
 @implementation iTermMultiServerJobManager {
     iTermMultiServerConnection *_conn;
@@ -207,15 +73,10 @@
         assert([error.domain isEqualToString:iTermFileDescriptorMultiClientErrorDomain]);
         const iTermFileDescriptorMultiClientErrorCode code = (iTermFileDescriptorMultiClientErrorCode)error.code;
         switch (code) {
+            case iTermFileDescriptorMultiClientErrorCodePreemptiveWaitResponse:
             case iTermFileDescriptorMultiClientErrorCodeConnectionLost:
-                completion(iTermJobManagerForkAndExecStatusServerError);
-                break;
             case iTermFileDescriptorMultiClientErrorCodeNoSuchChild:
-                completion(iTermJobManagerForkAndExecStatusServerError);
-                break;
             case iTermFileDescriptorMultiClientErrorCodeCanNotWait:
-                completion(iTermJobManagerForkAndExecStatusServerError);
-                break;
             case iTermFileDescriptorMultiClientErrorCodeUnknown:
                 completion(iTermJobManagerForkAndExecStatusServerError);
                 break;
@@ -269,19 +130,34 @@
     assert(serverConnection.type == iTermGeneralServerConnectionTypeMulti);
     assert(!_conn);
     assert(!_child);
-    _conn = [iTermMultiServerConnection connectionForSocketNumber:serverConnection.multi.number];
+    _conn = [iTermMultiServerConnection connectionForSocketNumber:serverConnection.multi.number
+                                                 createIfPossible:NO];
     if (!_conn) {
 #warning TODO: Test this
         [task brokenPipe];
         return;
     }
-    _child = [_conn attachToProcessID:thePid.intValue];
+    if (thePid != nil) {
+        assert(thePid.integerValue == serverConnection.multi.pid);
+    }
+    _child = [_conn attachToProcessID:serverConnection.multi.pid];
     if (!_child) {
         return;
     }
-    [[TaskNotifier sharedInstance] registerTask:task];
-#warning TODO: Update orphan server adopter
-    [[iTermProcessCache sharedInstance] setNeedsUpdate:YES];
+    if (_child.hasTerminated) {
+        const pid_t pid = _child.pid;
+        [_conn waitForChild:_child removePreemptively:NO completion:^(int status, NSError *error) {
+            if (error) {
+                DLog(@"Failed to wait on child with pid %d: %@", pid, error);
+            } else {
+                DLog(@"Child with pid %d terminated with status %d", pid, status);
+            }
+        }];
+        [task brokenPipe];
+    } else {
+        [[TaskNotifier sharedInstance] registerTask:task];
+        [[iTermProcessCache sharedInstance] setNeedsUpdate:YES];
+    }
 }
 
 - (void)sendSignal:(int)signo toServer:(BOOL)toServer {
@@ -329,6 +205,13 @@
             [self sendSignal:SIGHUP toServer:NO];
             break;
     }
+    if (_child.haveWaited) {
+        return;
+    }
+    const pid_t pid = _child.pid;
+    [_conn waitForChild:_child removePreemptively:YES completion:^(int status, NSError *error) {
+        DLog(@"Preemptive wait for %d finished with status %d error %@", pid, status, error);
+    }];
 }
 
 @end

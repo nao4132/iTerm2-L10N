@@ -93,6 +93,8 @@ static int unblockPipeW;
     }];
     if (i == NSNotFound) {
         [tasksLock unlock];
+        // This is the normal case — usually there'll be an error status on the FD and
+        // -deregisterTask: will take care of it.
         return;
     }
     id<iTermTask> task = [[_tasks[i] retain] autorelease];

@@ -101,7 +101,8 @@
 }
 
 - (void)setTty:(NSString *)tty {
-    assert(NO);
+    ITAssertWithMessage([NSObject object:tty isEqualToObject:_child.tty],
+                        @"setTty:%@ when _child.tty=%@", tty, _child.tty);
 }
 
 - (pid_t)externallyVisiblePid {

@@ -238,7 +238,7 @@
         kill(_serverPid, signo);
         return;
     }
-    if (_serverChildPid < 0) {
+    if (_serverChildPid <= 0) {
         return;
     }
     [[iTermProcessCache sharedInstance] unregisterTrackedPID:_serverChildPid];

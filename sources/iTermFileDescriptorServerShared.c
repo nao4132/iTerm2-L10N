@@ -43,7 +43,7 @@ void iTermFileDescriptorServerLog(char *format, ...) {
 int iTermFileDescriptorServerAcceptAndClose(int socketFd) {
     int fd = iTermFileDescriptorServerAccept(socketFd);
     if (fd != -1) {
-        close(fd);
+        close(socketFd);
     }
     return fd;
 }

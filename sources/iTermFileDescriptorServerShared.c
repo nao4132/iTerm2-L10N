@@ -181,11 +181,6 @@ int iTermSelect(int *fds, int count, int *results, int wantErrors) {
         }
         FDLog(LOG_DEBUG, "Calling select...");
         result = select(max + 1, &readset, NULL, wantErrors ? &errorset : NULL, NULL);
-#warning DNS
-        static int forceReturn = 0;
-        if (forceReturn) {
-            return 0;
-        }
         theError = errno;
         FDLog(LOG_DEBUG, "select returned %d, error = %s", result, strerror(theError));
     } while (result == -1 && theError == EINTR);

@@ -212,7 +212,6 @@ int iTermCreateConnectedUnixDomainSocket(const char *path,
                       "/",  // initialPwd
                       cenv,  // newEnviron
                       1);  // errorFd
-            _exit(-1);
             return forkState;
         }
         default:

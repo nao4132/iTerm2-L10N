@@ -27,7 +27,7 @@ int iTermPosixTTYReplacementForkPty(int *amaster,
                                     int serverSocketFd,
                                     int deadMansPipeWriteEnd);
 
-// Call this in the child after fork.
+// Call this in the child after fork. This never returns, even if it can't exec the target.
 void iTermExec(const char *argpath,
                const char **argv,
                int closeFileDescriptors,
@@ -35,7 +35,7 @@ void iTermExec(const char *argpath,
                const iTermForkState *forkState,
                const char *initialPwd,
                const char **newEnviron,
-               int errorFd);
+               int errorFd) __attribute__((noreturn));
 
 void iTermSignalSafeWrite(int fd, const char *message);
 void iTermSignalSafeWriteInt(int fd, int n);

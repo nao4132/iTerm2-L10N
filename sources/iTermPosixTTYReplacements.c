@@ -177,7 +177,6 @@ void iTermExec(const char *argpath,
         iTermSignalSafeWrite(errorFd, "## exec failed ##\n");
         iTermSignalSafeWrite(errorFd, "Program: ");
         iTermSignalSafeWrite(errorFd, argpath);
-        iTermSignalSafeWrite(errorFd, "\nErrno: ");
         if (e == ENOENT) {
             iTermSignalSafeWrite(errorFd, "\nNo such file or directory");
         } else {
@@ -188,6 +187,7 @@ void iTermExec(const char *argpath,
     }
 
     sleep(1);
+    _exit(1);
 }
 
 void iTermSignalSafeWrite(int fd, const char *message) {

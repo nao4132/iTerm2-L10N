@@ -215,7 +215,6 @@ static int Launch(const iTermMultiServerRequestLaunch *launch,
                   launch->pwd,
                   launch->envp,
                   fd);
-        return -1;
     }
     if (forkState->pid == 1) {
         *errorPtr = errno;
@@ -273,15 +272,15 @@ static int SendLaunchResponse(int fd, int status, pid_t pid, int masterFd, const
 
 static int HandleLaunchRequest(int fd, const iTermMultiServerRequestLaunch *launch) {
     DLog("HandleLaunchRequest fd=%d", fd);
-    LogLaunchRequest(launch);
 
-    int error;
     iTermForkState forkState = {
         .connectionFd = -1,
         .deadMansPipe = { 0, 0 },
     };
     iTermTTYState ttyState;
     memset(&ttyState, 0, sizeof(ttyState));
+
+    int error = 0;
     int masterFd = Launch(launch, &forkState, &ttyState, &error);
     if (masterFd < 0) {
         return SendLaunchResponse(fd,

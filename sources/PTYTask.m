@@ -491,7 +491,31 @@ static void HandleSigChld(int n) {
                                                  waitUntilDone:NO];
 }
 
+- (void)setJobManagerType:(iTermGeneralServerConnectionType)type {
+    assert([self canAttach]);
+    switch (type) {
+        case iTermGeneralServerConnectionTypeMono:
+            if ([_jobManager isKindOfClass:[iTermMonoServerJobManager class]]) {
+                return;
+            }
+            DLog(@"Replace jobmanager %@ with monoserver instance", _jobManager);
+            _jobManager = [[iTermMonoServerJobManager alloc] init];
+            break;
+
+        case iTermGeneralServerConnectionTypeMulti:
+            if ([_jobManager isKindOfClass:[iTermMultiServerJobManager class]]) {
+                return;
+            }
+            DLog(@"Replace jobmanager %@ with multiserver instance", _jobManager);
+            _jobManager = [[iTermMonoServerJobManager alloc] init];
+            break;
+    }
+}
+
+// This works for any kind of connection.
 - (void)attachToServer:(iTermGeneralServerConnection)serverConnection {
+    assert([self canAttach]);
+    [self setJobManagerType:serverConnection.type];
     [_jobManager attachToServer:serverConnection withProcessID:nil task:self];
 }
 
@@ -538,10 +562,6 @@ static void HandleSigChld(int n) {
     }
 
     DLog(@"tryToAttachToMultiserverWithRestorationIdentifier:%@", restorationIdentifier);
-    if (![_jobManager isKindOfClass:[iTermMultiServerJobManager class]]) {
-        DLog(@"Replace jobmanager %@ with multiserver instance", _jobManager);
-        _jobManager = [[iTermMultiServerJobManager alloc] init];
-    }
     [self attachToServer:generalConnection];
     return YES;
 }

@@ -54,11 +54,13 @@ typedef struct {
     int number;
 } iTermFileDescriptorMultiServerProcess;
 
+typedef NS_ENUM(NSUInteger, iTermGeneralServerConnectionType) {
+    iTermGeneralServerConnectionTypeMono,
+    iTermGeneralServerConnectionTypeMulti
+};
+
 typedef struct {
-    enum {
-        iTermGeneralServerConnectionTypeMono,
-        iTermGeneralServerConnectionTypeMulti
-    } type;
+    iTermGeneralServerConnectionType type;
     union {
         iTermFileDescriptorServerConnection mono;
         iTermFileDescriptorMultiServerProcess multi;

@@ -73,9 +73,8 @@ NSArray<NSString *> *iTermOrphanServerAdopterFindMultiServers(void) {
     if (self) {
         if ([iTermAdvancedSettingsModel multiserver]) {
             _pathsOfMultiServers = iTermOrphanServerAdopterFindMultiServers();
-        } else {
-            _pathsOfOrphanedMonoServers = iTermOrphanServerAdopterFindMonoServers();
         }
+        _pathsOfOrphanedMonoServers = iTermOrphanServerAdopterFindMonoServers();
     }
     return self;
 }

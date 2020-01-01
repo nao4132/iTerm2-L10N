@@ -557,11 +557,6 @@ static long long MakeUniqueID(void) {
     }
 }
 
-- (void)killServerAndAllChildren {
-#warning TODO
-    // TODO
-}
-
 - (iTermFileDescriptorMultiClientChild *)childWithPID:(pid_t)pid {
     return [_children objectPassingTest:^BOOL(iTermFileDescriptorMultiClientChild *element, NSUInteger index, BOOL *stop) {
         return element.pid == pid;

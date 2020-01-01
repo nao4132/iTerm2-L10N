@@ -79,8 +79,6 @@ typedef NS_ENUM(NSUInteger, iTermFileDescriptorMultiClientErrorCode) {
   removePreemptively:(BOOL)removePreemptively
           completion:(void (^)(int status, NSError * _Nullable))completion;
 
-- (void)killServerAndAllChildren;
-
 @end
 
 NS_ASSUME_NONNULL_END

@@ -31,7 +31,7 @@
             }
         }];
         if (!instance) {
-            int i = 0;
+            int i = 1;
             while (!instance) {
                 instance = [self connectionForSocketNumber:i createIfPossible:YES];
                 i += 1;
@@ -83,6 +83,7 @@
 - (instancetype)initWithSocketNumber:(int)number {
     self = [super init];
     if (self) {
+        _socketNumber = number;
         _unattachedChildren = [NSMutableArray array];
         NSString *const path = [self.class pathForNumber:number];
         _client = [[iTermFileDescriptorMultiClient alloc] initWithPath:path];

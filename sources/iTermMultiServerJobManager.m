@@ -14,11 +14,48 @@
 #import "iTermProcessCache.h"
 #import "NSArray+iTerm.h"
 #import "NSFileManager+iTerm.h"
+#import "NSObject+iTerm.h"
 #import "TaskNotifier.h"
+
+NSString *const iTermMultiServerRestorationKeyType = @"Type";
+NSString *const iTermMultiServerRestorationKeyVersion = @"Version";
+NSString *const iTermMultiServerRestorationKeySocket = @"Socket";
+NSString *const iTermMultiServerRestorationKeyChildPID = @"Child PID";
+
+// Value for iTermMultiServerRestorationKeyType
+static NSString *const iTermMultiServerRestorationType = @"multiserver";
+static const int iTermMultiServerMaximumSupportedRestorationIdentifierVersion = 1;
 
 @implementation iTermMultiServerJobManager {
     iTermMultiServerConnection *_conn;
     iTermFileDescriptorMultiClientChild *_child;
+}
+
++ (BOOL)getGeneralConnection:(iTermGeneralServerConnection *)generalConnection
+   fromRestorationIdentifier:(NSDictionary *)dict {
+    NSString *type = dict[iTermMultiServerRestorationKeyType];
+    if (![type isEqual:iTermMultiServerRestorationType]) {
+        return NO;
+    }
+
+    NSNumber *version = [NSNumber castFrom:dict[iTermMultiServerRestorationKeyVersion]];
+    if (!version || version.intValue < 0 || version.intValue > iTermMultiServerMaximumSupportedRestorationIdentifierVersion) {
+        return NO;
+    }
+
+    NSNumber *socketNumber = [NSNumber castFrom:dict[iTermMultiServerRestorationKeySocket]];
+    if (!socketNumber || socketNumber.intValue <= 0) {
+        return NO;
+    }
+    NSNumber *childPidNumber = [NSNumber castFrom:dict[iTermMultiServerRestorationKeyChildPID]];
+    if (!childPidNumber || childPidNumber.intValue < 0) {
+        return NO;
+    }
+    memset(generalConnection, 0, sizeof(*generalConnection));
+    generalConnection->type = iTermGeneralServerConnectionTypeMulti;
+    generalConnection->multi.number = socketNumber.intValue;
+    generalConnection->multi.pid = childPidNumber.intValue;
+    return YES;
 }
 
 - (instancetype)init {
@@ -114,7 +151,14 @@
 }
 
 - (id)sessionRestorationIdentifier {
-    return @{ @"Multi": @(_child.pid) };
+    ITBetaAssert(_conn != nil, @"nil connection");
+    if (!_conn) {
+        return nil;
+    }
+    return @{ iTermMultiServerRestorationKeyType: iTermMultiServerRestorationType,
+              iTermMultiServerRestorationKeyVersion: @(iTermMultiServerMaximumSupportedRestorationIdentifierVersion),
+              iTermMultiServerRestorationKeySocket: @(_conn.socketNumber),
+              iTermMultiServerRestorationKeyChildPID: @(_child.pid) };
 }
 
 - (pid_t)pidToWaitOn {
@@ -156,6 +200,7 @@
         }];
         [task brokenPipe];
     } else {
+        [[iTermProcessCache sharedInstance] registerTrackedPID:_child.pid];
         [[TaskNotifier sharedInstance] registerTask:task];
         [[iTermProcessCache sharedInstance] setNeedsUpdate:YES];
     }

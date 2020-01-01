@@ -495,17 +495,21 @@ static void HandleSigChld(int n) {
     [_jobManager attachToServer:serverConnection withProcessID:nil task:self];
 }
 
-- (BOOL)tryToAttachToServerWithProcessId:(pid_t)thePid tty:(NSString *)tty {
+- (BOOL)canAttach {
     if (![iTermAdvancedSettingsModel runJobsInServers]) {
         return NO;
     }
     if (_jobManager.hasJob) {
         return NO;
     }
+    return YES;
+}
 
-    // TODO: This server code is super scary so I'm NSLog'ing it to make it easier to recover
-    // logs. These should eventually become DLog's and the log statements in the server should
-    // become LOG_DEBUG level.
+- (BOOL)tryToAttachToServerWithProcessId:(pid_t)thePid tty:(NSString *)tty {
+    if (![self canAttach]) {
+        return NO;
+    }
+
     DLog(@"tryToAttachToServerWithProcessId: Attempt to connect to server for pid %d, tty %@", (int)thePid, tty);
     iTermFileDescriptorServerConnection serverConnection = iTermFileDescriptorClientRun(thePid);
     if (!serverConnection.ok) {
@@ -521,6 +525,25 @@ static void HandleSigChld(int n) {
         [self setTty:tty];
         return YES;
     }
+}
+
+- (BOOL)tryToAttachToMultiserverWithRestorationIdentifier:(NSDictionary *)restorationIdentifier {
+    if (![self canAttach]) {
+        return NO;
+    }
+    iTermGeneralServerConnection generalConnection;
+    if (![iTermMultiServerJobManager getGeneralConnection:&generalConnection
+                                fromRestorationIdentifier:restorationIdentifier]) {
+        return NO;
+    }
+
+    DLog(@"tryToAttachToMultiserverWithRestorationIdentifier:%@", restorationIdentifier);
+    if (![_jobManager isKindOfClass:[iTermMultiServerJobManager class]]) {
+        DLog(@"Replace jobmanager %@ with multiserver instance", _jobManager);
+        _jobManager = [[iTermMultiServerJobManager alloc] init];
+    }
+    [self attachToServer:generalConnection];
+    return YES;
 }
 
 - (void)registerAsCoprocessOnlyTask {

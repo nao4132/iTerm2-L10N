@@ -18,10 +18,13 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (nonatomic, readonly) pid_t pid;
 @property (nonatomic, readonly) NSArray<iTermFileDescriptorMultiClientChild *> *unattachedChildren;
+@property (nonatomic, readonly) int socketNumber;
 
 + (instancetype)primaryConnection;
 + (instancetype)connectionForSocketNumber:(int)number
                          createIfPossible:(BOOL)shouldCreate;
+
+- (instancetype)init NS_UNAVAILABLE;
 
 - (iTermFileDescriptorMultiClientChild *)attachToProcessID:(pid_t)pid;
 

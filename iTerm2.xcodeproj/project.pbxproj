@@ -5834,6 +5834,7 @@
 		A6C7DE5C19A469D6001E5C75 /* NSColor+Scripting.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "NSColor+Scripting.m"; sourceTree = "<group>"; };
 		A6C93DD2238A447900F21E0D /* iTermLogicalMovementHelper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = iTermLogicalMovementHelper.h; sourceTree = "<group>"; };
 		A6C93DD3238A447900F21E0D /* iTermLogicalMovementHelper.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = iTermLogicalMovementHelper.m; sourceTree = "<group>"; };
+		A6C9A62B23BC625E0070C789 /* iTermFileDescriptorMultiClient+Protected.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "iTermFileDescriptorMultiClient+Protected.h"; sourceTree = "<group>"; };
 		A6CC16521CF012E300E8C148 /* iTermCarbonHotKeyController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = iTermCarbonHotKeyController.h; sourceTree = "<group>"; };
 		A6CC16531CF012E300E8C148 /* iTermCarbonHotKeyController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = iTermCarbonHotKeyController.m; sourceTree = "<group>"; };
 		A6CD8A3822344C78007C5B39 /* iTermAPIPermissionsWindowController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = iTermAPIPermissionsWindowController.h; sourceTree = "<group>"; };
@@ -8367,6 +8368,7 @@
 				A663196C22FE651D00C502BD /* iTermFileDescriptorMultiClient+MRR.m */,
 				A64FCD56238DE785001D8199 /* iTermFileDescriptorServerShared.h */,
 				A64FCD57238DE785001D8199 /* iTermFileDescriptorServerShared.c */,
+				A6C9A62B23BC625E0070C789 /* iTermFileDescriptorMultiClient+Protected.h */,
 			);
 			name = "Shell Launcher/FD Client/Server";
 			sourceTree = "<group>";

@@ -7,6 +7,7 @@
 
 #import "iTermFileDescriptorMultiClient.h"
 #import "iTermFileDescriptorMultiClient+MRR.h"
+#import "iTermFileDescriptorMultiClient+Protected.h"
 
 #import "DebugLogging.h"
 #import "iTermFileDescriptorServer.h"

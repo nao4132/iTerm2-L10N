@@ -244,7 +244,11 @@ static int SendLaunchResponse(int fd, int status, pid_t pid, int masterFd, const
             }
         }
     };
-    iTermMultiServerProtocolEncodeMessageFromServer(&message, &obj);
+    const int rc = iTermMultiServerProtocolEncodeMessageFromServer(&message, &obj);
+    if (rc) {
+        DLog("Error encoding launch response");
+        return -1;
+    }
 
     ssize_t result;
     if (masterFd >= 0) {
@@ -317,7 +321,11 @@ static int ReportTermination(int fd, pid_t pid) {
             }
         }
     };
-    iTermMultiServerProtocolEncodeMessageFromServer(&message, &obj);
+    const int rc = iTermMultiServerProtocolEncodeMessageFromServer(&message, &obj);
+    if (rc) {
+        DLog("Failed to encode termination report");
+        return -1;
+    }
 
     int error;
     ssize_t result = iTermFileDescriptorServerSendMessage(fd,
@@ -361,7 +369,11 @@ static int ReportChild(int fd, const iTermMultiServerChild *child, int isLast) {
         .type = iTermMultiServerRPCTypeReportChild,
     };
     PopulateReportChild(child, isLast, &message.payload.reportChild);
-    iTermMultiServerProtocolEncodeMessageFromServer(&message, &obj);
+    const int rc = iTermMultiServerProtocolEncodeMessageFromServer(&message, &obj);
+    if (rc) {
+        DLog("Failed to encode report child");
+        return -1;
+    }
 
     ssize_t bytes = iTermFileDescriptorServerSendMessageAndFileDescriptor(fd,
                                                                           obj.ioVectors[0].iov_base,
@@ -460,7 +472,11 @@ static int HandleHandshake(int fd, iTermMultiServerRequestHandshake *handshake) 
             }
         }
     };
-    iTermMultiServerProtocolEncodeMessageFromServer(&message, &obj);
+    const int rc = iTermMultiServerProtocolEncodeMessageFromServer(&message, &obj);
+    if (rc) {
+        DLog("Failed to encode handshake response");
+        return -1;
+    }
 
     DLog("Send handshake response with protocolVersion=%d, numChildren=%d, pid=%d",
          message.payload.handshake.protocolVersion,
@@ -527,7 +543,11 @@ static int HandleWait(int fd, iTermMultiServerRequestWait *wait) {
             }
         }
     };
-    iTermMultiServerProtocolEncodeMessageFromServer(&message, &obj);
+    const int rc = iTermMultiServerProtocolEncodeMessageFromServer(&message, &obj);
+    if (rc) {
+        DLog("Failed to encode wait response");
+        return -1;
+    }
 
     DLog("Send wait response with pid=%d status=%d errorNumber=%d",
          message.payload.wait.pid,
@@ -623,7 +643,11 @@ static void AcceptAndReject(int socket) {
     };
     iTermClientServerProtocolMessage obj;
     iTermClientServerProtocolMessageInitialize(&obj);
-    iTermMultiServerProtocolEncodeMessageFromServer(&message, &obj);
+    const int rc = iTermMultiServerProtocolEncodeMessageFromServer(&message, &obj);
+    if (rc) {
+        DLog("Failed to encode version-rejected");
+        goto done;
+    }
     int error;
     const ssize_t result = iTermFileDescriptorServerSendMessage(fd,
                                                                 obj.ioVectors[0].iov_base,
@@ -634,7 +658,8 @@ static void AcceptAndReject(int socket) {
     }
 
     iTermClientServerProtocolMessageFree(&obj);
-    
+
+done:
     close(fd);
 }
 

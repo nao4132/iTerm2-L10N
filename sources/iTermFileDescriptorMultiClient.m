@@ -274,8 +274,9 @@ typedef void (^LaunchCallback)(iTermFileDescriptorMultiClientChild * _Nullable, 
     status = iTermMultiServerProtocolParseMessageFromServer(&encodedMessage, &decodedMessage);
     if (status == 0) {
         block(YES, &decodedMessage);
+#warning TODO: Free invalid partially-decoded messages.
+        iTermMultiServerServerOriginatedMessageFree(&decodedMessage);
     }
-    iTermMultiServerServerOriginatedMessageFree(&decodedMessage);
 
 done:
     if (mustFreeEncodedMessage) {

@@ -212,29 +212,36 @@ typedef struct {
     } payload;
 } iTermMultiServerServerOriginatedMessage;
 
-int iTermMultiServerProtocolParseMessageFromClient(iTermClientServerProtocolMessage *message,
-                                                   iTermMultiServerClientOriginatedMessage *out);
+int __attribute__((warn_unused_result))
+iTermMultiServerProtocolParseMessageFromClient(iTermClientServerProtocolMessage *message,
+                                               iTermMultiServerClientOriginatedMessage *out);
 
-int iTermMultiServerProtocolEncodeMessageFromClient(iTermMultiServerClientOriginatedMessage *obj,
-                                                    iTermClientServerProtocolMessage *message);
+int __attribute__((warn_unused_result))
+iTermMultiServerProtocolEncodeMessageFromClient(iTermMultiServerClientOriginatedMessage *obj,
+                                                iTermClientServerProtocolMessage *message);
 
-int iTermMultiServerProtocolParseMessageFromServer(iTermClientServerProtocolMessage *message,
-                                                   iTermMultiServerServerOriginatedMessage *out);
+int __attribute__((warn_unused_result))
+iTermMultiServerProtocolParseMessageFromServer(iTermClientServerProtocolMessage *message,
+                                               iTermMultiServerServerOriginatedMessage *out);
 
-int iTermMultiServerProtocolEncodeMessageFromServer(iTermMultiServerServerOriginatedMessage *obj,
-                                                    iTermClientServerProtocolMessage *message);
+int __attribute__((warn_unused_result))
+iTermMultiServerProtocolEncodeMessageFromServer(iTermMultiServerServerOriginatedMessage *obj,
+                                                iTermClientServerProtocolMessage *message);
 
 void iTermMultiServerClientOriginatedMessageFree(iTermMultiServerClientOriginatedMessage *obj);
 void iTermMultiServerServerOriginatedMessageFree(iTermMultiServerServerOriginatedMessage *obj);
 
 // Reads a message from the UDS. Returns 0 on success. When successful, the message
 // must be freed by the caller with iTermClientServerProtocolMessageFree().
-int iTermMultiServerRecv(int fd, iTermClientServerProtocolMessage *message);
+int __attribute__((warn_unused_result))
+iTermMultiServerRecv(int fd, iTermClientServerProtocolMessage *message);
 
 // Reads text from a file descriptor.
-int iTermMultiServerRead(int fd, iTermClientServerProtocolMessage *message);
+int __attribute__((warn_unused_result))
+iTermMultiServerRead(int fd, iTermClientServerProtocolMessage *message);
 
 // Get a file descriptor from a received message. Returns nonzero on error. On success,
 // sets *receivedFileDescriptorPtr to the file derscriptor you now own.
-int iTermMultiServerProtocolGetFileDescriptor(iTermClientServerProtocolMessage *message,
-                                              int *receivedFileDescriptorPtr);
+int __attribute__((warn_unused_result))
+iTermMultiServerProtocolGetFileDescriptor(iTermClientServerProtocolMessage *message,
+                                          int *receivedFileDescriptorPtr);

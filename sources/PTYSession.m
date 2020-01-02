@@ -1402,7 +1402,8 @@ ITERM_WEAKLY_REFERENCEABLE
                     DLog(@"Success!");
                     didAttach = YES;
                 }
-            } else if ([NSDictionary castFrom:arrangement[SESSION_ARRANGEMENT_SERVER_DICT]]) {
+            } else if ([iTermAdvancedSettingsModel multiserver] &&
+                       [NSDictionary castFrom:arrangement[SESSION_ARRANGEMENT_SERVER_DICT]]) {
                 DLog(@"Have a server dict in the arrangement");
                 NSDictionary *serverDict = arrangement[SESSION_ARRANGEMENT_SERVER_DICT];
                 DLog(@"Try to attach to %@", serverDict);

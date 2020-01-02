@@ -26,10 +26,16 @@ NSString *const iTermMultiServerRestorationKeyChildPID = @"Child PID";
 static NSString *const iTermMultiServerRestorationType = @"multiserver";
 static const int iTermMultiServerMaximumSupportedRestorationIdentifierVersion = 1;
 
+@interface iTermMultiServerJobManager()
+@property (atomic, strong, readwrite) dispatch_queue_t queue;
+@end
+
 @implementation iTermMultiServerJobManager {
     iTermMultiServerConnection *_conn;
     iTermFileDescriptorMultiClientChild *_child;
 }
+
+@synthesize queue;
 
 + (BOOL)getGeneralConnection:(iTermGeneralServerConnection *)generalConnection
    fromRestorationIdentifier:(NSDictionary *)dict {
@@ -58,9 +64,10 @@ static const int iTermMultiServerMaximumSupportedRestorationIdentifierVersion = 
     return YES;
 }
 
-- (instancetype)init {
+- (instancetype)initWithQueue:(dispatch_queue_t)queue {
     self = [super init];
     if (self) {
+        self.queue = queue;
         static dispatch_once_t onceToken;
         static id subscriber;
         dispatch_once(&onceToken, ^{
@@ -77,11 +84,35 @@ static const int iTermMultiServerMaximumSupportedRestorationIdentifierVersion = 
 }
 
 - (NSString *)description {
-    return [NSString stringWithFormat:@"<%@: %p child=%@ connection=%@>",
-            NSStringFromClass([self class]), self, _child, _conn];
+    __block NSString *result = nil;
+    dispatch_sync(self.queue, ^{
+        result = [NSString stringWithFormat:@"<%@: %p child=%@ connection=%@>",
+                  NSStringFromClass([self class]), self, _child, _conn];
+    });
+    return result;
 }
 
 - (void)forkAndExecWithTtyState:(iTermTTYState *)ttyStatePtr
+                        argpath:(const char *)argpath
+                           argv:(const char **)argv
+                     initialPwd:(const char *)initialPwd
+                     newEnviron:(const char **)newEnviron
+                    synchronous:(BOOL)synchronous
+                           task:(id<iTermTask>)task
+                     completion:(void (^)(iTermJobManagerForkAndExecStatus))completion {
+    dispatch_sync(self.queue, ^{
+        [self queueForkAndExecWithTtyState:ttyStatePtr
+                                   argpath:argpath
+                                      argv:argv
+                                initialPwd:initialPwd
+                                newEnviron:newEnviron
+                               synchronous:synchronous
+                                      task:task
+                                completion:completion];
+    });
+}
+
+- (void)queueForkAndExecWithTtyState:(iTermTTYState *)ttyStatePtr
                         argpath:(const char *)argpath
                            argv:(const char **)argv
                      initialPwd:(const char *)initialPwd
@@ -100,9 +131,11 @@ static const int iTermMultiServerMaximumSupportedRestorationIdentifierVersion = 
         self->_child = child;
         if (child != NULL) {
             // Happy path
-            [[TaskNotifier sharedInstance] registerTask:task];
-            [[iTermProcessCache sharedInstance] setNeedsUpdate:YES];
-            completion(iTermJobManagerForkAndExecStatusSuccess);
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [[TaskNotifier sharedInstance] registerTask:task];
+                [[iTermProcessCache sharedInstance] setNeedsUpdate:YES];
+                completion(iTermJobManagerForkAndExecStatusSuccess);
+            });
             return;
         }
 
@@ -126,11 +159,19 @@ static const int iTermMultiServerMaximumSupportedRestorationIdentifierVersion = 
 }
 
 - (int)fd {
-    return _child ? _child.fd : -1;
+    __block int result = -1;
+    dispatch_sync(self.queue, ^{
+        result = _child ? _child.fd : -1;
+    });
+    return result;
 }
 
 - (BOOL)ioAllowed {
-    return _child != nil && _child.fd >= 0;
+    __block BOOL result = NO;
+    dispatch_sync(self.queue, ^{
+        result = (_child != nil && _child.fd >= 0);
+    });
+    return result;
 }
 
 - (void)setFd:(int)fd {
@@ -138,31 +179,50 @@ static const int iTermMultiServerMaximumSupportedRestorationIdentifierVersion = 
 }
 
 - (NSString *)tty {
-    return _child.tty;
+    __block NSString *result = nil;
+    dispatch_sync(self.queue, ^{
+        result = [_child.tty copy];
+    });
+    return result;
 }
 
 - (void)setTty:(NSString *)tty {
-    ITAssertWithMessage([NSObject object:tty isEqualToObject:_child.tty],
-                        @"setTty:%@ when _child.tty=%@", tty, _child.tty);
+    dispatch_sync(self.queue, ^{
+        ITAssertWithMessage([NSObject object:tty isEqualToObject:_child.tty],
+                            @"setTty:%@ when _child.tty=%@", tty, _child.tty);
+    });
 }
 
 - (pid_t)externallyVisiblePid {
-    return _child.pid;
+    __block pid_t result = 0;
+    dispatch_sync(self.queue, ^{
+        result = _child.pid;
+    });
+    return result;
 }
 
 - (BOOL)hasJob {
-    return _child != nil;
+    __block BOOL result = NO;
+    dispatch_sync(self.queue, ^{
+        result = (_child != nil);
+    });
+    return result;
 }
 
 - (id)sessionRestorationIdentifier {
     ITBetaAssert(_conn != nil, @"nil connection");
-    if (!_conn) {
-        return nil;
-    }
-    return @{ iTermMultiServerRestorationKeyType: iTermMultiServerRestorationType,
-              iTermMultiServerRestorationKeyVersion: @(iTermMultiServerMaximumSupportedRestorationIdentifierVersion),
-              iTermMultiServerRestorationKeySocket: @(_conn.socketNumber),
-              iTermMultiServerRestorationKeyChildPID: @(_child.pid) };
+    __block id result = nil;
+    dispatch_sync(self.queue, ^{
+        if (!_conn) {
+            result = nil;
+            return;
+        }
+        result = @{ iTermMultiServerRestorationKeyType: iTermMultiServerRestorationType,
+                    iTermMultiServerRestorationKeyVersion: @(iTermMultiServerMaximumSupportedRestorationIdentifierVersion),
+                    iTermMultiServerRestorationKeySocket: @(_conn.socketNumber),
+                    iTermMultiServerRestorationKeyChildPID: @(_child.pid) };
+    });
+    return result;
 }
 
 - (pid_t)pidToWaitOn {
@@ -170,12 +230,32 @@ static const int iTermMultiServerMaximumSupportedRestorationIdentifierVersion = 
 }
 
 - (BOOL)isSessionRestorationPossible {
-    return _child != nil;
+    __block BOOL result = NO;
+    dispatch_sync(self.queue, ^{
+        result = (_child != nil);
+    });
+    return result;
 }
 
 - (void)attachToServer:(iTermGeneralServerConnection)serverConnection
          withProcessID:(NSNumber *)thePid
                   task:(id<iTermTask>)task {
+    __block BOOL shouldRegister = NO;
+    __block pid_t pid = 0;
+    dispatch_sync(self.queue, ^{
+        shouldRegister = [self queueAttachToServer:serverConnection withProcessID:thePid task:task];
+        pid = _child.pid;
+    });
+    if (shouldRegister) {
+        [[iTermProcessCache sharedInstance] registerTrackedPID:pid];
+        [[TaskNotifier sharedInstance] registerTask:task];
+        [[iTermProcessCache sharedInstance] setNeedsUpdate:YES];
+    }
+}
+
+- (BOOL)queueAttachToServer:(iTermGeneralServerConnection)serverConnection
+              withProcessID:(NSNumber *)thePid
+                       task:(id<iTermTask>)task {
     assert(serverConnection.type == iTermGeneralServerConnectionTypeMulti);
     assert(!_conn);
     assert(!_child);
@@ -184,14 +264,14 @@ static const int iTermMultiServerMaximumSupportedRestorationIdentifierVersion = 
     if (!_conn) {
 #warning TODO: Test this
         [task brokenPipe];
-        return;
+        return NO;
     }
     if (thePid != nil) {
         assert(thePid.integerValue == serverConnection.multi.pid);
     }
     _child = [_conn attachToProcessID:serverConnection.multi.pid];
     if (!_child) {
-        return;
+        return NO;
     }
     if (_child.hasTerminated) {
         const pid_t pid = _child.pid;
@@ -203,11 +283,9 @@ static const int iTermMultiServerMaximumSupportedRestorationIdentifierVersion = 
             }
         }];
         [task brokenPipe];
-    } else {
-        [[iTermProcessCache sharedInstance] registerTrackedPID:_child.pid];
-        [[TaskNotifier sharedInstance] registerTask:task];
-        [[iTermProcessCache sharedInstance] setNeedsUpdate:YES];
+        return NO;
     }
+    return YES;
 }
 
 - (void)sendSignal:(int)signo toServer:(BOOL)toServer {
@@ -226,8 +304,14 @@ static const int iTermMultiServerMaximumSupportedRestorationIdentifierVersion = 
     kill(_child.pid, signo);
 }
 
-#warning TODO: Test all these killing modes
 - (void)killWithMode:(iTermJobManagerKillingMode)mode {
+    dispatch_sync(self.queue, ^{
+        [self queueKillWithMode:mode];
+    });
+}
+
+#warning TODO: Test all these killing modes
+- (void)queueKillWithMode:(iTermJobManagerKillingMode)mode {
     switch (mode) {
         case iTermJobManagerKillingModeRegular:
             [self sendSignal:SIGHUP toServer:NO];

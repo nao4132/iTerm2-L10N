@@ -56,7 +56,7 @@ typedef struct {
 
 typedef NS_ENUM(NSUInteger, iTermGeneralServerConnectionType) {
     iTermGeneralServerConnectionTypeMono,
-    iTermGeneralServerConnectionTypeMulti
+    iTermGeneralServerConnectionTypeMulti,
 };
 
 typedef struct {
@@ -69,14 +69,17 @@ typedef struct {
 
 @protocol iTermJobManager<NSObject>
 
-@property (nonatomic) int fd;
-@property (nonatomic, copy) NSString *tty;
-@property (nonatomic, readonly) pid_t externallyVisiblePid;
-@property (nonatomic, readonly) BOOL hasJob;
-@property (nonatomic, readonly) id sessionRestorationIdentifier;
-@property (nonatomic, readonly) pid_t pidToWaitOn;
-@property (nonatomic, readonly) BOOL isSessionRestorationPossible;
-@property (nonatomic, readonly) BOOL ioAllowed;
+@property (atomic) int fd;
+@property (atomic, copy) NSString *tty;
+@property (atomic, readonly) pid_t externallyVisiblePid;
+@property (atomic, readonly) BOOL hasJob;
+@property (atomic, readonly) id sessionRestorationIdentifier;
+@property (atomic, readonly) pid_t pidToWaitOn;
+@property (atomic, readonly) BOOL isSessionRestorationPossible;
+@property (atomic, readonly) BOOL ioAllowed;
+@property (atomic, readonly) dispatch_queue_t queue;
+
+- (instancetype)initWithQueue:(dispatch_queue_t)queue;
 
 - (void)forkAndExecWithTtyState:(iTermTTYState *)ttyStatePtr
                         argpath:(const char *)argpath

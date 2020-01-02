@@ -161,6 +161,8 @@ static int iTermClientServerProtocolEncodeInt(iTermClientServerProtocolMessageEn
                                               void *valuePtr,
                                               size_t size) {
     if (iTermClientServerProtocolEncoderBytesLeft(encoder) < size) {
+        FDLog(LOG_ERR, "Ran out of space while encoding int value of size %d at offset %d",
+              (int)size, (int)encoder->offset);
         return -1;
     }
     iTermClientServerProtocolEncoderCopyAndAdvance(encoder, valuePtr, size);
@@ -193,6 +195,8 @@ static int iTermClientServerProtocolEncodeString(iTermClientServerProtocolMessag
         return -1;
     }
     if (iTermClientServerProtocolEncoderBytesLeft(encoder) < length) {
+        FDLog(LOG_ERR, "Ran out of space while encoding string of size %d at offset %d",
+              (int)length, (int)encoder->offset);
         return -1;
     }
     iTermClientServerProtocolEncoderCopyAndAdvance(encoder, string, length);

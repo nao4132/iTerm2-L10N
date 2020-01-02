@@ -9,6 +9,7 @@
 #define iTermFileDescriptorServerShared_h
 
 #include <stdio.h>
+#include <syslog.h>
 #include <sys/socket.h>
 
 typedef union {

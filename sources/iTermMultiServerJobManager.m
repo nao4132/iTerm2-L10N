@@ -126,7 +126,11 @@ static const int iTermMultiServerMaximumSupportedRestorationIdentifierVersion = 
 }
 
 - (int)fd {
-    return _child.fd;
+    return _child ? _child.fd : -1;
+}
+
+- (BOOL)ioAllowed {
+    return _child != nil && _child.fd >= 0;
 }
 
 - (void)setFd:(int)fd {

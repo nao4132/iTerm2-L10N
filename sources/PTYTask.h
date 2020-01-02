@@ -76,6 +76,7 @@ typedef struct {
 @property (nonatomic, readonly) id sessionRestorationIdentifier;
 @property (nonatomic, readonly) pid_t pidToWaitOn;
 @property (nonatomic, readonly) BOOL isSessionRestorationPossible;
+@property (nonatomic, readonly) BOOL ioAllowed;
 
 - (void)forkAndExecWithTtyState:(iTermTTYState *)ttyStatePtr
                         argpath:(const char *)argpath

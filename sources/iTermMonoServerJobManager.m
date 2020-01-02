@@ -316,4 +316,8 @@
     return @(_serverPid);
 }
 
+- (BOOL)ioAllowed {
+    return _fd != -1;
+}
+
 @end

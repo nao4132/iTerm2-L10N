@@ -796,7 +796,7 @@ static void HandleSigChld(int n) {
 #pragma mark I/O
 
 - (BOOL)wantsRead {
-    return !self.paused;
+    return _jobManager.ioAllowed && !self.paused;
 }
 
 - (BOOL)wantsWrite {
@@ -804,9 +804,9 @@ static void HandleSigChld(int n) {
         return NO;
     }
     [writeLock lock];
-    BOOL wantsWrite = [writeBuffer length] > 0;
+    const BOOL wantsWrite = [writeBuffer length] > 0;
     [writeLock unlock];
-    return wantsWrite;
+    return _jobManager.ioAllowed && wantsWrite;
 }
 
 - (BOOL)hasOutput {

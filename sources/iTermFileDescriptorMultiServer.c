@@ -180,10 +180,12 @@ static void Log2DArray(const char *label, const char **p, int count) {
 }
 
 static void LogLaunchRequest(const iTermMultiServerRequestLaunch *launch) {
-    DLog("Launch request path=%s size=(%d x %d) utf8=%d pwd=%s uniqueId=%lld:",
+    DLog("Launch request path=%s size=(%d x %d cells, %d x %d px) utf8=%d pwd=%s uniqueId=%lld:",
          launch->path ?: "(null)",
-         launch->width,
-         launch->height,
+         launch->columns,
+         launch->rows,
+         launch->pixel_width,
+         launch->pixel_height,
          launch->isUTF8,
          launch->pwd ?: "(null)",
          launch->uniqueId);
@@ -196,10 +198,9 @@ static int Launch(const iTermMultiServerRequestLaunch *launch,
                   iTermTTYState *ttyStatePtr,
                   int *errorPtr) {
     LogLaunchRequest(launch);
-#warning TODO: Pass pixel size
     iTermTTYStateInit(ttyStatePtr,
-                      iTermTTYCellSizeMake(launch->width, launch->height),
-                      iTermTTYPixelSizeMake(0, 0),
+                      iTermTTYCellSizeMake(launch->columns, launch->rows),
+                      iTermTTYPixelSizeMake(launch->pixel_width, launch->pixel_height),
                       launch->isUTF8);
     int fd;
     forkState->numFileDescriptorsToPreserve = 3;

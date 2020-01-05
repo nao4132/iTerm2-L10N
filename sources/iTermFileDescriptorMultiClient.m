@@ -489,8 +489,10 @@ static long long MakeUniqueID(void) {
                 .argc = LengthOfNullTerminatedPointerArray((const void **)argv),
                 .envp = environment,
                 .envc = LengthOfNullTerminatedPointerArray((const void **)environment),
-                .width = ttyStatePtr->win.ws_col,
-                .height = ttyStatePtr->win.ws_row,
+                .columns = ttyStatePtr->win.ws_col,
+                .rows = ttyStatePtr->win.ws_row,
+                .pixel_width = ttyStatePtr->win.ws_xpixel,
+                .pixel_height = ttyStatePtr->win.ws_ypixel,
                 .isUTF8 = !!(ttyStatePtr->term.c_iflag & IUTF8),
                 .pwd = pwd,
                 .uniqueId = uniqueID

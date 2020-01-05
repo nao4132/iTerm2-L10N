@@ -121,7 +121,7 @@ iTermTTYPixelSize iTermTTYPixelSizeMake(double width, double height) {
     } else if (height > USHRT_MAX) {
         result.height = USHRT_MAX;
     } else {
-        result.height = width;
+        result.height = height;
     }
     return result;
 }

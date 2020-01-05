@@ -149,10 +149,10 @@ static const int iTermMultiServerMaximumSupportedRestorationIdentifierVersion = 
             case iTermFileDescriptorMultiClientErrorCodeCanNotWait:
             case iTermFileDescriptorMultiClientErrorCodeUnknown:
                 completion(iTermJobManagerForkAndExecStatusServerError);
-                break;
+                return;
             case iTermFileDescriptorMultiClientErrorCodeForkFailed:
                 completion(iTermJobManagerForkAndExecStatusFailedToFork);
-                break;
+                return;
         }
         assert(NO);
     }];

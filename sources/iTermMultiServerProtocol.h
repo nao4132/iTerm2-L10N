@@ -24,8 +24,10 @@ typedef enum {
     iTermMultiServerTagLaunchRequestPath,
     iTermMultiServerTagLaunchRequestArgv,
     iTermMultiServerTagLaunchRequestEnvironment,
-    iTermMultiServerTagLaunchRequestWidth,
-    iTermMultiServerTagLaunchRequestHeight,
+    iTermMultiServerTagLaunchRequestColumns,
+    iTermMultiServerTagLaunchRequestRows,
+    iTermMultiServerTagLaunchRequestPixelWidth,
+    iTermMultiServerTagLaunchRequestPixelHeight,
     iTermMultiServerTagLaunchRequestIsUTF8,
     iTermMultiServerTagLaunchRequestPwd,
     iTermMultiServerTagLaunchRequestUniqueId,
@@ -84,12 +86,18 @@ typedef struct {
     const char **envp;
     int envc;
 
-    // iTermMultiServerTagLaunchRequestWidth
-    int width;
+    // iTermMultiServerTagLaunchRequestColumns
+    int columns;
 
-    // iTermMultiServerTagLaunchRequestHeight
-    int height;
-#warning TODO: Add pixel size
+    // iTermMultiServerTagLaunchRequestRows
+    int rows;
+
+    // iTermMultiServerTagLaunchRequestPixelWidth
+    int pixel_width;
+
+    // iTermMultiServerTagLaunchRequestPixelHeight
+    int pixel_height;
+
     // iTermMultiServerTagLaunchRequestIsUTF8
     int isUTF8;
 

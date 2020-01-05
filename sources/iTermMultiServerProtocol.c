@@ -75,10 +75,16 @@ static int ParseLaunchReqest(iTermClientServerProtocolMessageParser *parser,
     if (iTermClientServerProtocolParseTaggedStringArray(parser, (char ***)&out->envp, &out->envc, iTermMultiServerTagLaunchRequestEnvironment)) {
         return -1;
     }
-    if (iTermClientServerProtocolParseTaggedInt(parser, &out->width, sizeof(out->width), iTermMultiServerTagLaunchRequestWidth)) {
+    if (iTermClientServerProtocolParseTaggedInt(parser, &out->columns, sizeof(out->columns), iTermMultiServerTagLaunchRequestColumns)) {
         return -1;
     }
-    if (iTermClientServerProtocolParseTaggedInt(parser, &out->height, sizeof(out->height), iTermMultiServerTagLaunchRequestHeight)) {
+    if (iTermClientServerProtocolParseTaggedInt(parser, &out->rows, sizeof(out->rows), iTermMultiServerTagLaunchRequestRows)) {
+        return -1;
+    }
+    if (iTermClientServerProtocolParseTaggedInt(parser, &out->pixel_width, sizeof(out->pixel_width), iTermMultiServerTagLaunchRequestPixelWidth)) {
+        return -1;
+    }
+    if (iTermClientServerProtocolParseTaggedInt(parser, &out->pixel_height, sizeof(out->pixel_height), iTermMultiServerTagLaunchRequestPixelHeight)) {
         return -1;
     }
     if (iTermClientServerProtocolParseTaggedInt(parser, &out->isUTF8, sizeof(out->isUTF8), iTermMultiServerTagLaunchRequestIsUTF8)) {
@@ -104,10 +110,16 @@ static int EncodeLaunchRequest(iTermClientServerProtocolMessageEncoder *encoder,
     if (iTermClientServerProtocolEncodeTaggedStringArray(encoder, (char **)launch->envp, launch->envc, iTermMultiServerTagLaunchRequestEnvironment)) {
         return -1;
     }
-    if (iTermClientServerProtocolEncodeTaggedInt(encoder, &launch->width, sizeof(launch->width), iTermMultiServerTagLaunchRequestWidth)) {
+    if (iTermClientServerProtocolEncodeTaggedInt(encoder, &launch->columns, sizeof(launch->columns), iTermMultiServerTagLaunchRequestColumns)) {
         return -1;
     }
-    if (iTermClientServerProtocolEncodeTaggedInt(encoder, &launch->height, sizeof(launch->height), iTermMultiServerTagLaunchRequestHeight)) {
+    if (iTermClientServerProtocolEncodeTaggedInt(encoder, &launch->rows, sizeof(launch->rows), iTermMultiServerTagLaunchRequestRows)) {
+        return -1;
+    }
+    if (iTermClientServerProtocolEncodeTaggedInt(encoder, &launch->pixel_width, sizeof(launch->pixel_width), iTermMultiServerTagLaunchRequestPixelWidth)) {
+        return -1;
+    }
+    if (iTermClientServerProtocolEncodeTaggedInt(encoder, &launch->pixel_height, sizeof(launch->pixel_height), iTermMultiServerTagLaunchRequestPixelHeight)) {
         return -1;
     }
     if (iTermClientServerProtocolEncodeTaggedInt(encoder, &launch->isUTF8, sizeof(launch->isUTF8), iTermMultiServerTagLaunchRequestIsUTF8)) {

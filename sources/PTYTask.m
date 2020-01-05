@@ -773,7 +773,6 @@ static void HandleSigChld(int n) {
     switch (status) {
         case iTermJobManagerForkAndExecStatusSuccess:
             // Parent
-#warning TODO: Test this
             [self setTty:self.jobManager.tty];
             DLog(@"finished succesfully");
             break;

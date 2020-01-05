@@ -262,7 +262,6 @@ static const int iTermMultiServerMaximumSupportedRestorationIdentifierVersion = 
     _conn = [iTermMultiServerConnection connectionForSocketNumber:serverConnection.multi.number
                                                  createIfPossible:NO];
     if (!_conn) {
-#warning TODO: Test this
         [task brokenPipe];
         return NO;
     }

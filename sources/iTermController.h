@@ -134,7 +134,7 @@ typedef NS_ENUM(NSUInteger, iTermHotkeyWindowType) {
                        command:(NSString *)command
                          block:(PTYSession *(^)(Profile *, PseudoTerminal *))block
                    synchronous:(BOOL)synchronous
-                    completion:(void (^ _Nullable)(BOOL))completion;
+                    completion:(void (^ _Nullable)(PTYSession *session, BOOL ok))completion;
 - (PTYSession *)launchBookmark:(Profile *)profile
                     inTerminal:(PseudoTerminal *)theTerm
             respectTabbingMode:(BOOL)respectTabbingMode;

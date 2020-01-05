@@ -7817,7 +7817,7 @@ static CGFloat iTermDimmingAmount(PSMTabBarControl *tabView) {
                         profile:(Profile *)theBookmark
                   targetSession:(PTYSession *)targetSession
                     synchronous:(BOOL)synchronous
-                     completion:(void (^)(BOOL))completion{
+                     completion:(void (^)(PTYSession *, BOOL))completion {
     if ([targetSession isTmuxClient]) {
         [self willSplitTmuxPane];
         [[targetSession tmuxController] selectPane:targetSession.tmuxPane];
@@ -10124,7 +10124,7 @@ static CGFloat iTermDimmingAmount(PSMTabBarControl *tabView) {
                          withCommand:(NSString *)command
                          environment:(NSDictionary *)environment
                          synchronous:(BOOL)synchronous
-                          completion:(void (^)(BOOL ok))completion {
+                          completion:(void (^)(PTYSession *newSession, BOOL ok))completion {
     assert(profile);
 
     // Get active session's directory

@@ -1381,8 +1381,11 @@ ITERM_WEAKLY_REFERENCEABLE
     NSDictionary *contents = arrangement[SESSION_ARRANGEMENT_CONTENTS];
     BOOL restoreContents = !tmuxPaneNumber && contents && [iTermAdvancedSettingsModel restoreWindowContents];
     BOOL attachedToServer = NO;
-    typedef void (^iTermBooleanCompletionBlock)(BOOL ok);
-    void (^runCommandBlock)(iTermBooleanCompletionBlock) = ^(void (^completion)(BOOL)) { completion(YES); };
+    typedef void (^iTermSessionCreationCompletionBlock)(PTYSession *, BOOL ok);
+    void (^runCommandBlock)(iTermSessionCreationCompletionBlock) =
+    ^(iTermSessionCreationCompletionBlock innerCompletion) {
+        innerCompletion(aSession, YES);
+    };
     if (!tmuxPaneNumber) {
         DLog(@"No tmux pane ID during session restoration");
         // |contents| will be non-nil when using system window restoration.
@@ -1491,7 +1494,7 @@ ITERM_WEAKLY_REFERENCEABLE
                 substitutionsArg = aSession.substitutions;
                 customShell = aSession.customShell;
             }
-            runCommandBlock = ^(iTermBooleanCompletionBlock completion) {
+            runCommandBlock = ^(iTermSessionCreationCompletionBlock completion) {
                 iTermSessionFactory *factory = [[[iTermSessionFactory alloc] init] autorelease];
                 [factory attachOrLaunchCommandInSession:aSession
                                               canPrompt:NO
@@ -1523,7 +1526,7 @@ ITERM_WEAKLY_REFERENCEABLE
     }
     [aSession.screen restoreInitialSize];
 
-    void (^finish)(BOOL) = ^(BOOL ok) {
+    void (^finish)(PTYSession *, BOOL) = ^(PTYSession *newSession, BOOL ok) {
         if (!ok) {
             return;
         }
@@ -2065,7 +2068,7 @@ ITERM_WEAKLY_REFERENCEABLE
               isUTF8:(BOOL)isUTF8
        substitutions:(NSDictionary *)substitutions
          synchronous:(BOOL)synchronous
-          completion:(void (^)(BOOL))completion {
+          completion:(void (^)(void))completion {
     DLog(@"startProgram:%@ environment:%@ isUTF8:%@ substitutions:%@",
          command, environment, @(isUTF8), substitutions);
 
@@ -2100,8 +2103,7 @@ ITERM_WEAKLY_REFERENCEABLE
                             completion:^{
                                 [self sendInitialText];
                                 if (completion) {
-#warning TODO: Super sketchy that this always calls completion with YES.
-                                    completion(YES);
+                                    completion();
                                 }
                             }];
             }];

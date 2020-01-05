@@ -301,7 +301,7 @@ extern NSString *const iTermDidCreateTerminalWindowNotification;
                         profile:(Profile *)theBookmark
                   targetSession:(PTYSession *)targetSession
                     synchronous:(BOOL)synchronous
-                     completion:(void (^)(BOOL))completion;
+                     completion:(void (^)(PTYSession *newSession, BOOL))completion;
 
 // Change visibility of menu bar (but only if it should be changed--may do
 // nothing if the menu bar is on a different screen, for example).
@@ -320,7 +320,7 @@ extern NSString *const iTermDidCreateTerminalWindowNotification;
                          withCommand:(NSString *)command
                          environment:(NSDictionary *)environment
                          synchronous:(BOOL)synchronous
-                          completion:(void (^)(BOOL ok))completion;
+                          completion:(void (^)(PTYSession *newSession, BOOL ok))completion;
 
 - (IBAction)newTmuxWindow:(id)sender;
 - (IBAction)newTmuxTab:(id)sender;

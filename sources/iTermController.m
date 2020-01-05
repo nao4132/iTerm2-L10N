@@ -1105,7 +1105,7 @@ static iTermController *gSharedInstance;
                        command:(NSString *)command
                          block:(PTYSession *(^)(Profile *, PseudoTerminal *))block
                    synchronous:(BOOL)synchronous
-                    completion:(void (^ _Nullable)(BOOL))completion {
+                    completion:(void (^ _Nullable)(PTYSession *, BOOL))completion {
     iTermSessionLauncher *launcher = [[iTermSessionLauncher alloc] initWithProfile:bookmarkData windowController:theTerm];
     launcher.url = url;
     launcher.hotkeyWindowType = hotkeyWindowType;
@@ -1116,8 +1116,8 @@ static iTermController *gSharedInstance;
     if (block) {
         launcher.makeSession = ^(NSDictionary * _Nonnull profile,
                                  PseudoTerminal * _Nonnull windowController,
-                                 void (^ _Nonnull completion)(PTYSession * _Nullable)) {
-            completion(block(profile, windowController));
+                                 void (^ _Nonnull makeSessionCompletion)(PTYSession * _Nullable)) {
+            makeSessionCompletion(block(profile, windowController));
         };
     }
     __block PTYSession *session = nil;

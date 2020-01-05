@@ -9,6 +9,7 @@
 
 #import "DebugLogging.h"
 #import "iTermAdvancedSettingsModel.h"
+#import "iTermController.h"
 #import "iTermInitialDirectory.h"
 #import "iTermProfilePreferences.h"
 #import "iTermParameterPanelWindowController.h"
@@ -71,7 +72,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)finishAttachingOrLaunchingSession:(PTYSession * _Nonnull)aSession
                                       cmd:(NSString *)cmd
-                               completion:(void (^ _Nullable)(BOOL))completion
+                               completion:(void (^ _Nullable)(void))completion
                               environment:(NSDictionary * _Nonnull)environment
                               customShell:(NSString *)customShell
                                    isUTF8:(BOOL)isUTF8
@@ -87,7 +88,7 @@ NS_ASSUME_NONNULL_BEGIN
         assert([iTermAdvancedSettingsModel runJobsInServers]);
         [aSession attachToServer:*serverConnection];
         if (completion) {
-            completion(YES);
+            completion();
         }
     } else {
         [self startProgram:cmd
@@ -117,7 +118,7 @@ NS_ASSUME_NONNULL_BEGIN
                          substitutions:(nullable NSDictionary *)providedSubs
                       windowController:(PseudoTerminal * _Nonnull)windowController
                            synchronous:(BOOL)synchronous
-                            completion:(void (^ _Nullable)(BOOL))completion {
+                            completion:(void (^ _Nullable)(PTYSession * _Nullable, BOOL))completion {
     DLog(@"attachOrLaunchCommandInSession:%@ canPrompt:%@ objectType:%@ urlString:%@ allowURLSubs:%@ environment:%@ oldCWD:%@ forceUseOldCWD:%@ command:%@ isUTF8:%@ substitutions:%@ windowController:%@",
          aSession, @(canPrompt), @(objectType), urlString, @(allowURLSubs), environment, oldCWD,
          @(forceUseOldCWD), command, isUTF8Number, providedSubs, windowController);
@@ -151,7 +152,12 @@ NS_ASSUME_NONNULL_BEGIN
     if (!substitutions) {
         if (completion) {
             [aSession didFinishInitialization];
-            completion(NO);
+            // Ensure the controller has it before removing it, since this might get called by the controller.
+            // TODO: Remove cyclic dependency
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [[[iTermController sharedInstance] terminalWithSession:aSession] closeSessionWithoutConfirmation:aSession];
+            });
+            completion(nil, NO);
         }
         return NO;
     }
@@ -192,12 +198,12 @@ NS_ASSUME_NONNULL_BEGIN
                 DLog(@"pwd was empty. Use home directory of %@", pwd);
             }
         }
-        void (^wrapper)(BOOL) = ^(BOOL ok) {
+        void (^wrapper)(void) = ^ {
             DLog(@"factory completion wrapper starting");
             [aSession didFinishInitialization];
             DLog(@"factory did finish initialization");
             if (completion) {
-                completion(ok);
+                completion(aSession, YES);
             }
         };
         [self finishAttachingOrLaunchingSession:aSession
@@ -256,17 +262,17 @@ NS_ASSUME_NONNULL_BEGIN
         substitutions:(NSDictionary *)substitutions
     windowController:(PseudoTerminal *)term
          synchronous:(BOOL)synchronous
-          completion:(void (^ _Nullable)(BOOL))completion {
+          completion:(void (^ _Nullable)(void))completion {
     [theSession startProgram:command
                  environment:prog_env
                  customShell:customShell
                       isUTF8:isUTF8
                substitutions:substitutions
                  synchronous:synchronous
-                  completion:^(BOOL ok) {
+                  completion:^ {
                       [term setWindowTitle];
                       if (completion) {
-                          completion(ok);
+                          completion();
                       }
                   }];
     if ([[[term window] title] isEqualToString:@"Window"]) {

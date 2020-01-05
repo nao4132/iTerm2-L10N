@@ -21,7 +21,7 @@
 }
 
 + (instancetype)existingPrimaryConnection {
-    for (iTermMultiServerConnection *connection in self.registry) {
+    for (iTermMultiServerConnection *connection in [self.registry allValues]) {
         if (connection->_isPrimary) {
             return connection;
         }

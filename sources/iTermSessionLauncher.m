@@ -39,7 +39,7 @@
     return self;
 }
 
-- (void)launchWithCompletion:(void (^ _Nullable)(BOOL ok))completion {
+- (void)launchWithCompletion:(void (^ _Nullable)(PTYSession *session, BOOL ok))completion {
     [self launchSynchronously:NO completion:completion];
 }
 
@@ -47,7 +47,8 @@
     [self launchSynchronously:YES completion:nil];
 }
 
-- (void)launchSynchronously:(BOOL)sync completion:(void (^ _Nullable)(BOOL ok))completion {
+- (void)launchSynchronously:(BOOL)sync
+                 completion:(void (^ _Nullable)(PTYSession *session, BOOL ok))completion {
     assert(!_launched);
     _launched = YES;
 
@@ -200,7 +201,7 @@
                                                                    windowController:windowController
                                                                         synchronous:_synchronous
                                                                          completion:
-                     ^(BOOL ok) {
+                     ^(PTYSession *newSession, BOOL ok) {
                          DLog(@"launch by url finished with ok=%@", @(ok));
                          [weakSelf setFinishedWithSuccess:ok];
                      }];
@@ -219,14 +220,14 @@
                                  completion:(void (^)(PTYSession *, BOOL willCallCompletionBlock))completion {
     DLog(@"Make session by creating tab");
     __weak __typeof(self) weakSelf = self;
-    PTYSession *session = [windowController createTabWithProfile:profile
-                                                     withCommand:_command
-                                                     environment:nil
-                                                     synchronous:_synchronous
-                                                      completion:^(BOOL ok) {
-                                                          [weakSelf setFinishedWithSuccess:ok];
-                                                      }];
-    completion(session, YES);
+    [windowController createTabWithProfile:profile
+                               withCommand:_command
+                               environment:nil
+                               synchronous:_synchronous
+                                completion:^(PTYSession *newSession, BOOL ok) {
+        [weakSelf setFinishedWithSuccess:ok];
+        completion(newSession, ok);
+    }];
 }
 
 - (NSDictionary *)profile:(NSDictionary *)aDict
@@ -480,7 +481,12 @@
     }
     _finished = YES;
     if (_completion) {
-        _completion(ok);
+        // Ensure the completion block runs after the caller returns for better consistency.
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (self.completion) {
+                self.completion(self.session, ok);
+            }
+        });
     }
     [self maybeBreakRetainCycle];
 }

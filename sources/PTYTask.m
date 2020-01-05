@@ -690,7 +690,6 @@ static void HandleSigChld(int n) {
     }
 }
 
-#warning TODO: Super sketchy that this completion block doesn't take a success/error status.
 - (void)reallyLaunchWithPath:(NSString *)progpath
                    arguments:(NSArray *)args
                  environment:(NSDictionary *)env
@@ -759,8 +758,10 @@ static void HandleSigChld(int n) {
             [self freeEnvironment:(char **)newEnviron];
             [self didForkAndExec:progpath
                       withStatus:status
-                     errorNumber:errno
-                      completion:completion];
+                     errorNumber:errno];
+            if (completion) {
+                completion();
+            }
         });
     }];
 }
@@ -768,8 +769,7 @@ static void HandleSigChld(int n) {
 // Main queue
 - (void)didForkAndExec:(NSString *)progpath
             withStatus:(iTermJobManagerForkAndExecStatus)status
-           errorNumber:(int)errorNumber
-            completion:(void (^)(void))completion {
+           errorNumber:(int)errorNumber {
     switch (status) {
         case iTermJobManagerForkAndExecStatusSuccess:
             // Parent
@@ -791,9 +791,6 @@ static void HandleSigChld(int n) {
         case iTermJobManagerForkAndExecStatusServerError:
             [self->_delegate taskDiedImmediately];
             break;
-    }
-    if (completion != nil) {
-        completion();
     }
 }
 

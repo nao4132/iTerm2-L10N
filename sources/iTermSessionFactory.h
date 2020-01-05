@@ -23,6 +23,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (PTYSession *)newSessionWithProfile:(Profile *)profile;
 
+// Completion block is passed whether it was possible to create a session. If the user cancels a
+// substitution prompt, it will fail. On the other hand, if the command fails immediately
+// (e.g., no such file to exec) it will return success and immediately brokenPipe.
 - (BOOL)attachOrLaunchCommandInSession:(PTYSession *)aSession
                              canPrompt:(BOOL)canPrompt
                             objectType:(iTermObjectType)objectType
@@ -38,7 +41,7 @@ NS_ASSUME_NONNULL_BEGIN
                          substitutions:(nullable NSDictionary *)substitutions
                       windowController:(PseudoTerminal * _Nonnull)windowController
                            synchronous:(BOOL)synchronous
-                            completion:(void (^ _Nullable)(BOOL))completion;  // If nonnil this may be async
+                            completion:(void (^ _Nullable)(PTYSession * _Nullable, BOOL))completion;  // If nonnil this may be async
 @end
 
 NS_ASSUME_NONNULL_END

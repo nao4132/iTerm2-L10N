@@ -2077,19 +2077,19 @@ static iTermAPIHelper *sAPIHelperInstance;
 
     iTermSessionLauncher *launcher = [[iTermSessionLauncher alloc] initWithProfile:profile windowController:term];
     launcher.canActivate = NO;
-    launcher.makeSession = ^(NSDictionary * _Nonnull profile, PseudoTerminal * _Nonnull term, void (^ _Nonnull completion)(PTYSession * _Nullable)) {
+    launcher.makeSession = ^(NSDictionary * _Nonnull profile, PseudoTerminal * _Nonnull term, void (^ _Nonnull didMakeSession)(PTYSession * _Nullable)) {
         profile = [self profileByCustomizing:profile withProperties:request.customProfilePropertiesArray];
-        PTYSession *session = [term createTabWithProfile:profile
-                                             withCommand:nil
-                                             environment:nil
-                                             synchronous:NO
-                                              completion:nil];
-        completion(session);
+        [term createTabWithProfile:profile
+                       withCommand:nil
+                       environment:nil
+                       synchronous:NO
+                        completion:^(PTYSession *newSession, BOOL ok) {
+            didMakeSession(ok ? newSession : nil);
+        }];
     };
-    __weak iTermSessionLauncher *weakLauncher = launcher;
     __weak __typeof(self) weakSelf = self;
-    [launcher launchWithCompletion:^(BOOL ok) {
-        [weakSelf didCreateSession:weakLauncher.session forRequest:request handler:handler];
+    [launcher launchWithCompletion:^(PTYSession *session, BOOL ok) {
+        [weakSelf didCreateSession:ok ? session : nil forRequest:request handler:handler];
     }];
 }
 
@@ -2175,19 +2175,19 @@ static iTermAPIHelper *sAPIHelperInstance;
     for (PTYSession *session in sessions) {
         PseudoTerminal *term = [[iTermController sharedInstance] terminalWithSession:session];
         dispatch_group_enter(group);
-        PTYSession *newSession = [term splitVertically:request.splitDirection == ITMSplitPaneRequest_SplitDirection_Vertical
-                                                before:request.before
-                                               profile:profile
-                                         targetSession:session
-                                           synchronous:NO
-                                            completion:^(BOOL ok){
-                                                dispatch_group_leave(group);
-                                            }];
-        if (newSession && newSession.guid) {  // The test for newSession.guid is just to quiet the analyzer
-            [response.sessionIdArray addObject:newSession.guid];
-        } else if (newSession == nil && !session.isTmuxClient) {
-            response.status = ITMSplitPaneResponse_Status_CannotSplit;
-        }
+        [term splitVertically:request.splitDirection == ITMSplitPaneRequest_SplitDirection_Vertical
+                       before:request.before
+                      profile:profile
+                targetSession:session
+                  synchronous:NO
+                   completion:^(PTYSession *newSession, BOOL ok) {
+            if (newSession && newSession.guid) {  // The test for newSession.guid is just to quiet the analyzer
+                [response.sessionIdArray addObject:newSession.guid];
+            } else if (newSession == nil && !session.isTmuxClient) {
+                response.status = ITMSplitPaneResponse_Status_CannotSplit;
+            }
+            dispatch_group_leave(group);
+        }];
     }
 
     dispatch_group_notify(group, dispatch_get_main_queue(), ^{

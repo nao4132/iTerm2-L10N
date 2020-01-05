@@ -20,24 +20,38 @@
     NSMutableArray<iTermFileDescriptorMultiClientChild *> *_unattachedChildren;
 }
 
-+ (instancetype)primaryConnection {
-    static dispatch_once_t onceToken;
-    static iTermMultiServerConnection *instance;
-    dispatch_once(&onceToken, ^{
-        [self.registry enumerateKeysAndObjectsUsingBlock:^(NSNumber * _Nonnull key, iTermMultiServerConnection * _Nonnull obj, BOOL * _Nonnull stop) {
-            if (obj->_isPrimary) {
-                instance = obj;
-                *stop = YES;
-            }
-        }];
-        if (!instance) {
-            int i = 1;
-            while (!instance) {
-                instance = [self connectionForSocketNumber:i createIfPossible:YES];
-                i += 1;
-            }
++ (instancetype)existingPrimaryConnection {
+    for (iTermMultiServerConnection *connection in self.registry) {
+        if (connection->_isPrimary) {
+            return connection;
         }
-    });
+    };
+    return nil;
+}
+
++ (instancetype)anyConnectionCreatingIfNeeded {
+    for (int i = 1; i < INT_MAX; i++) {
+        iTermMultiServerConnection *instance = [self connectionForSocketNumber:i createIfPossible:YES];
+        if (instance) {
+            return instance;
+        }
+    }
+    assert(NO);
+}
+
++ (instancetype)primaryConnection {
+    static iTermMultiServerConnection *instance;
+    if (!instance || ![self.registry.allValues containsObject:instance]) {
+        // Try to find a connection in the registry that is already labeled as primary.
+        instance = [self existingPrimaryConnection];
+        
+        // If that doesn't work, try each socket number until we find one that already
+        // exists or can be launched. This also sets its isPrimary flag.
+        if (!instance) {
+            instance = [self anyConnectionCreatingIfNeeded];
+            instance->_isPrimary = YES;
+        }
+    };
     return instance;
 }
 
@@ -158,6 +172,7 @@ removePreemptively:(BOOL)removePreemptively
     assert(client == _client);
     _client.delegate = nil;
     _client = nil;
+    [[[self class] registry] removeObjectForKey:@(self.socketNumber)];
 }
 
 - (void)fileDescriptorMultiClient:(iTermFileDescriptorMultiClient *)client

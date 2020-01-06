@@ -258,7 +258,7 @@
     }
 }
 
-- (void)attachToServer:(iTermGeneralServerConnection)serverConnection
+- (BOOL)attachToServer:(iTermGeneralServerConnection)serverConnection
          withProcessID:(NSNumber *)pidNumber
                   task:(id<iTermTask>)task {
     dispatch_sync(self.queue, ^{
@@ -266,7 +266,7 @@
     });
     [[TaskNotifier sharedInstance] registerTask:task];
     if (pidNumber == nil) {
-        return;
+        return YES;
     }
 
     const pid_t thePid = pidNumber.integerValue;
@@ -275,6 +275,7 @@
     iTermFileDescriptorSocketPath(buffer, sizeof(buffer), thePid);
     [[iTermOrphanServerAdopter sharedInstance] removePath:[NSString stringWithUTF8String:buffer]];
     [[iTermProcessCache sharedInstance] setNeedsUpdate:YES];
+    return YES;
 }
 
 - (void)closeSocketFd {

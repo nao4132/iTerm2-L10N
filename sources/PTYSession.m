@@ -2913,7 +2913,7 @@ ITERM_WEAKLY_REFERENCEABLE
         DLog(@"  brokenPipe: Already exited");
         return;
     }
-    // Ensure we don't leak the unix domain socket file descriptor.
+    // Ensure we don't leak the monoserver unix domain socket file descriptor.
     [_shell killWithMode:iTermJobManagerKillingModeBrokenPipe];
     if ([self shouldPostUserNotification] &&
         [iTermProfilePreferences boolForKey:KEY_SEND_SESSION_ENDED_ALERT inProfile:self.profile]) {

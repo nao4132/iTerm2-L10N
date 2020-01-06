@@ -116,9 +116,10 @@
     return iTermJobManagerForkAndExecStatusSuccess;
 }
 
-- (void)attachToServer:(iTermGeneralServerConnection)serverConnection
+- (BOOL)attachToServer:(iTermGeneralServerConnection)serverConnection
          withProcessID:(NSNumber *)thePid
                   task:(id<iTermTask>)task {
+    return YES;
 }
 
 - (void)sendSignal:(int)signo toProcessGroup:(BOOL)toProcessGroup {

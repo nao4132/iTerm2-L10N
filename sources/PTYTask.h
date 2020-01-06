@@ -90,7 +90,7 @@ typedef struct {
                            task:(id<iTermTask>)task
                      completion:(void (^)(iTermJobManagerForkAndExecStatus))completion;
 
-- (void)attachToServer:(iTermGeneralServerConnection)serverConnection
+- (BOOL)attachToServer:(iTermGeneralServerConnection)serverConnection
          withProcessID:(NSNumber *)thePid
                   task:(id<iTermTask>)task;
 
@@ -176,8 +176,9 @@ typedef struct {
 
 // Wire up the server as the task's file descriptor and process. The caller
 // will have connected to the server to get this info. Requires
-// [iTermAdvancedSettingsModel runJobsInServers].
-- (void)attachToServer:(iTermGeneralServerConnection)serverConnection;
+// [iTermAdvancedSettingsModel runJobsInServers]. Multiservers may return failure (NO) here
+// if the pid is not known.
+- (BOOL)attachToServer:(iTermGeneralServerConnection)serverConnection;
 
 - (void)killWithMode:(iTermJobManagerKillingMode)mode;
 

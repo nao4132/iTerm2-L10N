@@ -517,10 +517,10 @@ static void HandleSigChld(int n) {
 
 // This works for any kind of connection. It finishes the process of attaching a PTYTask to a child
 // that we know is in a server, either newly launched or an orphan.
-- (void)attachToServer:(iTermGeneralServerConnection)serverConnection {
+- (BOOL)attachToServer:(iTermGeneralServerConnection)serverConnection {
     assert([self canAttach]);
     [self setJobManagerType:serverConnection.type];
-    [_jobManager attachToServer:serverConnection withProcessID:nil task:self];
+    return [_jobManager attachToServer:serverConnection withProcessID:nil task:self];
 }
 
 - (BOOL)canAttach {
@@ -570,8 +570,7 @@ static void HandleSigChld(int n) {
     }
 
     DLog(@"tryToAttachToMultiserverWithRestorationIdentifier:%@", restorationIdentifier);
-    [self attachToServer:generalConnection];
-    return YES;
+    return [self attachToServer:generalConnection];
 }
 
 - (void)registerAsCoprocessOnlyTask {

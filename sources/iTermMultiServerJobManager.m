@@ -237,7 +237,7 @@ static const int iTermMultiServerMaximumSupportedRestorationIdentifierVersion = 
     return result;
 }
 
-- (void)attachToServer:(iTermGeneralServerConnection)serverConnection
+- (BOOL)attachToServer:(iTermGeneralServerConnection)serverConnection
          withProcessID:(NSNumber *)thePid
                   task:(id<iTermTask>)task {
     __block BOOL shouldRegister = NO;
@@ -246,11 +246,13 @@ static const int iTermMultiServerMaximumSupportedRestorationIdentifierVersion = 
         shouldRegister = [self queueAttachToServer:serverConnection withProcessID:thePid task:task];
         pid = _child.pid;
     });
-    if (shouldRegister) {
-        [[iTermProcessCache sharedInstance] registerTrackedPID:pid];
-        [[TaskNotifier sharedInstance] registerTask:task];
-        [[iTermProcessCache sharedInstance] setNeedsUpdate:YES];
+    if (!shouldRegister) {
+        return NO;
     }
+    [[iTermProcessCache sharedInstance] registerTrackedPID:pid];
+    [[TaskNotifier sharedInstance] registerTask:task];
+    [[iTermProcessCache sharedInstance] setNeedsUpdate:YES];
+    return YES;
 }
 
 - (BOOL)queueAttachToServer:(iTermGeneralServerConnection)serverConnection
@@ -270,6 +272,8 @@ static const int iTermMultiServerMaximumSupportedRestorationIdentifierVersion = 
     }
     _child = [_conn attachToProcessID:serverConnection.multi.pid];
     if (!_child) {
+        // Happens when doing Quit (killing all children) followed by relaunching. Don't want a
+        // broken pipe in that case.
         return NO;
     }
     if (_child.hasTerminated) {
@@ -300,7 +304,7 @@ static const int iTermMultiServerMaximumSupportedRestorationIdentifierVersion = 
         return;
     }
     [[iTermProcessCache sharedInstance] unregisterTrackedPID:_child.pid];
-    kill(_child.pid, signo);
+    killpg(_child.pid, signo);
 }
 
 - (void)killWithMode:(iTermJobManagerKillingMode)mode {
@@ -335,7 +339,9 @@ static const int iTermMultiServerMaximumSupportedRestorationIdentifierVersion = 
             break;
 
         case iTermJobManagerKillingModeBrokenPipe:
-            [self sendSignal:SIGHUP toServer:NO];
+            // This is irrelevant for the multiserver. Monoserver needs to ensure the server
+            // dies even when the child is persistent, but multiserver can survive
+            // its children.
             break;
     }
     if (_child.haveWaited) {

@@ -576,8 +576,10 @@ static long long MakeUniqueID(void) {
 
 - (void)handleLaunch:(iTermMultiServerResponseLaunch)launch {
     iTermFileDescriptorMultiClientPendingLaunch *pendingLaunch = _pendingLaunches[@(launch.uniqueId)];
-#warning yay race conditions
-    assert(pendingLaunch);
+    if (!pendingLaunch) {
+        ITBetaAssert(NO, @"No pending launch for %@ in %@", @(launch.uniqueId), _pendingLaunches);
+        return;
+    }
     [_pendingLaunches removeObjectForKey:@(launch.uniqueId)];
 
     if (launch.status != 0) {

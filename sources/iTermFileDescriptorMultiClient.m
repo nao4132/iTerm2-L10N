@@ -406,6 +406,7 @@ done:
     assert(_readFD < 0);
     iTermFileDescriptorMultiClientAttachStatus status = iTermConnectToUnixDomainSocket(_socketPath.UTF8String, &_readFD);
     if (status != iTermFileDescriptorMultiClientAttachStatusSuccess) {
+        // Server dead or already connected.
         return status;
     }
     iTermClientServerProtocolMessage message;
@@ -414,8 +415,8 @@ done:
         iTermMultiServerProtocolGetFileDescriptor(&message, &_writeFD)) {
         close(_readFD);
         _readFD = -1;
-#warning TODO: Test this and make sure FDs are closed exactly once and that the client is notified.
-        // The most likely reason to get here is that the server is already connected.
+        // You can get here if the server crashes right after accepting the connection. It should
+        // be very rare.
         return iTermFileDescriptorMultiClientAttachStatusFatalError;
     }
     return iTermFileDescriptorMultiClientAttachStatusSuccess;

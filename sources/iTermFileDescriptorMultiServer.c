@@ -603,13 +603,17 @@ static int ReadAndHandleRequest(int readFd, int writeFd) {
         return -1;
     }
     DLog("Handle request of type %d", (int)request.type);
+    int result = 0;
     switch (request.type) {
         case iTermMultiServerRPCTypeHandshake:
-            return HandleHandshake(writeFd, &request.payload.handshake);
+            result = HandleHandshake(writeFd, &request.payload.handshake);
+            break;
         case iTermMultiServerRPCTypeWait:
-            return HandleWait(writeFd, &request.payload.wait);
+            result = HandleWait(writeFd, &request.payload.wait);
+            break;
         case iTermMultiServerRPCTypeLaunch:
-            return HandleLaunchRequest(writeFd, &request.payload.launch);
+            result = HandleLaunchRequest(writeFd, &request.payload.launch);
+            break;
         case iTermMultiServerRPCTypeTermination:
             DLog("Ignore termination message");
             break;

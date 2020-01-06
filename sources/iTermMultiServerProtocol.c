@@ -302,6 +302,7 @@ static int EncodeTermination(iTermClientServerProtocolMessageEncoder *encoder,
 
 int iTermMultiServerProtocolParseMessageFromClient(iTermClientServerProtocolMessage *message,
                                                    iTermMultiServerClientOriginatedMessage *out) {
+    memset(out, 0, sizeof(*out));
     iTermClientServerProtocolMessageParser parser = {
         .offset = 0,
         .message = message
@@ -346,6 +347,7 @@ int iTermMultiServerProtocolGetFileDescriptor(iTermClientServerProtocolMessage *
 
 int iTermMultiServerProtocolParseMessageFromServer(iTermClientServerProtocolMessage *message,
                                                    iTermMultiServerServerOriginatedMessage *out) {
+    memset(out, 0, sizeof(*out));
     iTermClientServerProtocolMessage temp = *message;
     // This pointer can dangle if the struct gets copied, so ensure it's a legit internal pointer.
     temp.message.msg_iov = message->ioVectors;

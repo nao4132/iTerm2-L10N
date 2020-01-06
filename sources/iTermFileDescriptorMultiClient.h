@@ -56,6 +56,7 @@ typedef NS_ENUM(NSUInteger, iTermFileDescriptorMultiClientErrorCode) {
 @interface iTermFileDescriptorMultiClient : NSObject
 
 @property (nonatomic, weak) id<iTermFileDescriptorMultiClientDelegate> delegate;
+@property (nonatomic, readonly) pid_t serverPID;
 
 - (instancetype)initWithPath:(NSString *)path NS_DESIGNATED_INITIALIZER;
 - (instancetype)init NS_UNAVAILABLE;

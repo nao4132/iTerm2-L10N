@@ -313,7 +313,6 @@ static const int iTermMultiServerMaximumSupportedRestorationIdentifierVersion = 
     });
 }
 
-#warning TODO: Test all these killing modes
 - (void)queueKillWithMode:(iTermJobManagerKillingMode)mode {
     switch (mode) {
         case iTermJobManagerKillingModeRegular:

@@ -157,6 +157,10 @@ removePreemptively:(BOOL)removePreemptively
     [_client waitForChild:child removePreemptively:removePreemptively completion:completion];
 }
 
+- (pid_t)pid {
+    return _client.serverPID;
+}
+
 #pragma mark - iTermFileDescriptorMultiClientDelegate
 
 - (void)fileDescriptorMultiClient:(iTermFileDescriptorMultiClient *)client

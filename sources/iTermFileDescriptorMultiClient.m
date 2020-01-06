@@ -326,7 +326,7 @@ done:
     return YES;
 }
 
-- (BOOL)readHandshakeResponse:(int *)numberOfChildrenOut {
+- (BOOL)readHandshakeResponse:(int *)numberOfChildrenOut serverProcessID:(pid_t *)pidPtr {
     __block BOOL ok = NO;
     __block int numberOfChildren = 0;
     const BOOL readOK = [self readSynchronouslyWithCompletion:^(BOOL readOK, iTermMultiServerServerOriginatedMessage *message) {
@@ -343,6 +343,7 @@ done:
             return;
         }
         numberOfChildren = message->payload.handshake.numChildren;
+        *pidPtr = message->payload.handshake.pid;
         ok = YES;
     }];
     if (!readOK || !ok) {
@@ -385,7 +386,7 @@ done:
     }
 
     int numberOfChildren;
-    if (![self readHandshakeResponse:&numberOfChildren]) {
+    if (![self readHandshakeResponse:&numberOfChildren serverProcessID:&_serverPID]) {
         return NO;
     }
 

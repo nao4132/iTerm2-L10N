@@ -376,7 +376,7 @@ done:
     return YES;
 }
 
-#warning TODO: Make this async
+// TODO: Make this async if it's really necessary. It's going to be difficult.
 - (BOOL)handshakeWithChildDiscoveryBlock:(void (^)(iTermMultiServerReportChild *))block {
     assert(_readFD >= 0);
     assert(_writeFD >= 0);
@@ -401,7 +401,7 @@ done:
 
 // This is copypasta from iTermFileDescriptorClient.c's iTermFileDescriptorClientConnect()
 // NOTE: Sets _readFD and_writeFD as a side-effect.
-#warning TODO: Make this async
+// TODO: Make this async if it's really necessary. It's going to be difficult.
 - (iTermFileDescriptorMultiClientAttachStatus)tryAttach {
     assert(_readFD < 0);
     iTermFileDescriptorMultiClientAttachStatus status = iTermConnectToUnixDomainSocket(_socketPath.UTF8String, &_readFD);

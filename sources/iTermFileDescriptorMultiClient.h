@@ -44,8 +44,6 @@ typedef NS_ENUM(NSUInteger, iTermFileDescriptorMultiClientErrorCode) {
 - (void)fileDescriptorMultiClient:(iTermFileDescriptorMultiClient *)client
                  didDiscoverChild:(iTermFileDescriptorMultiClientChild *)child;
 
-- (void)fileDescriptorMultiClientDidFinishHandshake:(iTermFileDescriptorMultiClient *)client;
-
 - (void)fileDescriptorMultiClient:(iTermFileDescriptorMultiClient *)client
                 childDidTerminate:(iTermFileDescriptorMultiClientChild *)child;
 

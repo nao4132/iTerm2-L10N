@@ -168,10 +168,6 @@ removePreemptively:(BOOL)removePreemptively
     [_unattachedChildren addObject:child];
 }
 
-- (void)fileDescriptorMultiClientDidFinishHandshake:(iTermFileDescriptorMultiClient *)client {
-#warning todo
-}
-
 - (void)fileDescriptorMultiClientDidClose:(iTermFileDescriptorMultiClient *)client {
     assert(client == _client);
     _client.delegate = nil;

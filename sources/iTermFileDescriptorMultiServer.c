@@ -769,6 +769,12 @@ static void MainLoop(char *path, int acceptFd, int initialWriteFd, int initialRe
             SelectLoop(acceptFd, writeFd, readFd);
         }
 
+        if (GetNumberOfReportableChildren() == 0) {
+            // Not attached and no children? Quit rather than leave a useless daemon running.
+            DLog("Exiting because no reportable children remain. %d terminating.", numberOfChildren);
+            return;
+        }
+
         // You get here after the connection is lost. Listen and accept.
         DLog("Calling iTermMultiServerAccept");
         writeFd = iTermMultiServerAccept(acceptFd);

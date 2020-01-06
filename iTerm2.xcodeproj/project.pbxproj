@@ -3372,6 +3372,7 @@
 		A6E5D20C1FA3C55700EDD002 /* iTermMetalRowData.m in Sources */ = {isa = PBXBuildFile; fileRef = A6E5D20A1FA3C55700EDD002 /* iTermMetalRowData.m */; };
 		A6E5D20F1FA3C57900EDD002 /* iTermMetalFrameData.h in Headers */ = {isa = PBXBuildFile; fileRef = A6E5D20D1FA3C57900EDD002 /* iTermMetalFrameData.h */; };
 		A6E5D2101FA3C57900EDD002 /* iTermMetalFrameData.m in Sources */ = {isa = PBXBuildFile; fileRef = A6E5D20E1FA3C57900EDD002 /* iTermMetalFrameData.m */; };
+		A6E632C723C31BD9008F60F0 /* iTermCLogging.h in Headers */ = {isa = PBXBuildFile; fileRef = A6E632C623C31BD9008F60F0 /* iTermCLogging.h */; };
 		A6E7137A18F1D70E008D94DD /* GeneralPreferencesViewController.h in Headers */ = {isa = PBXBuildFile; fileRef = A6E7137818F1D70D008D94DD /* GeneralPreferencesViewController.h */; };
 		A6E7138418F263BC008D94DD /* PreferenceInfo.h in Headers */ = {isa = PBXBuildFile; fileRef = A6E7138218F263BC008D94DD /* PreferenceInfo.h */; };
 		A6E7138918F26445008D94DD /* iTermPreferencesBaseViewController.h in Headers */ = {isa = PBXBuildFile; fileRef = A6E7138718F26445008D94DD /* iTermPreferencesBaseViewController.h */; };
@@ -5956,6 +5957,7 @@
 		A6E5D20A1FA3C55700EDD002 /* iTermMetalRowData.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = iTermMetalRowData.m; path = Metal/Infrastructure/iTermMetalRowData.m; sourceTree = "<group>"; };
 		A6E5D20D1FA3C57900EDD002 /* iTermMetalFrameData.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = iTermMetalFrameData.h; sourceTree = "<group>"; };
 		A6E5D20E1FA3C57900EDD002 /* iTermMetalFrameData.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = iTermMetalFrameData.m; sourceTree = "<group>"; };
+		A6E632C623C31BD9008F60F0 /* iTermCLogging.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = iTermCLogging.h; sourceTree = "<group>"; };
 		A6E7137818F1D70D008D94DD /* GeneralPreferencesViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 4; lastKnownFileType = sourcecode.c.h; path = GeneralPreferencesViewController.h; sourceTree = "<group>"; tabWidth = 4; };
 		A6E7137918F1D70D008D94DD /* GeneralPreferencesViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 4; lastKnownFileType = sourcecode.c.objc; path = GeneralPreferencesViewController.m; sourceTree = "<group>"; tabWidth = 4; };
 		A6E7137D18F1DB1E008D94DD /* iTermPreferences.h */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 4; lastKnownFileType = sourcecode.c.h; path = iTermPreferences.h; sourceTree = "<group>"; tabWidth = 4; };
@@ -8369,6 +8371,7 @@
 				A64FCD56238DE785001D8199 /* iTermFileDescriptorServerShared.h */,
 				A64FCD57238DE785001D8199 /* iTermFileDescriptorServerShared.c */,
 				A6C9A62B23BC625E0070C789 /* iTermFileDescriptorMultiClient+Protected.h */,
+				A6E632C623C31BD9008F60F0 /* iTermCLogging.h */,
 			);
 			name = "Shell Launcher/FD Client/Server";
 			sourceTree = "<group>";
@@ -10608,6 +10611,7 @@
 				A653B6CE20AD3C4100B481F1 /* iTermSessionNameController.h in Headers */,
 				A6180D7021A364EE0073F219 /* iTermMetalPerFrameStateConfiguration.h in Headers */,
 				A66719521DCE36C3000CE608 /* iTermRecentDirectoryMO+CoreDataProperties.h in Headers */,
+				A6E632C723C31BD9008F60F0 /* iTermCLogging.h in Headers */,
 				A62EED9E20E010C000943DE3 /* iTermScriptImporter.h in Headers */,
 				A66719531DCE36C3000CE608 /* iTermSocketAddress.h in Headers */,
 				A629F5AE23AFF65600C2F16B /* iTermShellIntegrationPasteShellCommandsViewController.h in Headers */,

@@ -6,9 +6,13 @@
 //
 
 #import "iTermClientServerProtocol.h"
+
+#import "iTermCLogging.h"
+
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 const size_t ITERM_MULTISERVER_BUFFER_SIZE = 65536;
 const int ITERM_MULTISERVER_MAGIC = 0xdeadbeef;

@@ -157,6 +157,7 @@ typedef struct {
 
 - (void)stop;
 
+// Called on any thread
 - (void)brokenPipe;
 - (void)processRead;
 - (void)processWrite;

@@ -64,7 +64,7 @@ static void HandleSigChld(int n) {
 
 
     Coprocess *coprocess_;  // synchronized (self)
-    BOOL brokenPipe_;
+    BOOL brokenPipe_;  // synchronized (self)
     NSString *command_;  // Command that was run if launchWithPath:arguments:etc was called
 
     // Number of spins of the select loop left before we tell the delegate we were deregistered.
@@ -226,7 +226,9 @@ static void HandleSigChld(int n) {
 }
 
 - (BOOL)hasBrokenPipe {
-    return brokenPipe_;
+    @synchronized(self) {
+        return brokenPipe_;
+    }
 }
 
 - (NSString *)originalCommand {
@@ -404,7 +406,9 @@ static void HandleSigChld(int n) {
 }
 
 - (void)brokenPipe {
-    brokenPipe_ = YES;
+    @synchronized(self) {
+        brokenPipe_ = YES;
+    }
     [[TaskNotifier sharedInstance] deregisterTask:self];
     [self.delegate threadedTaskBrokenPipe];
 }

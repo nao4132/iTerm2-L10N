@@ -356,7 +356,8 @@ done:
 - (BOOL)receiveInitialChildReports:(int)numberOfChildren
                              block:(void (^)(iTermMultiServerReportChild *))block {
     __block BOOL ok = NO;
-    for (int i = 0; i < numberOfChildren; i++) {
+    __block BOOL foundLast = NO;
+    while (numberOfChildren > 0 && !foundLast) {
         const BOOL readChildOK = [self readSynchronouslyWithCompletion:^(BOOL readOK, iTermMultiServerServerOriginatedMessage *message) {
             if (!readOK) {
                 ok = NO;
@@ -366,6 +367,7 @@ done:
                 ok = NO;
                 return;
             }
+            foundLast = message->payload.reportChild.isLast;
             block(&message->payload.reportChild);
             ok = YES;
         }];

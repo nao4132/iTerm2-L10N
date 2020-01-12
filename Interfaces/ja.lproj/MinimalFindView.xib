@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.Cocoa.XIB" version="3.0" toolsVersion="14490.70" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none">
+    <dependencies>
+        <deployment identifier="macosx"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="14490.70"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <objects>
+        <customObject id="-2" userLabel="File's Owner" customClass="iTermDropDownFindViewController">
+            <connections>
+                <outlet property="findBarTextField_" destination="2" id="27"/>
+                <outlet property="view" destination="1" id="10"/>
+            </connections>
+        </customObject>
+        <customObject id="-1" userLabel="First Responder" customClass="FirstResponder"/>
+        <customObject id="-3" userLabel="Application" customClass="NSObject"/>
+        <customView id="1" customClass="MinimalFindView">
+            <rect key="frame" x="0.0" y="0.0" width="380" height="60"/>
+            <autoresizingMask key="autoresizingMask" flexibleMinX="YES" flexibleMinY="YES"/>
+            <subviews>
+                <button id="23">
+                    <rect key="frame" x="343" y="18" width="24" height="23"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMinX="YES" flexibleMinY="YES"/>
+                    <buttonCell key="cell" type="square" bezelStyle="shadowlessSquare" image="TabClose_Front" imagePosition="only" alignment="center" alternateImage="TabClose_Front_Pressed" inset="2" id="24">
+                        <behavior key="behavior" lightByContents="YES"/>
+                        <font key="font" metaFont="system"/>
+                        <string key="keyEquivalent" base64-UTF8="YES">
+Gw
+</string>
+                    </buttonCell>
+                    <connections>
+                        <action selector="closeFindView:" target="-2" id="29"/>
+                    </connections>
+                </button>
+                <searchField wantsLayer="YES" focusRingType="none" verticalHuggingPriority="750" allowsCharacterPickerTouchBarItem="YES" id="2" customClass="iTermFocusReportingSearchField">
+                    <rect key="frame" x="16" y="19" width="278" height="22"/>
+                    <autoresizingMask key="autoresizingMask" widthSizable="YES" flexibleMinY="YES"/>
+                    <searchFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" selectable="YES" editable="YES" borderStyle="bezel" focusRingType="none" usesSingleLineMode="YES" bezelStyle="round" id="3" customClass="iTermMinimalSearchFieldCell">
+                        <font key="font" metaFont="system"/>
+                        <color key="textColor" name="controlTextColor" catalog="System" colorSpace="catalog"/>
+                        <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
+                    </searchFieldCell>
+                    <connections>
+                        <outlet property="delegate" destination="-2" id="35"/>
+                        <outlet property="searchMenuTemplate" destination="15" id="20"/>
+                    </connections>
+                </searchField>
+                <button verticalHuggingPriority="750" id="MyD-4t-63g">
+                    <rect key="frame" x="302" y="19" width="21" height="21"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMinX="YES" flexibleMinY="YES"/>
+                    <buttonCell key="cell" type="square" bezelStyle="shadowlessSquare" image="NSGoLeftTemplate" imagePosition="only" alignment="center" imageScaling="proportionallyDown" inset="2" id="oJx-93-4xK">
+                        <behavior key="behavior" lightByContents="YES"/>
+                        <font key="font" metaFont="system"/>
+                    </buttonCell>
+                    <connections>
+                        <action selector="searchPrevious:" target="-2" id="ZaF-mj-I4r"/>
+                    </connections>
+                </button>
+                <button verticalHuggingPriority="750" id="qoR-tl-nVb">
+                    <rect key="frame" x="323" y="19" width="21" height="21"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMinX="YES" flexibleMinY="YES"/>
+                    <buttonCell key="cell" type="square" bezelStyle="shadowlessSquare" image="NSGoRightTemplate" imagePosition="only" alignment="center" imageScaling="proportionallyDown" inset="2" id="0iC-J3-NCQ">
+                        <behavior key="behavior" lightByContents="YES"/>
+                        <font key="font" metaFont="system"/>
+                    </buttonCell>
+                    <connections>
+                        <action selector="searchNext:" target="-2" id="pol-cY-nvG"/>
+                    </connections>
+                </button>
+            </subviews>
+            <point key="canvasLocation" x="177" y="158"/>
+        </customView>
+        <menu id="15">
+            <items>
+                <menuItem title="Smart Case Substring" state="on" id="16">
+                    <modifierMask key="keyEquivalentModifierMask"/>
+                    <connections>
+                        <action selector="changeMode:" target="-2" id="OVp-ei-63a"/>
+                    </connections>
+                </menuItem>
+                <menuItem isSeparatorItem="YES" id="qHP-Qy-WFh"/>
+                <menuItem title="Case-Sensitive Substring" state="on" tag="1" id="IJN-DB-LJ2">
+                    <modifierMask key="keyEquivalentModifierMask"/>
+                    <connections>
+                        <action selector="changeMode:" target="-2" id="tWH-sW-7Ij"/>
+                    </connections>
+                </menuItem>
+                <menuItem title="Case-Insensitive Substring" state="on" tag="2" id="6Px-6a-JTm">
+                    <modifierMask key="keyEquivalentModifierMask"/>
+                    <connections>
+                        <action selector="changeMode:" target="-2" id="aPy-bk-w39"/>
+                    </connections>
+                </menuItem>
+                <menuItem isSeparatorItem="YES" id="F1b-pc-PFJ"/>
+                <menuItem title="Case-Sensitive Regex" state="on" tag="3" id="s1o-x7-jkk">
+                    <modifierMask key="keyEquivalentModifierMask"/>
+                    <connections>
+                        <action selector="changeMode:" target="-2" id="cem-eD-Fft"/>
+                    </connections>
+                </menuItem>
+                <menuItem title="Case-Insensitive Regex" state="on" tag="4" id="C2V-dA-zRG">
+                    <modifierMask key="keyEquivalentModifierMask"/>
+                    <connections>
+                        <action selector="changeMode:" target="-2" id="ZJX-A7-7La"/>
+                    </connections>
+                </menuItem>
+                <menuItem isSeparatorItem="YES" id="ZCE-vD-EeM"/>
+                <menuItem title="Erase Search History" tag="5" id="cGh-hQ-V9H">
+                    <modifierMask key="keyEquivalentModifierMask"/>
+                    <connections>
+                        <action selector="eraseSearchHistory:" target="-2" id="6sW-DK-Wkc"/>
+                    </connections>
+                </menuItem>
+            </items>
+        </menu>
+    </objects>
+    <resources>
+        <image name="NSGoLeftTemplate" width="9" height="12"/>
+        <image name="NSGoRightTemplate" width="9" height="12"/>
+        <image name="TabClose_Front" width="15" height="15"/>
+        <image name="TabClose_Front_Pressed" width="15" height="15"/>
+    </resources>
+</document>

@@ -49,7 +49,7 @@ Gw
                 <searchField wantsLayer="YES" verticalHuggingPriority="750" allowsCharacterPickerTouchBarItem="YES" id="2" customClass="iTermFocusReportingSearchField">
                     <rect key="frame" x="8" y="4" width="206" height="19"/>
                     <autoresizingMask key="autoresizingMask" widthSizable="YES" flexibleMinY="YES"/>
-                    <searchFieldCell key="cell" controlSize="small" scrollable="YES" lineBreakMode="clipping" selectable="YES" editable="YES" borderStyle="bezel" usesSingleLineMode="YES" bezelStyle="round" id="3" customClass="iTermSearchFieldCell">
+                    <searchFieldCell key="cell" controlSize="small" scrollable="YES" lineBreakMode="clipping" selectable="YES" editable="YES" borderStyle="bezel" placeholderString="検索" usesSingleLineMode="YES" bezelStyle="round" id="3" customClass="iTermSearchFieldCell">
                         <font key="font" metaFont="smallSystem"/>
                         <color key="textColor" name="controlTextColor" catalog="System" colorSpace="catalog"/>
                         <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
@@ -63,40 +63,40 @@ Gw
         </customView>
         <menu id="15">
             <items>
-                <menuItem title="Smart Case Substring" state="on" id="16">
+                <menuItem title="大文字・小文字のスマート判定部分文字列" state="on" id="16">
                     <modifierMask key="keyEquivalentModifierMask"/>
                     <connections>
                         <action selector="changeMode:" target="-2" id="OVp-ei-63a"/>
                     </connections>
                 </menuItem>
                 <menuItem isSeparatorItem="YES" id="qHP-Qy-WFh"/>
-                <menuItem title="Case-Sensitive Substring" state="on" tag="1" id="IJN-DB-LJ2">
+                <menuItem title="大文字・小文字を区別する部分文字列" state="on" tag="1" id="IJN-DB-LJ2">
                     <modifierMask key="keyEquivalentModifierMask"/>
                     <connections>
                         <action selector="changeMode:" target="-2" id="tWH-sW-7Ij"/>
                     </connections>
                 </menuItem>
-                <menuItem title="Case-Insensitive Substring" state="on" tag="2" id="6Px-6a-JTm">
+                <menuItem title="大文字・小文字を区別しない部分文字列" state="on" tag="2" id="6Px-6a-JTm">
                     <modifierMask key="keyEquivalentModifierMask"/>
                     <connections>
                         <action selector="changeMode:" target="-2" id="aPy-bk-w39"/>
                     </connections>
                 </menuItem>
                 <menuItem isSeparatorItem="YES" id="F1b-pc-PFJ"/>
-                <menuItem title="Case-Sensitive Regex" state="on" tag="3" id="s1o-x7-jkk">
+                <menuItem title="大文字・小文字を区別する正規表現" state="on" tag="3" id="s1o-x7-jkk">
                     <modifierMask key="keyEquivalentModifierMask"/>
                     <connections>
                         <action selector="changeMode:" target="-2" id="cem-eD-Fft"/>
                     </connections>
                 </menuItem>
-                <menuItem title="Case-Insensitive Regex" state="on" tag="4" id="C2V-dA-zRG">
+                <menuItem title="大文字・小文字を区別しない正規表現" state="on" tag="4" id="C2V-dA-zRG">
                     <modifierMask key="keyEquivalentModifierMask"/>
                     <connections>
                         <action selector="changeMode:" target="-2" id="ZJX-A7-7La"/>
                     </connections>
                 </menuItem>
                 <menuItem isSeparatorItem="YES" id="Vkh-3q-N5K"/>
-                <menuItem title="Erase Search History" tag="5" id="6DZ-ad-yVz">
+                <menuItem title="検索履歴を削除" tag="5" id="6DZ-ad-yVz">
                     <modifierMask key="keyEquivalentModifierMask"/>
                     <connections>
                         <action selector="eraseSearchHistory:" target="-2" id="BzG-Vy-jjt"/>

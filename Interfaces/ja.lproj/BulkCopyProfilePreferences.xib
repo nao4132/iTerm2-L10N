@@ -21,7 +21,7 @@
         </customObject>
         <customObject id="-1" userLabel="First Responder" customClass="FirstResponder"/>
         <customObject id="-3" userLabel="Application"/>
-        <window title="Copy Bookmark Settings" allowsToolTipsWhenApplicationIsInactive="NO" autorecalculatesKeyViewLoop="NO" hidesOnDeactivate="YES" oneShot="NO" showsToolbarButton="NO" visibleAtLaunch="NO" animationBehavior="default" id="viC-2q-HiR" customClass="NSPanel">
+        <window title="ブックマークのコピー設定" allowsToolTipsWhenApplicationIsInactive="NO" autorecalculatesKeyViewLoop="NO" hidesOnDeactivate="YES" visibleAtLaunch="NO" animationBehavior="default" id="viC-2q-HiR" customClass="NSPanel">
             <windowStyleMask key="styleMask" titled="YES" utility="YES" documentModal="YES"/>
             <windowPositionMask key="initialPositionMask" leftStrut="YES" rightStrut="YES" topStrut="YES" bottomStrut="YES"/>
             <rect key="contentRect" x="162" y="79" width="560" height="400"/>
@@ -42,7 +42,7 @@
                     <textField verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="Oye-Bx-dhb">
                         <rect key="frame" x="17" y="305" width="200" height="17"/>
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                        <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" sendsActionOnEndEditing="YES" title="To these profiles:" id="nfi-Fs-Fpa">
+                        <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" sendsActionOnEndEditing="YES" title="コピー先プロファイル:" id="nfi-Fs-Fpa">
                             <font key="font" metaFont="system"/>
                             <color key="textColor" name="controlTextColor" catalog="System" colorSpace="catalog"/>
                             <color key="backgroundColor" name="controlColor" catalog="System" colorSpace="catalog"/>
@@ -51,7 +51,7 @@
                     <button fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="9Mg-QE-0jR">
                         <rect key="frame" x="30" y="340" width="63" height="18"/>
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                        <buttonCell key="cell" type="check" title="Colors" bezelStyle="regularSquare" imagePosition="left" alignment="left" inset="2" id="0jx-Mi-J2i">
+                        <buttonCell key="cell" type="check" title="色" bezelStyle="regularSquare" imagePosition="left" alignment="left" inset="2" id="0jx-Mi-J2i">
                             <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                             <font key="font" metaFont="system"/>
                         </buttonCell>
@@ -60,9 +60,9 @@
                         </connections>
                     </button>
                     <button fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="aM3-9L-MGa">
-                        <rect key="frame" x="97" y="340" width="51" height="18"/>
+                        <rect key="frame" x="97" y="340" width="59" height="18"/>
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                        <buttonCell key="cell" type="check" title="Text" bezelStyle="regularSquare" imagePosition="left" alignment="left" inset="2" id="70l-W7-ZJS">
+                        <buttonCell key="cell" type="check" title="文字列" bezelStyle="regularSquare" imagePosition="left" alignment="left" inset="2" id="70l-W7-ZJS">
                             <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                             <font key="font" metaFont="system"/>
                         </buttonCell>
@@ -71,9 +71,9 @@
                         </connections>
                     </button>
                     <button fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="tp8-sU-UEo">
-                        <rect key="frame" x="154" y="340" width="72" height="18"/>
+                        <rect key="frame" x="162" y="340" width="80" height="18"/>
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                        <buttonCell key="cell" type="check" title="Window" bezelStyle="regularSquare" imagePosition="left" alignment="left" inset="2" id="htO-se-n4C">
+                        <buttonCell key="cell" type="check" title="ウィンドウ" bezelStyle="regularSquare" imagePosition="left" alignment="left" inset="2" id="htO-se-n4C">
                             <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                             <font key="font" metaFont="system"/>
                         </buttonCell>
@@ -82,9 +82,9 @@
                         </connections>
                     </button>
                     <button fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="JQ9-AJ-VBd">
-                        <rect key="frame" x="234" y="340" width="78" height="18"/>
+                        <rect key="frame" x="250" y="340" width="70" height="18"/>
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                        <buttonCell key="cell" type="check" title="Terminal" bezelStyle="regularSquare" imagePosition="left" alignment="left" inset="2" id="lCp-6g-h7e">
+                        <buttonCell key="cell" type="check" title="端末" bezelStyle="regularSquare" imagePosition="left" alignment="left" inset="2" id="lCp-6g-h7e">
                             <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                             <font key="font" metaFont="system"/>
                         </buttonCell>
@@ -95,7 +95,7 @@
                     <button fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="CEn-pG-8pg">
                         <rect key="frame" x="321" y="340" width="57" height="18"/>
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                        <buttonCell key="cell" type="check" title="Keys" bezelStyle="regularSquare" imagePosition="left" alignment="left" inset="2" id="WPj-v2-zIZ">
+                        <buttonCell key="cell" type="check" title="キー" bezelStyle="regularSquare" imagePosition="left" alignment="left" inset="2" id="WPj-v2-zIZ">
                             <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                             <font key="font" metaFont="system"/>
                         </buttonCell>
@@ -104,9 +104,9 @@
                         </connections>
                     </button>
                     <button fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="91T-bR-nMt">
-                        <rect key="frame" x="382" y="340" width="72" height="18"/>
+                        <rect key="frame" x="372" y="340" width="84" height="18"/>
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                        <buttonCell key="cell" type="check" title="Session" bezelStyle="regularSquare" imagePosition="left" alignment="left" inset="2" id="F3M-Vq-JAY">
+                        <buttonCell key="cell" type="check" title="セッション" bezelStyle="regularSquare" imagePosition="left" alignment="left" inset="2" id="F3M-Vq-JAY">
                             <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                             <font key="font" metaFont="system"/>
                         </buttonCell>
@@ -117,7 +117,7 @@
                     <button fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="HG2-Ad-TQV">
                         <rect key="frame" x="458" y="340" width="84" height="18"/>
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                        <buttonCell key="cell" type="check" title="Advanced" bezelStyle="regularSquare" imagePosition="left" alignment="left" inset="2" id="fuM-ok-LHm">
+                        <buttonCell key="cell" type="check" title="詳細" bezelStyle="regularSquare" imagePosition="left" alignment="left" inset="2" id="fuM-ok-LHm">
                             <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                             <font key="font" metaFont="system"/>
                         </buttonCell>
@@ -136,7 +136,7 @@
                     <button verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="VVP-os-AzU">
                         <rect key="frame" x="450" y="14" width="96" height="32"/>
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                        <buttonCell key="cell" type="push" title="Copy" bezelStyle="rounded" alignment="center" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="zoP-e3-jDv">
+                        <buttonCell key="cell" type="push" title="コピー" bezelStyle="rounded" alignment="center" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="zoP-e3-jDv">
                             <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                             <font key="font" metaFont="system"/>
                             <string key="keyEquivalent" base64-UTF8="YES">
@@ -150,7 +150,7 @@ DQ
                     <button verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="puk-vn-6CO">
                         <rect key="frame" x="354" y="14" width="96" height="32"/>
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                        <buttonCell key="cell" type="push" title="Cancel" bezelStyle="rounded" alignment="center" state="on" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="NM7-uB-FSU">
+                        <buttonCell key="cell" type="push" title="キャンセル" bezelStyle="rounded" alignment="center" state="on" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="NM7-uB-FSU">
                             <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                             <font key="font" metaFont="system"/>
                             <string key="keyEquivalent" base64-UTF8="YES">

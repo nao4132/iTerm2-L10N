@@ -17,7 +17,7 @@
         </customObject>
         <customObject id="-1" userLabel="First Responder" customClass="FirstResponder"/>
         <customObject id="-3" userLabel="Application" customClass="NSObject"/>
-        <window title="Advanced Working Directory Settings" allowsToolTipsWhenApplicationIsInactive="NO" autorecalculatesKeyViewLoop="NO" hidesOnDeactivate="YES" oneShot="NO" showsToolbarButton="NO" visibleAtLaunch="NO" animationBehavior="default" id="nKk-F6-OG0" userLabel="Panel (Advanced Working Directory)" customClass="NSPanel">
+        <window title="作業ディレクトリの詳細設定" allowsToolTipsWhenApplicationIsInactive="NO" autorecalculatesKeyViewLoop="NO" hidesOnDeactivate="YES" visibleAtLaunch="NO" animationBehavior="default" id="nKk-F6-OG0" userLabel="Panel (Advanced Working Directory)" customClass="NSPanel">
             <windowStyleMask key="styleMask" titled="YES" utility="YES" documentModal="YES"/>
             <windowPositionMask key="initialPositionMask" leftStrut="YES" rightStrut="YES" topStrut="YES" bottomStrut="YES"/>
             <rect key="contentRect" x="230" y="120" width="485" height="421"/>
@@ -45,15 +45,15 @@
                         </buttonCell>
                         <cells>
                             <column>
-                                <buttonCell type="radio" title="Home directory" imagePosition="left" alignment="left" state="on" tag="1" inset="2" id="yO6-Oa-WJ3">
+                                <buttonCell type="radio" title="ホームディレクトリ" imagePosition="left" alignment="left" state="on" tag="1" inset="2" id="yO6-Oa-WJ3">
                                     <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                                     <font key="font" metaFont="system"/>
                                 </buttonCell>
-                                <buttonCell type="radio" title="Reuse previous session's directory" imagePosition="left" alignment="left" tag="2" inset="2" id="ffv-Al-noL">
+                                <buttonCell type="radio" title="前回セッションのディレクトリを再利用" imagePosition="left" alignment="left" tag="2" inset="2" id="ffv-Al-noL">
                                     <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                                     <font key="font" metaFont="system"/>
                                 </buttonCell>
-                                <buttonCell type="radio" title="Directory:" imagePosition="left" alignment="left" inset="2" id="nUw-Py-iKc">
+                                <buttonCell type="radio" title="指定:" imagePosition="left" alignment="left" inset="2" id="nUw-Py-iKc">
                                     <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                                     <font key="font" metaFont="system"/>
                                 </buttonCell>
@@ -90,15 +90,15 @@
                         </buttonCell>
                         <cells>
                             <column>
-                                <buttonCell type="radio" title="Home directory" imagePosition="left" alignment="left" state="on" tag="1" inset="2" id="6mB-LP-747">
+                                <buttonCell type="radio" title="ホームディレクトリ" imagePosition="left" alignment="left" state="on" tag="1" inset="2" id="6mB-LP-747">
                                     <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                                     <font key="font" metaFont="system"/>
                                 </buttonCell>
-                                <buttonCell type="radio" title="Reuse previous session's directory" imagePosition="left" alignment="left" tag="2" inset="2" id="5JZ-fv-M9U">
+                                <buttonCell type="radio" title="前回セッションのディレクトリを再利用" imagePosition="left" alignment="left" tag="2" inset="2" id="5JZ-fv-M9U">
                                     <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                                     <font key="font" metaFont="system"/>
                                 </buttonCell>
-                                <buttonCell type="radio" title="Directory:" imagePosition="left" alignment="left" inset="2" id="Ieo-mE-vpq">
+                                <buttonCell type="radio" title="指定:" imagePosition="left" alignment="left" inset="2" id="Ieo-mE-vpq">
                                     <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                                     <font key="font" metaFont="system"/>
                                 </buttonCell>
@@ -135,15 +135,15 @@
                         </buttonCell>
                         <cells>
                             <column>
-                                <buttonCell type="radio" title="Home directory" imagePosition="left" alignment="left" state="on" tag="1" inset="2" id="Ziq-3t-wcN">
+                                <buttonCell type="radio" title="ホームディレクトリ" imagePosition="left" alignment="left" state="on" tag="1" inset="2" id="Ziq-3t-wcN">
                                     <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                                     <font key="font" metaFont="system"/>
                                 </buttonCell>
-                                <buttonCell type="radio" title="Reuse previous session's directory" imagePosition="left" alignment="left" tag="2" inset="2" id="dfK-M9-Uwn">
+                                <buttonCell type="radio" title="前回セッションのディレクトリを再利用" imagePosition="left" alignment="left" tag="2" inset="2" id="dfK-M9-Uwn">
                                     <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                                     <font key="font" metaFont="system"/>
                                 </buttonCell>
-                                <buttonCell type="radio" title="Directory:" imagePosition="left" alignment="left" inset="2" id="SD9-ei-Zdb">
+                                <buttonCell type="radio" title="指定:" imagePosition="left" alignment="left" inset="2" id="SD9-ei-Zdb">
                                     <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                                     <font key="font" metaFont="system"/>
                                 </buttonCell>

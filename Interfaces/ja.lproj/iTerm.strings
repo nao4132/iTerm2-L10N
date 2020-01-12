@@ -1,118 +1,171 @@
 /* Context menu */
-"-> Browser" = "-> Browser";
-"-> Mail" = "-> Mail";
+"-> Browser" = "-> ブラウザ";
+"-> Mail" = "-> メール";
 "-> Google" = "-> Google";
 
 /* Toolbar Item:Bookmarks */
-"Bookmarks" = "Bookmarks";
+"Bookmarks" = "ブックマーク";
 
 /* Close window */
-"All sessions will be closed" = "All sessions will be closed";
+"All sessions will be closed" = "すべてのセッションは閉じられます";
 
 /* Cancel */
-"Cancel" = "Cancel";
+"Cancel" = "キャンセル";
 
 /* Context menu */
-"Clear Buffer" = "Clear Buffer";
+"Send Selection" = "選択範囲の送信";
+
+/* Context menu */
+"Clear Buffer" = "バッファのクリア";
 
 /* Toolbar Item: Close Session */
-"Close" = "Close";
+"Close" = "閉じる";
 
 /* Toolbar Item Tip: Close */
-"Close the current session" = "Close the current session";
+"Close the current session" = "現在のセッションを閉じる";
 
 /* Close window */
-"Close Window?" = "Close Window?";
-"Quit iTerm?" = "Quit iTerm?";
+"Close Window?" = "ウィンドウを閉じますか？";
+"Quit iTerm?" = "iTermを終了しますか？";
 
 /* Close Session */
-"This session will be closed."="This session will be closed.";
-"All unsaved data will be lost"="All unsaved data will be lost";
+"This session will be closed."="このセッションは閉じられます。";
+"All unsaved data will be lost"="すべての保存していないデータは失われます";
 
 /* Toolbar Item:Info */
-"Info" = "Info";
+"Info" = "情報";
 
 /* Toolbar Item Tip:Info */
-"Window/Session Info" = "Window/Session Info";
+"Window/Session Info" = "ウィンドウ/セッション 情報";
 
 /* Context menu */
-"Info..." = "Info...";
+"Info..." = "情報...";
 
 /* Context menu */
-"Copy" = "Copy";
+"Copy" = "コピー";
 
 /* Context menu */
-"New Tab" = "New Tab";
+"New Tab" = "新規タブ";
 
 /* Context menu */
-"New Window" = "New Window";
+"New Window" = "新規ウィンドウ";
 
+/* Context menu */
+"Download with scp" = "scpでダウンロード";
+
+/* Context menu */
+"Download with scp from %@" = "scpで%@をダウンロード";
+
+/* Context menu */
+"Open Selection as URL" = "選択範囲をURLとしてオープン";
+
+/* Context menu */
+"Search the Web for Selection" = "選択範囲をWeb検索";
+
+/* Context menu */
+"Send Email to Selected Address" = "選択したアドレスへメールを送信";
+
+/* Context menu */
+"Split Pane Vertically" = "垂直方向に分割";
+
+/* Context menu */
+"Split Pane Horizontally" = "水平方向に分割";
+
+/* Context menu */
+"Move Session to Split Pane" = "セッションを分割ペインに移動";
+
+/* Context menu */
+"Move Session to Window" = "セッションをウィンドウへ移動";
+
+/* Context menu */
+"Swap With Session…" = "セッションの入替…";
+
+/* Context menu */
+"Annotate Selection" = "選択範囲に注釈を設定";
+
+/* Context menu */
+"Reveal Annotation" = "注釈を表示";
+
+/* Context menu */
+"Edit Session..." = "セッションを編集...";
+
+/* Context menu */
+"Toggle Broadcasting Input" = "入力のブロードキャストを切替";
+
+/* Context menu */
+"Stop Coprocess" = "コプロセスを呈し";
+
+/* Context menu */
+"Restart" = "再スタート";
+
+/* Context menu */
+"Bury" = "埋め込み";
 
 /* Removal Alert */
-"Do you really want to remove this item?" = "Do you really want to remove this item?";
+"Do you really want to remove this item?" = "この項目を本当に削除しますか？";
 
 /* Toolbar Item:New */
-"Default Session"="Default Session";
-"New" = "New";
-"Press Option for New Window"="Press Option for New Window";
-"Open In New Window" = "Open In New Window";
-"Open a new session"="Open a new session";
-"Execute" = "Execute";
-"Execute Command or Launch URL" = "Execute Command or Launch URL";
+"Default Session"="デフォルトセッション";
+"New" = "新規";
+"Press Option for New Window"="新しいウィンドウを開くために Option を押してください";
+"Open In New Window" = "新規ウィンドウで開く";
+"Open a new session"="新規セッションを開く";
+"Execute" = "実行";
+"Execute Command or Launch URL" = "コマンドの実行 もしくは URLの起動";
 
 /* OK */
 "OK" = "OK";
 
 /* Toolbar Item Tip:Bookmarks */
-"Open the bookmarks" = "Open the bookmarks";
+"Open the bookmarks" = "ブックマークを開く";
 
 /* Context menu */
-"Paste" = "Paste";
+"Paste" = "ペースト";
 
 /* Context menu */
-"Save" = "Save";
+"Save" = "保存";
 
 /* Context menu */
-"Select" = "Select";
+"Select" = "選択";
 
 /* Context menu */
-"Move to new window" = "Move to new window";
+"Move to new window" = "新規ウィンドウに移動";
 
 /* Anti-Idle: wrong input */
-"Please enter a valid code (0~255)" = "Please enter a valid code (0~255)";
+"Please enter a valid code (0~255)" = "適切なコードを入力してください(0~255)";
 
 /* wrong input */
-"Please enter a valid window size" = "Please enter a valid window size";
+"Please enter a valid window size" = "適切なウィンドウサイズを入力してください";
 
 /* Remove */
-"Remove" = "Remove";
+"Remove" = "削除";
 
 /* Context menu */
-"Select All" = "Select All";
-"Save" = "Save";
-"Print..." = "Print...";
-"Print Selection..." = "Print Selection...";
+"Select All" = "すべて選択";
+"Save" = "保存";
+"Print..." = "印刷...";
+"Print Selection..." = "選択範囲を印刷...";
 
 /* Removal Alert */
-"There is no undo for this operation." = "There is no undo for this operation.";
+"There is no undo for this operation." = "この操作ではやり直しができません。";
 
 /* wrong input */
-"Wrong Input" = "Wrong Input";
+"Wrong Input" = "間違った入力";
 
 /* Upgrade */
-"Upgrade Warning: New language encodings available!"="Upgrade Warning: New language encodings available!";
-"Please reset all the encoding settings in your preference and bookmarks"="Please reset all the encoding settings in your preference and bookmarks";
+"Upgrade Warning: New language encodings available!"="アップグレード警告: 新しい言語のエンコーディングが利用可能です！";
+"Please reset all the encoding settings in your preference and bookmarks"="設定およびブックマックのすべてのエンコーディング設定をリセットしてください";
 
 /* Author */
 "fabian"="fabian";
 "Ujwal S. Setlur"="Ujwal S. Setlur";
 
 /* About */
-"Report A Bug"="Report A Bug";
+"Report A Bug"="バグの報告";
 
 /* Config */
-"Configuration saved as a new entry in Bookmarks"="Configuration saved as a new entry in Bookmarks";
-"Configuration saved"="Configuration saved";
+"Configuration saved as a new entry in Bookmarks"="ブックマークの新規エントリとして設定を保存しました";
+"Configuration saved"="設定を保存しました";
 
 /* OS Version */
 "Minimum_OS"="iTerm requires OS X version 10.2 or higher to run. This application will now terminate.";
@@ -121,46 +174,46 @@
 "Sorry"="Sorry";
 
 /* Quit */
-"Quit"="Quit";
+"Quit"="終了";
 
 /* PreferencePanel */
-"Display"="Display";
-"Shell"="Shell";
-"Emulation"="Emulation";
-"Color"="Color";
+"Display"="表示";
+"Shell"="シェル";
+"Emulation"="エミュレーション";
+"Color"="色";
 
 /* Script */
-"Script" = "Script";
-"Refresh" = "Refresh";
+"Script" = "スクリプト";
+"Refresh" = "リフレッシュ";
 
 /* Key Binding Profiles */
-"Global"="Global";
+"Global"="グローバル";
 
 /* Display Profiles */
-"Default" = "Default";
+"Default" = "デフォルト";
 
 /* Key Binding Actions */
-"next tab"="next tab";
-"next window"="next window";
-"previous tab"="previous tab";
-"previous window"="previous window";
-"scroll end"="scroll end";
-"scroll home"="scroll home";
-"scroll line down"="scroll line down";
-"scroll line up"="scroll line up";
-"scroll page down"="scroll page down";
-"scroll page up"="scroll page up";
-"send ^["="send ^[";
-"send hex code"="send hex code";
-"send"="send";
-"ignore"="ignore";
-"unknown action ID"="unknown action ID";
+"next tab"="次のタブ";
+"next window"="次のウィンドウ";
+"previous tab"="前のタブ";
+"previous window"="前のウィンドウ";
+"scroll end"="スクロール末尾";
+"scroll home"="スクロール先頭";
+"scroll line down"="1行下にスクロール";
+"scroll line up"="1行下にスクロール";
+"scroll page down"="次のページにスクロール";
+"scroll page up"="前のページにスクロール";
+"send ^["="^[ を送信";
+"send hex code"="16進コードを送信";
+"send"="送信";
+"ignore"="無視";
+"unknown action ID"="不明なアクションID";
 
 /* Key Names */
-"cursor down"="cursor down";
-"cursor left"="cursor left";
-"cursor right"="cursor right";
-"cursor up"="cursor up";
+"cursor down"="下カーソル";
+"cursor left"="左カーソル";
+"cursor right"="右カーソル";
+"cursor up"="上カーソル";
 "del"="del";
 "delete"="delete";
 "end"="end";
@@ -169,64 +222,64 @@
 "numlock"="numlock";
 "page down"="page down";
 "page up"="page up";
-"unknown key"="unknown key";
+"unknown key"="不明なキー";
 
 /* Save Confirmation */
-"%@'s display profile %@ and terminal profile %@ have been updated"="%@'s display profile %@ and terminal profile %@ have been updated";
-"All bookmarks associated with this profile are affected"="All bookmarks associated with this profile are affected";
+"%@'s display profile %@ and terminal profile %@ have been updated"="%@ の表示プロファイル「%@」と端末プロファイル「%@」を更新しました";
+"All bookmarks associated with this profile are affected"="このプロファイルから構成されているすべてのブックマークが影響を受けます";
 
 /* Profiles */
-"Delete Profile" = "Delete Profile";
-"Are you sure that you want to delete %@? There is no way to undo this action." = "Are you sure that you want to delete %@? There is no way to undo this action.";
-"Delete" = "Delete";
-"Cancel" = "Cancel";
-"Untitled" = "Untitled";
+"Delete Profile" = "プロファイルの削除";
+"Are you sure that you want to delete %@? There is no way to undo this action." = "本当に「%@」を削除しますか？この操作はやり直しできません。";
+"Delete" = "削除";
+"Cancel" = "キャンセル";
+"Untitled" = "名称未設定";
 "%@ copy" = "%@ copy";
 
 /* Bookmarks */
-"Delete Bookmark"="Delete Bookmark";
+"Delete Bookmark"="ブックマークの削除";
 
 /* Warning */
-"Warning!" = "Warning!";
+"Warning!" = "警告！";
 
 /* Keyboard Input */
-"Keyboard input will be sent to all sessions in this terminal." = "Keyboard input will be sent to all sessions in this terminal.";
+"Keyboard input will be sent to all sessions in this terminal." = "この端末ではキーボードからの入力はすべてのセッションに送信されます。";
 
 /* Growl Alerts */
-"Alert" = "Alert";
-"Session %@ #%d: %@" = "Session %@ #%d: %@";
-"Bell" = "Bell";
-"Session %@ #%d just rang a bell!" = "Session %@ #%d just rang a bell!";
+"Alert" = "警告";
+"Session %@ #%d: %@" = "セッション %@ #%d: %@";
+"Bell" = "ベル";
+"Session %@ #%d just rang a bell!" = "セッション %@ #%d ベルを鳴らしました！";
 "Broken Pipe" = "Broken Pipe";
-"Session %@ #%d just terminated." = "Session %@ #%d just terminated.";
+"Session %@ #%d just terminated." = "セッション %@ #%d は終了しました。";
 "Idle" = "Idle";
-"Session %@ #%d becomes idle." = "Session %@ #%d becomes idle.";
-"New Output" = "New Output";
-"New Output was received in %@ #%d." = "New Output was received in %@ #%d.";
+"Session %@ #%d becomes idle." = "セッション %@ #%d はアイドル状態になりました。";
+"New Output" = "新規出力";
+"New Output was received in %@ #%d." = "新規出力を %@ #%d で受け取りました。";
 
 /* Info */
-"Update %@" = "Update %@";
+"Update %@" = "%@ を更新";
 
 /* Tab Tooltips */
-"Name: %@\nCommand: %@\nTerminal Profile: %@\nDisplay Profile: %@\nKeyboard Profile: %@" = "Name: %@\nCommand: %@\nTerminal Profile: %@\nDisplay Profile: %@\nKeyboard Profile: %@";
+"Name: %@\nCommand: %@\nTerminal Profile: %@\nDisplay Profile: %@\nKeyboard Profile: %@" = "名前: %@\nコマンド: %@\n端末プロファイル: %@\n表示プロファイル: %@\nキーボードプロファイル: %@";
 
 /* Profiles */
-"Keyboard Profiles" = "Keyboard Profiles";
-"Display Profiles" = "Display Profiles";
-"Terminal Profiles" = "Terminal Profiles";
-"eg. [OC for ESC [OC." = "eg. [OC for ESC [OC.";
-"eg. 7F for backward delete." = "eg. 7F for backward delete.";
-"use \n for new-line, etc" = "use \n for new-line, etc";
+"Keyboard Profiles" = "キーボードプロファイル";
+"Display Profiles" = "表示プロファイル";
+"Terminal Profiles" = "端末プロファイル";
+"eg. [OC for ESC [OC." = "例) ESC [OC は [OC";
+"eg. 7F for backward delete." = "例) バックスペースでの削除は 7F ";
+"use \n for new-line, etc" = "改行は \n を使うなど";
 
 /* Error */
-"Out of memory" = "Out of memory";
-"New session cannot be created. Try smaller buffer sizes." = "New session cannot be created. Try smaller buffer sizes.";
+"Out of memory" = "メモリが足りません";
+"New session cannot be created. Try smaller buffer sizes." = "新規セッションが作成できません。バッファサイズを小さくしてください。";
 
 /* Security Warnings */
-"Bad User Shell" = "Bad User Shell";
-"The shell for this account is not a valid shell as defined in /etc/shells. Contact your system administrator." = "The shell for this account is not matched by a valid shell as defined in /etc/shells. Contact your system administrator.";
+"Bad User Shell" = "不適切なユーザシェル";
+"The shell for this account is not a valid shell as defined in /etc/shells. Contact your system administrator." = "このアカウントシェルは /etc/shells で定義されている適切なシェルには一致しません。管理者に問合せください。";
 
 /* Fork Error*/
-"Unable to Fork!"="Unable to Fork!";
-"iTerm cannot launch the program for this session."="iTerm cannot launch the program for this session.";
-"Close Session"="Close Session";
+"Unable to Fork!"="Forkできません！";
+"iTerm cannot launch the program for this session."="iTermはこのセッションでプログラムを起動できません";
+"Close Session"="セッションを閉じる";

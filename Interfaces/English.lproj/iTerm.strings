@@ -47,6 +47,56 @@
 /* Context menu */
 "New Window" = "New Window";
 
+/* Context menu */
+"Download with scp" = "Download with scp";
+
+/* Context menu */
+"Download with scp from %@" = "Download with scp from %@";
+
+/* Context menu */
+"Open Selection as URL" = "Open Selection as URL";
+
+/* Context menu */
+"Search the Web for Selection" = "Search the Web for Selection";
+
+/* Context menu */
+"Send Email to Selected Address" = "Send Email to Selected Address";
+
+/* Context menu */
+"Split Pane Vertically" = "Split Pane Vertically";
+
+/* Context menu */
+"Split Pane Horizontally" = "Split Pane Horizontally";
+
+/* Context menu */
+"Move Session to Split Pane" = "Move Session to Split Pane";
+
+/* Context menu */
+"Move Session to Window" = "Move Session to Window";
+
+/* Context menu */
+"Swap With Session…" = "Swap With Session…";
+
+/* Context menu */
+"Annotate Selection" = "Annotate Selection";
+
+/* Context menu */
+"Reveal Annotation" = "Reveal Annotation";
+
+/* Context menu */
+"Edit Session..." = "Edit Session...";
+
+/* Context menu */
+"Toggle Broadcasting Input" = "Toggle Broadcasting Input";
+
+/* Context menu */
+"Stop Coprocess" = "Stop Coprocess";
+
+/* Context menu */
+"Restart" = "Restart";
+
+/* Context menu */
+"Bury" = "Bury";
 
 /* Removal Alert */
 "Do you really want to remove this item?" = "Do you really want to remove this item?";

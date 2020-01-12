@@ -3651,26 +3651,38 @@ static double EuclideanDistance(NSPoint p1, NSPoint p2) {
     }
 
     // Menu items for acting on text selections
-    NSString *scpTitle = @"Download with scp";
+    NSString *scpTitle = NSLocalizedStringFromTableInBundle(@"Download with scp",
+                                                            @"iTerm",
+                                                            [NSBundle bundleForClass: [self class]],
+                                                            @"Context menu");
     if ([self _haveShortSelection]) {
         SCPPath *scpPath = [_dataSource scpPathForFile:[self selectedText]
                                                 onLine:_selection.lastRange.coordRange.start.y];
         if (scpPath) {
-            scpTitle = [NSString stringWithFormat:@"Download with scp from %@", scpPath.hostname];
+            scpTitle = [NSString stringWithFormat:NSLocalizedStringFromTableInBundle(@"Download with scp from %@", @"iTerm", [NSBundle bundleForClass: [self class]], @"Context menu"), scpPath.hostname];
         }
     }
 
     [theMenu addItemWithTitle:scpTitle
                        action:@selector(downloadWithSCP:)
                 keyEquivalent:@""];
-    [theMenu addItemWithTitle:@"Open Selection as URL"
-                     action:@selector(browse:) keyEquivalent:@""];
+    [theMenu addItemWithTitle:NSLocalizedStringFromTableInBundle(@"Open Selection as URL",
+								 @"iTerm",
+								 [NSBundle bundleForClass: [self class]],
+								 @"Context menu")
+		       action:@selector(browse:) keyEquivalent:@""];
     [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
-    [theMenu addItemWithTitle:@"Search the Web for Selection"
-                     action:@selector(searchInBrowser:) keyEquivalent:@""];
+    [theMenu addItemWithTitle:NSLocalizedStringFromTableInBundle(@"Search the Web for Selection",
+								 @"iTerm",
+								 [NSBundle bundleForClass: [self class]],
+								 @"Context menu")
+		       action:@selector(searchInBrowser:) keyEquivalent:@""];
     [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
-    [theMenu addItemWithTitle:@"Send Email to Selected Address"
-                     action:@selector(mail:) keyEquivalent:@""];
+    [theMenu addItemWithTitle:NSLocalizedStringFromTableInBundle(@"Send Email to Selected Address",
+								 @"iTerm",
+								 [NSBundle bundleForClass: [self class]],
+								 @"Context menu")
+		       action:@selector(mail:) keyEquivalent:@""];
     [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
 
     // Separator
@@ -3686,21 +3698,41 @@ static double EuclideanDistance(NSPoint p1, NSPoint p2) {
     }
 
     // Split pane options
-    [theMenu addItemWithTitle:@"Split Pane Vertically" action:@selector(splitTextViewVertically:) keyEquivalent:@""];
+    [theMenu addItemWithTitle:NSLocalizedStringFromTableInBundle(@"Split Pane Vertically",
+								 @"iTerm",
+								 [NSBundle bundleForClass: [self class]],
+								 @"Context menu")
+		       action:@selector(splitTextViewVertically:) keyEquivalent:@""];
     [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
 
-    [theMenu addItemWithTitle:@"Split Pane Horizontally" action:@selector(splitTextViewHorizontally:) keyEquivalent:@""];
+    [theMenu addItemWithTitle:NSLocalizedStringFromTableInBundle(@"Split Pane Horizontally",
+								 @"iTerm",
+								 [NSBundle bundleForClass: [self class]],
+								 @"Context menu")
+		       action:@selector(splitTextViewHorizontally:) keyEquivalent:@""];
     [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
 
     // Separator
     [theMenu addItem:[NSMenuItem separatorItem]];
 
-    [theMenu addItemWithTitle:@"Move Session to Split Pane" action:@selector(movePane:) keyEquivalent:@""];
+    [theMenu addItemWithTitle:NSLocalizedStringFromTableInBundle(@"Move Session to Split Pane",
+								 @"iTerm",
+								 [NSBundle bundleForClass: [self class]],
+								 @"Context menu")
+		       action:@selector(movePane:) keyEquivalent:@""];
     [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
 
-    [theMenu addItemWithTitle:@"Move Session to Window" action:@selector(moveSessionToWindow:) keyEquivalent:@""];
+    [theMenu addItemWithTitle:NSLocalizedStringFromTableInBundle(@"Move Session to Window",
+								 @"iTerm",
+								 [NSBundle bundleForClass: [self class]],
+								 @"Context menu")
+		       action:@selector(moveSessionToWindow:) keyEquivalent:@""];
 
-    [theMenu addItemWithTitle:@"Swap With Session…" action:@selector(swapSessions:) keyEquivalent:@""];
+    [theMenu addItemWithTitle:NSLocalizedStringFromTableInBundle(@"Swap With Session…",
+								 @"iTerm",
+								 [NSBundle bundleForClass: [self class]],
+								 @"Context menu")
+		       action:@selector(swapSessions:) keyEquivalent:@""];
     [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
 
     // Separator
@@ -3721,28 +3753,43 @@ static double EuclideanDistance(NSPoint p1, NSPoint p2) {
     [theMenu addItem:[NSMenuItem separatorItem]];
 
     // Select all
-    [theMenu addItemWithTitle:NSLocalizedStringFromTableInBundle(@"Select All",@"iTerm", [NSBundle bundleForClass: [self class]], @"Context menu")
+    [theMenu addItemWithTitle:NSLocalizedStringFromTableInBundle(@"Select All",
+								 @"iTerm",
+								 [NSBundle bundleForClass: [self class]],
+								 @"Context menu")
                      action:@selector(selectAll:) keyEquivalent:@""];
     [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
 
-    [theMenu addItemWithTitle:@"Send Selection"
+    [theMenu addItemWithTitle:NSLocalizedStringFromTableInBundle(@"Send Selection",
+								 @"iTerm",
+								 [NSBundle bundleForClass: [self class]],
+								 @"Context menu")
                        action:@selector(sendSelection:)
                 keyEquivalent:@""];
     [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
 
     // Clear buffer
-    [theMenu addItemWithTitle:@"Clear Buffer"
+    [theMenu addItemWithTitle:NSLocalizedStringFromTableInBundle(@"Clear Buffer",
+								 @"iTerm",
+								 [NSBundle bundleForClass: [self class]],
+								 @"Context menu")
                        action:@selector(clearTextViewBuffer:)
                 keyEquivalent:@""];
     [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
 
     // Make note
-    [theMenu addItemWithTitle:@"Annotate Selection"
+    [theMenu addItemWithTitle:NSLocalizedStringFromTableInBundle(@"Annotate Selection",
+								 @"iTerm",
+								 [NSBundle bundleForClass: [self class]],
+								 @"Context menu")
                        action:@selector(addNote:)
                 keyEquivalent:@""];
     [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
 
-    [theMenu addItemWithTitle:@"Reveal Annotation"
+    [theMenu addItemWithTitle:NSLocalizedStringFromTableInBundle(@"Reveal Annotation",
+								 @"iTerm",
+								 [NSBundle bundleForClass: [self class]],
+								 @"Context menu")
                        action:@selector(showNotes:)
                 keyEquivalent:@""];
     [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
@@ -3751,7 +3798,10 @@ static double EuclideanDistance(NSPoint p1, NSPoint p2) {
     [theMenu addItem:[NSMenuItem separatorItem]];
 
     // Edit Session
-    [theMenu addItemWithTitle:@"Edit Session..."
+    [theMenu addItemWithTitle:NSLocalizedStringFromTableInBundle(@"Edit Session...",
+								 @"iTerm",
+								 [NSBundle bundleForClass: [self class]],
+								 @"Context menu")
                        action:@selector(editTextViewSession:)
                 keyEquivalent:@""];
     [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
@@ -3760,13 +3810,19 @@ static double EuclideanDistance(NSPoint p1, NSPoint p2) {
     [theMenu addItem:[NSMenuItem separatorItem]];
 
     // Toggle broadcast
-    [theMenu addItemWithTitle:@"Toggle Broadcasting Input"
+    [theMenu addItemWithTitle:NSLocalizedStringFromTableInBundle(@"Toggle Broadcasting Input",
+								 @"iTerm",
+								 [NSBundle bundleForClass: [self class]],
+								 @"Context menu")
                        action:@selector(toggleBroadcastingInput:)
                 keyEquivalent:@""];
     [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
 
     if ([_delegate textViewHasCoprocess]) {
-        [theMenu addItemWithTitle:@"Stop Coprocess"
+        [theMenu addItemWithTitle:NSLocalizedStringFromTableInBundle(@"Stop Coprocess",
+								     @"iTerm",
+								     [NSBundle bundleForClass: [self class]],
+								     @"Context menu")
                            action:@selector(textViewStopCoprocess)
                     keyEquivalent:@""];
         [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self.delegate];
@@ -3776,10 +3832,10 @@ static double EuclideanDistance(NSPoint p1, NSPoint p2) {
     [theMenu addItem:[NSMenuItem separatorItem]];
 
     // Close current pane
-    [theMenu addItemWithTitle:@"Close"
+    [theMenu addItemWithTitle:NSLocalizedStringFromTableInBundle(@"Close",@"iTerm", [NSBundle bundleForClass: [self class]], @"Context menu")
                        action:@selector(closeTextViewSession:)
                 keyEquivalent:@""];
-    [theMenu addItemWithTitle:@"Restart"
+    [theMenu addItemWithTitle:NSLocalizedStringFromTableInBundle(@"Restart",@"iTerm", [NSBundle bundleForClass: [self class]], @"Context menu")
                        action:@selector(restartTextViewSession:)
                 keyEquivalent:@""];
     [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
@@ -3791,7 +3847,7 @@ static double EuclideanDistance(NSPoint p1, NSPoint p2) {
 
     // Separator
     [theMenu addItem:[NSMenuItem separatorItem]];
-    [theMenu addItemWithTitle:@"Bury"
+    [theMenu addItemWithTitle:NSLocalizedStringFromTableInBundle(@"Bury",@"iTerm", [NSBundle bundleForClass: [self class]], @"Context menu")
                        action:@selector(bury:)
                 keyEquivalent:@""];
 

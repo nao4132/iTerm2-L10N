@@ -26,7 +26,7 @@
         </customObject>
         <customObject id="-1" userLabel="First Responder" customClass="FirstResponder"/>
         <customObject id="-3" userLabel="Application" customClass="NSObject"/>
-        <window title="Set Keyboard Shortcut" allowsToolTipsWhenApplicationIsInactive="NO" autorecalculatesKeyViewLoop="NO" hidesOnDeactivate="YES" oneShot="NO" showsToolbarButton="NO" visibleAtLaunch="NO" animationBehavior="default" id="F0z-JX-Cv5" customClass="NSPanel">
+        <window title="キーボードショートカットの設定" allowsToolTipsWhenApplicationIsInactive="NO" autorecalculatesKeyViewLoop="NO" hidesOnDeactivate="YES" oneShot="NO" showsToolbarButton="NO" visibleAtLaunch="NO" animationBehavior="default" id="F0z-JX-Cv5" customClass="NSPanel">
             <windowStyleMask key="styleMask" titled="YES" resizable="YES" documentModal="YES"/>
             <windowPositionMask key="initialPositionMask" leftStrut="YES" rightStrut="YES" topStrut="YES" bottomStrut="YES"/>
             <rect key="contentRect" x="196" y="240" width="442" height="157"/>
@@ -42,7 +42,7 @@
                             <textField verticalHuggingPriority="750" id="K5J-cS-cKV">
                                 <rect key="frame" x="17" y="119" width="127" height="18"/>
                                 <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                                <textFieldCell key="cell" sendsActionOnEndEditing="YES" alignment="right" title="Keyboard Shortcut:" id="yKb-4m-EJs">
+                                <textFieldCell key="cell" sendsActionOnEndEditing="YES" alignment="right" title="キーボードショートカット:" id="yKb-4m-EJs">
                                     <font key="font" metaFont="system"/>
                                     <color key="textColor" name="controlTextColor" catalog="System" colorSpace="catalog"/>
                                     <color key="backgroundColor" name="controlColor" catalog="System" colorSpace="catalog"/>
@@ -51,7 +51,7 @@
                             <textField verticalHuggingPriority="750" id="SiS-Fz-x6B">
                                 <rect key="frame" x="17" y="94" width="127" height="17"/>
                                 <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                                <textFieldCell key="cell" sendsActionOnEndEditing="YES" alignment="right" title="Action:" id="GiU-A2-oLi">
+                                <textFieldCell key="cell" sendsActionOnEndEditing="YES" alignment="right" title="アクション:" id="GiU-A2-oLi">
                                     <font key="font" metaFont="system"/>
                                     <color key="textColor" name="controlTextColor" catalog="System" colorSpace="catalog"/>
                                     <color key="backgroundColor" name="controlColor" catalog="System" colorSpace="catalog"/>
@@ -60,161 +60,161 @@
                             <popUpButton verticalHuggingPriority="750" id="GMz-jA-Nhg">
                                 <rect key="frame" x="146" y="88" width="279" height="26"/>
                                 <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                                <popUpButtonCell key="cell" type="push" title="Select Action" bezelStyle="rounded" alignment="left" lineBreakMode="clipping" borderStyle="borderAndBezel" tag="999" inset="2" pullsDown="YES" arrowPosition="arrowAtCenter" preferredEdge="maxY" id="NkH-n8-Fjv">
+                                <popUpButtonCell key="cell" type="push" title="アクションを選択" bezelStyle="rounded" alignment="left" lineBreakMode="clipping" borderStyle="borderAndBezel" tag="999" inset="2" pullsDown="YES" arrowPosition="arrowAtCenter" preferredEdge="maxY" id="NkH-n8-Fjv">
                                     <behavior key="behavior" lightByBackground="YES" lightByGray="YES"/>
                                     <font key="font" metaFont="menu"/>
                                     <menu key="menu" title="OtherViews" id="BCW-Et-dPr">
                                         <items>
-                                            <menuItem title="Select Action" tag="999" hidden="YES" id="GAT-06-TtI"/>
-                                            <menuItem title="Ignore" tag="13" id="1LJ-xG-847"/>
+                                            <menuItem title="アクションを選択" tag="999" hidden="YES" id="GAT-06-TtI"/>
+                                            <menuItem title="無視" tag="13" id="1LJ-xG-847"/>
                                             <menuItem isSeparatorItem="YES" id="VuU-ME-pRd"/>
-                                            <menuItem title="Do Not Remap Modifiers" tag="22" id="1Ky-4L-4JV"/>
-                                            <menuItem title="Remap Modifiers in iTerm2 Only" tag="24" id="bek-yf-XvE"/>
+                                            <menuItem title="装飾キーに再マップしない" tag="22" id="1Ky-4L-4JV"/>
+                                            <menuItem title="iTerm2のみ装飾キーに再マップ" tag="24" id="bek-yf-XvE"/>
                                             <menuItem isSeparatorItem="YES" id="9wX-9R-Bay"/>
-                                            <menuItem title="New Window with Profile" tag="26" id="rhK-QX-5hc">
+                                            <menuItem title="プロファイルで新規ウィンドウ" tag="26" id="rhK-QX-5hc">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
-                                            <menuItem title="New Tab with Profile" tag="27" id="yer-8x-Rrr">
+                                            <menuItem title="プロファイルで新規タブ" tag="27" id="yer-8x-Rrr">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
                                             <menuItem isSeparatorItem="YES" id="vW0-Pi-EVl"/>
-                                            <menuItem title="Duplicate Tab" tag="61" id="Mfu-F0-x5K">
+                                            <menuItem title="タブの複製" tag="61" id="Mfu-F0-x5K">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
-                                            <menuItem title="Move Session to Split Pane" tag="62" id="zLs-mG-pmk">
+                                            <menuItem title="セッションを分割ペインに移動" tag="62" id="zLs-mG-pmk">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
                                             <menuItem isSeparatorItem="YES" id="Aaz-Cw-Dsa"/>
-                                            <menuItem title="Split Horizontally with Profile" tag="28" id="29Q-kA-i03">
+                                            <menuItem title="プロファイルで水平方向に分割" tag="28" id="29Q-kA-i03">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
-                                            <menuItem title="Split Vertically with Profile" tag="29" id="zWO-IV-f1A">
+                                            <menuItem title="プロファイルで垂直方向に分割" tag="29" id="zWO-IV-f1A">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
                                             <menuItem isSeparatorItem="YES" id="4fe-wh-9mG"/>
-                                            <menuItem title="Change Profile" tag="37" id="Mwu-nG-lFB">
+                                            <menuItem title="プロファイルの変更" tag="37" id="Mwu-nG-lFB">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
-                                            <menuItem title="Load Color Preset" tag="40" id="NOe-hG-2vD">
+                                            <menuItem title="プリセット色のロード" tag="40" id="NOe-hG-2vD">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
                                             <menuItem isSeparatorItem="YES" id="xlM-Ek-XsE"/>
-                                            <menuItem title="Start Instant Replay" tag="15" id="ciX-9R-VBU">
+                                            <menuItem title="簡易再生を開始" tag="15" id="ciX-9R-VBU">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
                                             <menuItem isSeparatorItem="YES" id="Zt3-jj-Skb"/>
-                                            <menuItem title="Cycle Tabs Forward" tag="32" id="2VY-V4-Nu1"/>
-                                            <menuItem title="Cycle Tabs Backward" tag="39" id="9pi-Go-k3E"/>
-                                            <menuItem title="Next Tab" id="SDw-y6-a1r"/>
-                                            <menuItem title="Previous Tab" tag="2" id="5Hd-lI-i2d"/>
+                                            <menuItem title="順方向にタブを切り替え" tag="32" id="2VY-V4-Nu1"/>
+                                            <menuItem title="逆方向にタブを切り替え" tag="39" id="9pi-Go-k3E"/>
+                                            <menuItem title="次のタブ" id="SDw-y6-a1r"/>
+                                            <menuItem title="前のタブ" tag="2" id="5Hd-lI-i2d"/>
                                             <menuItem isSeparatorItem="YES" id="RnW-GR-lTX"/>
-                                            <menuItem title="Move Tab Left" tag="33" id="5wC-T7-Nqr"/>
-                                            <menuItem title="Move Tab Right" tag="34" id="BGE-1U-XuD"/>
+                                            <menuItem title="タブを左に移動" tag="33" id="5wC-T7-Nqr"/>
+                                            <menuItem title="タブを右に移動" tag="34" id="BGE-1U-XuD"/>
                                             <menuItem isSeparatorItem="YES" id="cac-Kj-Tyz"/>
-                                            <menuItem title="Next Window" tag="1" id="Vyn-Fe-bEL"/>
-                                            <menuItem title="Previous Window" tag="3" id="kP7-3M-ZgN"/>
+                                            <menuItem title="次のウィンドウ" tag="1" id="Vyn-Fe-bEL"/>
+                                            <menuItem title="前のウィンドウ" tag="3" id="kP7-3M-ZgN"/>
                                             <menuItem isSeparatorItem="YES" id="JRu-pJ-Ma0"/>
-                                            <menuItem title="Next Pane" tag="30" id="pHE-Ud-5v3"/>
-                                            <menuItem title="Previous Pane" tag="31" id="Z36-1b-EXY"/>
+                                            <menuItem title="次のペイン" tag="30" id="pHE-Ud-5v3"/>
+                                            <menuItem title="前のペイン" tag="31" id="Z36-1b-EXY"/>
                                             <menuItem isSeparatorItem="YES" id="KeO-Bs-txv"/>
-                                            <menuItem title="Decrease Height" tag="49" id="EpA-2v-9s0">
+                                            <menuItem title="高さを減らす" tag="49" id="EpA-2v-9s0">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
-                                            <menuItem title="Increase Height" tag="50" id="76W-hp-334">
+                                            <menuItem title="高さを増やす" tag="50" id="76W-hp-334">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
-                                            <menuItem title="Decrease Width" tag="51" id="TdK-gh-sNx">
+                                            <menuItem title="幅を減らす" tag="51" id="TdK-gh-sNx">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
-                                            <menuItem title="Increase Width" tag="52" id="mHj-xJ-MJH">
+                                            <menuItem title="幅を増やす" tag="52" id="mHj-xJ-MJH">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
                                             <menuItem isSeparatorItem="YES" id="xVG-IF-xul"/>
-                                            <menuItem title="Scroll to End" tag="4" id="Mrs-CO-Zqo"/>
-                                            <menuItem title="Scroll to Top" tag="5" id="Gnz-HA-ehs"/>
-                                            <menuItem title="Scroll One Line Down" tag="6" id="i7U-mp-pzT"/>
-                                            <menuItem title="Scroll One Line Up" tag="7" id="EiN-bf-soZ"/>
-                                            <menuItem title="Scroll One Page Down" tag="8" id="Ubz-Ra-sDW"/>
-                                            <menuItem title="Scroll One Page Up" tag="9" id="Zv0-lG-YWl"/>
+                                            <menuItem title="末尾へスクロール" tag="4" id="Mrs-CO-Zqo"/>
+                                            <menuItem title="先頭へスクロール" tag="5" id="Gnz-HA-ehs"/>
+                                            <menuItem title="1行下にスクロール" tag="6" id="i7U-mp-pzT"/>
+                                            <menuItem title="1行上にスクロール" tag="7" id="EiN-bf-soZ"/>
+                                            <menuItem title="1ページ下にスクロール" tag="8" id="Ubz-Ra-sDW"/>
+                                            <menuItem title="1ページ上にスクロール" tag="9" id="Zv0-lG-YWl"/>
                                             <menuItem isSeparatorItem="YES" id="fvC-Ga-wJE"/>
-                                            <menuItem title="Select Split Pane Above" tag="20" id="vSs-10-uDh">
+                                            <menuItem title="上の分割ペインを選択" tag="20" id="vSs-10-uDh">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
-                                            <menuItem title="Select Split Pane Below" tag="21" id="DwZ-M0-Hx7">
+                                            <menuItem title="下の分割ペインを選択" tag="21" id="DwZ-M0-Hx7">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
-                                            <menuItem title="Select Split Pane On Left" tag="18" id="5o3-Un-MAf">
+                                            <menuItem title="左の分割ペインを選択" tag="18" id="5o3-Un-MAf">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
-                                            <menuItem title="Select Split Pane On Right" tag="19" id="DNl-nX-yXT">
+                                            <menuItem title="右の分割ペインを選択" tag="19" id="DNl-nX-yXT">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
                                             <menuItem isSeparatorItem="YES" id="Wdb-df-nzr"/>
-                                            <menuItem title="Swap With Split Pane Above" tag="55" id="ode-hA-x73">
+                                            <menuItem title="上の分割ペインと入れ替え" tag="55" id="ode-hA-x73">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
-                                            <menuItem title="Swap With Split Pane Below" tag="56" id="ZY0-cI-XLp">
+                                            <menuItem title="下の分割ペインと入れ替え" tag="56" id="ZY0-cI-XLp">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
-                                            <menuItem title="Swap With Split Pane on Left" tag="53" id="FzR-E6-3aa">
+                                            <menuItem title="左の分割ペインと入れ替え" tag="53" id="FzR-E6-3aa">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
-                                            <menuItem title="Swap With Split Pane on Right" tag="54" id="FxY-zD-K4z">
+                                            <menuItem title="右の分割ペインと入れ替え" tag="54" id="FxY-zD-K4z">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
                                             <menuItem isSeparatorItem="YES" id="3ly-ho-Okc"/>
-                                            <menuItem title="Send ^H Backspace" tag="16" id="h8d-9v-j74">
+                                            <menuItem title="^H バックスペースを送信" tag="16" id="h8d-9v-j74">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
-                                            <menuItem title="Send ^? Backspace" tag="17" id="soB-AH-rEI">
+                                            <menuItem title="^? バックスペースを送信" tag="17" id="soB-AH-rEI">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
-                                            <menuItem title="Send Escape Sequence" tag="10" id="wWj-9U-Z2G"/>
-                                            <menuItem title="Send Hex Code" tag="11" id="YXc-hq-7p6"/>
-                                            <menuItem title="Send Text" tag="12" id="ky6-A2-dO2"/>
-                                            <menuItem title="Send Text with &quot;vim&quot; Special Chars" tag="38" id="gkw-IL-5aH"/>
+                                            <menuItem title="エスケープシーケンスを送信" tag="10" id="wWj-9U-Z2G"/>
+                                            <menuItem title="16進数のコードを送信" tag="11" id="YXc-hq-7p6"/>
+                                            <menuItem title="文字列を送信" tag="12" id="ky6-A2-dO2"/>
+                                            <menuItem title="&quot;vim&quot;の特殊文字も含めて文字列を送信" tag="38" id="gkw-IL-5aH"/>
                                             <menuItem isSeparatorItem="YES" id="rDx-uC-uV7"/>
-                                            <menuItem title="Find Regular Expression…" tag="36" id="cm6-Qm-ZZ2">
+                                            <menuItem title="正規表現で検索…" tag="36" id="cm6-Qm-ZZ2">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
-                                            <menuItem title="Find Again Down" tag="57" id="HpW-sT-CrS">
+                                            <menuItem title="下方向に再検索" tag="57" id="HpW-sT-CrS">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
-                                            <menuItem title="Find Again Up" tag="58" id="SbI-2u-CFv">
+                                            <menuItem title="上方向に再検索" tag="58" id="SbI-2u-CFv">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
                                             <menuItem isSeparatorItem="YES" id="33m-xl-Tut"/>
-                                            <menuItem title="Undo" tag="44" id="jbm-dN-Ohe">
+                                            <menuItem title="取り消す" tag="44" id="jbm-dN-Ohe">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
                                             <menuItem isSeparatorItem="YES" id="kJn-FB-e1e"/>
-                                            <menuItem title="Paste…" tag="41" id="A2O-gZ-DLd">
+                                            <menuItem title="ペースト…" tag="41" id="A2O-gZ-DLd">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
-                                            <menuItem title="Paste from Selection…" tag="42" id="6or-vm-lir">
+                                            <menuItem title="選択範囲からペースト…" tag="42" id="6or-vm-lir">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
                                             <menuItem isSeparatorItem="YES" id="2kX-33-g8o"/>
-                                            <menuItem title="Toggle Fullscreen" tag="23" id="SzE-61-BL1"/>
-                                            <menuItem title="Toggle Pin Hotkey Window" tag="43" id="foW-Ca-dgS">
+                                            <menuItem title="フルスクリーンの切り替え" tag="23" id="SzE-61-BL1"/>
+                                            <menuItem title="ホットキーウィンドウの固定を切り替え" tag="43" id="foW-Ca-dgS">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
-                                            <menuItem title="Toggle Mouse Reporting" tag="59" id="4wm-MJ-Y2A">
+                                            <menuItem title="マウスのレポートを切り替え" tag="59" id="4wm-MJ-Y2A">
                                                 <modifierMask key="keyEquivalentModifierMask"/>
                                             </menuItem>
                                             <menuItem isSeparatorItem="YES" id="svX-cj-e8M"/>
-                                            <menuItem title="Run Coprocess" tag="35" id="m6l-mc-bhF"/>
+                                            <menuItem title="コプロセスを実行" tag="35" id="m6l-mc-bhF"/>
                                             <menuItem isSeparatorItem="YES" id="D8m-Tb-i1k"/>
                                             <menuItem title="Move Start of Selection Back" tag="47" id="YBg-Ld-iyY"/>
                                             <menuItem title="Move Start of Selection Forward" tag="48" id="OUd-6i-YQe"/>
                                             <menuItem title="Move End of Selection Back" tag="45" id="L33-q3-stz"/>
                                             <menuItem title="Move End of Selection Forward" tag="46" id="xRC-3K-RlB"/>
                                             <menuItem isSeparatorItem="YES" id="c8c-8I-caf"/>
-                                            <menuItem title="Invoke Script Function…" tag="60" id="haJ-OE-peX">
+                                            <menuItem title="スクリプトの関数を実行…" tag="60" id="haJ-OE-peX">
                                                 <modifierMask key="keyEquivalentModifierMask" shift="YES"/>
                                             </menuItem>
                                             <menuItem isSeparatorItem="YES" id="F8k-hs-TuO"/>
-                                            <menuItem title="Select Menu Item..." tag="25" id="diP-BY-3qB"/>
+                                            <menuItem title="メニュー項目を選択..." tag="25" id="diP-BY-3qB"/>
                                         </items>
                                     </menu>
                                 </popUpButtonCell>
@@ -238,9 +238,9 @@ DQ
                                 </connections>
                             </button>
                             <button verticalHuggingPriority="750" id="rEh-rY-u5S">
-                                <rect key="frame" x="268" y="12" width="82" height="32"/>
+                                <rect key="frame" x="260" y="12" width="90" height="32"/>
                                 <autoresizingMask key="autoresizingMask" flexibleMinX="YES" flexibleMaxY="YES"/>
-                                <buttonCell key="cell" type="push" title="Cancel" bezelStyle="rounded" alignment="center" borderStyle="border" inset="2" id="Fhv-Fo-bzd">
+                                <buttonCell key="cell" type="push" title="キャンセル" bezelStyle="rounded" alignment="center" borderStyle="border" inset="2" id="Fhv-Fo-bzd">
                                     <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                     <font key="font" metaFont="system"/>
                                     <string key="keyEquivalent" base64-UTF8="YES">
@@ -277,7 +277,7 @@ Gw
                             <textField verticalHuggingPriority="750" misplaced="YES" id="oHw-49-aB1" userLabel="Touch Bar Label">
                                 <rect key="frame" x="150" y="119" width="273" height="22"/>
                                 <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                                <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" selectable="YES" editable="YES" sendsActionOnEndEditing="YES" state="on" borderStyle="bezel" alignment="left" placeholderString="Label to show in Touch Bar" drawsBackground="YES" id="mYT-YJ-w7Z">
+                                <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" selectable="YES" editable="YES" sendsActionOnEndEditing="YES" state="on" borderStyle="bezel" alignment="left" placeholderString="タッチバーに表示するラベル" drawsBackground="YES" id="mYT-YJ-w7Z">
                                     <font key="font" metaFont="system"/>
                                     <color key="textColor" name="textColor" catalog="System" colorSpace="catalog"/>
                                     <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
@@ -286,7 +286,7 @@ Gw
                             <textField verticalHuggingPriority="750" id="7JT-ar-Qef" userLabel="Parameter">
                                 <rect key="frame" x="149" y="62" width="273" height="22"/>
                                 <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                                <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" selectable="YES" editable="YES" sendsActionOnEndEditing="YES" state="on" borderStyle="bezel" alignment="left" placeholderString="ex: 0x7f" drawsBackground="YES" id="QTL-FQ-Diu">
+                                <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" selectable="YES" editable="YES" sendsActionOnEndEditing="YES" state="on" borderStyle="bezel" alignment="left" placeholderString="例: 0x7f" drawsBackground="YES" id="QTL-FQ-Diu">
                                     <font key="font" metaFont="system"/>
                                     <color key="textColor" name="textColor" catalog="System" colorSpace="catalog"/>
                                     <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
@@ -343,7 +343,7 @@ Gw
                             <textField hidden="YES" verticalHuggingPriority="750" id="TtY-N0-xlA" userLabel="Color Preset Label">
                                 <rect key="frame" x="58" y="64" width="85" height="17"/>
                                 <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                                <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" sendsActionOnEndEditing="YES" title="Color Preset:" id="gdc-og-Wst">
+                                <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" sendsActionOnEndEditing="YES" title="プリセット色:" id="gdc-og-Wst">
                                     <font key="font" metaFont="system"/>
                                     <color key="textColor" name="controlTextColor" catalog="System" colorSpace="catalog"/>
                                     <color key="backgroundColor" name="controlColor" catalog="System" colorSpace="catalog"/>

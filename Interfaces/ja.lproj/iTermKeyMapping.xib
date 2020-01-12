@@ -44,7 +44,7 @@
                                 <color key="gridColor" name="gridColor" catalog="System" colorSpace="catalog"/>
                                 <tableColumns>
                                     <tableColumn identifier="0" editable="NO" width="198" minWidth="40" maxWidth="1000" id="Qlz-bw-G7W">
-                                        <tableHeaderCell key="headerCell" lineBreakMode="truncatingTail" borderStyle="border" alignment="left" title="Key Combination">
+                                        <tableHeaderCell key="headerCell" lineBreakMode="truncatingTail" borderStyle="border" alignment="left" title="キーの組み合わせ">
                                             <font key="font" metaFont="smallSystem"/>
                                             <color key="textColor" name="headerTextColor" catalog="System" colorSpace="catalog"/>
                                             <color key="backgroundColor" white="0.33333299" alpha="1" colorSpace="calibratedWhite"/>
@@ -57,7 +57,7 @@
                                         <tableColumnResizingMask key="resizingMask" resizeWithTable="YES" userResizable="YES"/>
                                     </tableColumn>
                                     <tableColumn identifier="1" editable="NO" width="319.101" minWidth="42.10107" maxWidth="1000" id="8iu-ei-TS7">
-                                        <tableHeaderCell key="headerCell" lineBreakMode="truncatingTail" borderStyle="border" alignment="left" title="Action">
+                                        <tableHeaderCell key="headerCell" lineBreakMode="truncatingTail" borderStyle="border" alignment="left" title="アクション">
                                             <font key="font" metaFont="smallSystem"/>
                                             <color key="textColor" name="headerTextColor" catalog="System" colorSpace="catalog"/>
                                             <color key="backgroundColor" white="0.33333299" alpha="1" colorSpace="calibratedWhite"/>
@@ -120,12 +120,12 @@
                 <popUpButton id="G8O-KW-SKT">
                     <rect key="frame" x="39" y="3" width="144" height="22"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
-                    <popUpButtonCell key="cell" type="square" title="Presets…" bezelStyle="shadowlessSquare" alignment="left" lineBreakMode="truncatingTail" state="on" borderStyle="borderAndBezel" imageScaling="proportionallyDown" inset="2" pullsDown="YES" selectedItem="0rv-a0-ans" id="Tmb-OS-Cqe">
+                    <popUpButtonCell key="cell" type="square" title="プリセット…" bezelStyle="shadowlessSquare" alignment="left" lineBreakMode="truncatingTail" state="on" borderStyle="borderAndBezel" imageScaling="proportionallyDown" inset="2" pullsDown="YES" selectedItem="0rv-a0-ans" id="Tmb-OS-Cqe">
                         <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                         <font key="font" metaFont="menu"/>
                         <menu key="menu" title="OtherViews" id="6LM-vc-lR6">
                             <items>
-                                <menuItem title="Presets…" state="on" image="NSActionTemplate" hidden="YES" id="0rv-a0-ans">
+                                <menuItem title="プリセット…" state="on" image="NSActionTemplate" hidden="YES" id="0rv-a0-ans">
                                     <modifierMask key="keyEquivalentModifierMask"/>
                                 </menuItem>
                             </items>
@@ -138,7 +138,7 @@
                 <button id="mE2-Fe-MAY">
                     <rect key="frame" x="394" y="3" width="131" height="22"/>
                     <autoresizingMask key="autoresizingMask" flexibleMinX="YES" flexibleMaxY="YES"/>
-                    <buttonCell key="cell" type="square" title="Add Touch Bar Item" bezelStyle="shadowlessSquare" imagePosition="overlaps" alignment="center" borderStyle="border" inset="2" id="2Vc-Od-Zym">
+                    <buttonCell key="cell" type="square" title="タッチバーの項目を追加" bezelStyle="shadowlessSquare" imagePosition="overlaps" alignment="center" borderStyle="border" inset="2" id="2Vc-Od-Zym">
                         <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                         <font key="font" metaFont="smallSystem"/>
                     </buttonCell>
@@ -150,7 +150,7 @@
                 <button id="j8M-h4-JJ5">
                     <rect key="frame" x="264" y="3" width="131" height="22"/>
                     <autoresizingMask key="autoresizingMask" flexibleMinX="YES" flexibleMaxY="YES"/>
-                    <buttonCell key="cell" type="square" title="Touch Bar Mitigations" bezelStyle="shadowlessSquare" imagePosition="overlaps" alignment="center" borderStyle="border" inset="2" id="j1Y-sT-5wz">
+                    <buttonCell key="cell" type="square" title="タッチバーの緩和" bezelStyle="shadowlessSquare" imagePosition="overlaps" alignment="center" borderStyle="border" inset="2" id="j1Y-sT-5wz">
                         <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                         <font key="font" metaFont="smallSystem"/>
                     </buttonCell>
@@ -172,9 +172,9 @@
                 <autoresizingMask key="autoresizingMask"/>
                 <subviews>
                     <button verticalHuggingPriority="750" id="qMI-f8-C8U">
-                        <rect key="frame" x="18" y="99" width="238" height="18"/>
+                        <rect key="frame" x="18" y="99" width="240" height="18"/>
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                        <buttonCell key="cell" type="check" title="Haptic feedback when pressing esc" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="T2e-te-qXU">
+                        <buttonCell key="cell" type="check" title="ESCキー押下時に触覚のフィードバック" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="T2e-te-qXU">
                             <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                             <font key="font" metaFont="system"/>
                         </buttonCell>
@@ -183,9 +183,9 @@
                         </connections>
                     </button>
                     <button verticalHuggingPriority="750" id="3GM-j0-23l">
-                        <rect key="frame" x="18" y="79" width="146" height="18"/>
+                        <rect key="frame" x="18" y="79" width="156" height="18"/>
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                        <buttonCell key="cell" type="check" title="Key click for esc key" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="ziz-Lx-Vmu">
+                        <buttonCell key="cell" type="check" title="ESCキーでキークリック" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="ziz-Lx-Vmu">
                             <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                             <font key="font" metaFont="system"/>
                         </buttonCell>
@@ -194,9 +194,9 @@
                         </connections>
                     </button>
                     <button verticalHuggingPriority="750" id="qxR-eD-9hV">
-                        <rect key="frame" x="18" y="59" width="165" height="18"/>
+                        <rect key="frame" x="18" y="59" width="180" height="18"/>
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                        <buttonCell key="cell" type="check" title="Visual esc key indicator" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="jDm-YT-6t1">
+                        <buttonCell key="cell" type="check" title="ESCキーインジゲータを表示" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="jDm-YT-6t1">
                             <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                             <font key="font" metaFont="system"/>
                         </buttonCell>

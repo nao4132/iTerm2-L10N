@@ -1316,6 +1316,8 @@
 		5376CB3E220D2E4300FE7476 /* git.sb in Resources */ = {isa = PBXBuildFile; fileRef = 5376CB3B220D2E4300FE7476 /* git.sb */; };
 		5378FA40224DAE4700CA2B2D /* iTermPreferencesSearch.h in Headers */ = {isa = PBXBuildFile; fileRef = 5378FA3E224DAE4700CA2B2D /* iTermPreferencesSearch.h */; };
 		5378FA41224DAE4700CA2B2D /* iTermPreferencesSearch.m in Sources */ = {isa = PBXBuildFile; fileRef = 5378FA3F224DAE4700CA2B2D /* iTermPreferencesSearch.m */; };
+		5379C59723DBE9F100314F23 /* iTermFocusFollowsMouseController.h in Headers */ = {isa = PBXBuildFile; fileRef = 5379C59523DBE9F100314F23 /* iTermFocusFollowsMouseController.h */; };
+		5379C59823DBE9F100314F23 /* iTermFocusFollowsMouseController.m in Sources */ = {isa = PBXBuildFile; fileRef = 5379C59623DBE9F100314F23 /* iTermFocusFollowsMouseController.m */; };
 		537BFDC520FFA5A40098C91F /* iTermStatusBarJobComponent.h in Headers */ = {isa = PBXBuildFile; fileRef = 537BFDC320FFA5A40098C91F /* iTermStatusBarJobComponent.h */; };
 		537BFDC920FFB2590098C91F /* iTermProcessCache.h in Headers */ = {isa = PBXBuildFile; fileRef = 537BFDC720FFB2590098C91F /* iTermProcessCache.h */; };
 		537BFDCA20FFB2590098C91F /* iTermProcessCache.m in Sources */ = {isa = PBXBuildFile; fileRef = 537BFDC820FFB2590098C91F /* iTermProcessCache.m */; };
@@ -1430,6 +1432,8 @@
 		53FF984C20967806008688D7 /* iTermMetalDeviceProvider.m in Sources */ = {isa = PBXBuildFile; fileRef = 53FF984A20967805008688D7 /* iTermMetalDeviceProvider.m */; };
 		5ECE005F1454E59B004861E9 /* PseudoTerminalRestorer.h in Headers */ = {isa = PBXBuildFile; fileRef = 5ECE005D1454E59B004861E9 /* PseudoTerminalRestorer.h */; };
 		7581C4E120A38E0F00699F99 /* iTermHyperlinkTrigger.h in Headers */ = {isa = PBXBuildFile; fileRef = 7581C4DD20A38DF900699F99 /* iTermHyperlinkTrigger.h */; };
+		5379C59723DBE9F100314F23 /* iTermFocusFollowsMouseController.h in Headers */ = {isa = PBXBuildFile; fileRef = 5379C59523DBE9F100314F23 /* iTermFocusFollowsMouseController.h */; };
+		5379C59823DBE9F100314F23 /* iTermFocusFollowsMouseController.m in Sources */ = {isa = PBXBuildFile; fileRef = 5379C59623DBE9F100314F23 /* iTermFocusFollowsMouseController.m */; };
 		84AF9D4123CAFD740044E5C0 /* MinimalPasteView.xib in Resources */ = {isa = PBXBuildFile; fileRef = 84AF9D4523CAFD740044E5C0 /* MinimalPasteView.xib */; };
 		84AF9D4223CAFD740044E5C0 /* MinimalPasteView.xib in Resources */ = {isa = PBXBuildFile; fileRef = 84AF9D4523CAFD740044E5C0 /* MinimalPasteView.xib */; };
 		84AF9D4323CAFD740044E5C0 /* MinimalPasteView.xib in Resources */ = {isa = PBXBuildFile; fileRef = 84AF9D4523CAFD740044E5C0 /* MinimalPasteView.xib */; };
@@ -3864,6 +3868,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A663197622FF349700C502BD /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
 		A6725AD923D64A57001CA48A /* CopyFiles */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -3874,15 +3887,6 @@
 				A6725ADA23D64A87001CA48A /* image_decoder in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
-		};
-		A663197622FF349700C502BD /* CopyFiles */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = /usr/share/man/man1/;
-			dstSubfolderSpec = 0;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 1;
 		};
 		A6755F471D729A0500F3726C /* Copy Files */ = {
 			isa = PBXCopyFilesBuildPhase;
@@ -4577,6 +4581,8 @@
 		5378FA3D224DA9F200CA2B2D /* iTermSearchableViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = iTermSearchableViewController.h; sourceTree = "<group>"; };
 		5378FA3E224DAE4700CA2B2D /* iTermPreferencesSearch.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = iTermPreferencesSearch.h; sourceTree = "<group>"; };
 		5378FA3F224DAE4700CA2B2D /* iTermPreferencesSearch.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = iTermPreferencesSearch.m; sourceTree = "<group>"; };
+		5379C59523DBE9F100314F23 /* iTermFocusFollowsMouseController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = iTermFocusFollowsMouseController.h; sourceTree = "<group>"; };
+		5379C59623DBE9F100314F23 /* iTermFocusFollowsMouseController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = iTermFocusFollowsMouseController.m; sourceTree = "<group>"; };
 		537BFDC320FFA5A40098C91F /* iTermStatusBarJobComponent.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = iTermStatusBarJobComponent.h; sourceTree = "<group>"; };
 		537BFDC420FFA5A40098C91F /* iTermStatusBarJobComponent.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = iTermStatusBarJobComponent.m; sourceTree = "<group>"; };
 		537BFDC720FFB2590098C91F /* iTermProcessCache.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = iTermProcessCache.h; sourceTree = "<group>"; };
@@ -11212,7 +11218,7 @@
 					};
 					A663197722FF349700C502BD = {
 						CreatedOnToolsVersion = 10.2;
-						DevelopmentTeam = H7V7XYVQ7D;
+						DevelopmentTeam = BFUD822NSJ;
 						ProvisioningStyle = Automatic;
 					};
 					A66717851DCE36C3000CE608 = {
@@ -13151,6 +13157,7 @@
 				A6EC47C121EC623D000E1321 /* iTermOnboardingWindowController.m in Sources */,
 				A6E7352B20EBF3270034FCFD /* iTermSetCurrentTerminalHelper.m in Sources */,
 				A629F59823AFF49E00C2F16B /* iTermShellIntegrationRootView.m in Sources */,
+				5379C59823DBE9F100314F23 /* iTermFocusFollowsMouseController.m in Sources */,
 				A6A4867A20B67DFF00493302 /* ProfilesSessionPreferencesViewController.m in Sources */,
 				A6435117233B195D00828AF6 /* iTermApplescriptPythonCommands.m in Sources */,
 				A66719671DCE3772000CE608 /* iTermWebSocketFrameBuilder.m in Sources */,
@@ -13250,7 +13257,7 @@
 				A6BF035521E179380097DA86 /* iTermVariableHistory.m in Sources */,
 				A6CD8A442234DB83007C5B39 /* iTermStatusBarPlaceholderComponent.m in Sources */,
 				A6B4140A211A5AEA00D28207 /* iTermStandardWindowButtonsView.m in Sources */,
-				A636C3B22288887600A83E2F /* iTermResourceLimitsHelper.m in Sources */,
+				A636C3B22288887600A83E2F /* iTermResourceLimitsHelper.c in Sources */,
 				A6B6A4FE23CEE6E80016B1AE /* iTermOrderEnforcer.m in Sources */,
 				A636C3B22288887600A83E2F /* iTermResourceLimitsHelper.c in Sources */,
 				A65429BB20CE3C9F00CE71B1 /* iTermExpressionParser.m in Sources */,
@@ -13334,7 +13341,6 @@
 				A6F718D8226704920053488E /* PTYSession+ARC.m in Sources */,
 				A666D5E52219323D00D6184A /* iTermEventTap.m in Sources */,
 				A629F5A623AFF5BA00C2F16B /* iTermShellIntegrationSecondPageViewController.m in Sources */,
-				5379C59823DBE9F100314F23 /* iTermFocusFollowsMouseController.m in Sources */,
 				A6A4867D20B67F7E00493302 /* ProfilesWindowPreferencesViewController.m in Sources */,
 				53C2D3A62152CA3900FF6471 /* NSUserDefaults+iTerm.m in Sources */,
 				53E9DFE1220D51D50070C9C0 /* CoprocessTrigger.m in Sources */,
@@ -15472,7 +15478,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = H7V7XYVQ7D;
+				DEVELOPMENT_TEAM = BFUD822NSJ;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -15535,7 +15541,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = H7V7XYVQ7D;
+				DEVELOPMENT_TEAM = BFUD822NSJ;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -15591,7 +15597,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = H7V7XYVQ7D;
+				DEVELOPMENT_TEAM = BFUD822NSJ;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -15647,7 +15653,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = H7V7XYVQ7D;
+				DEVELOPMENT_TEAM = BFUD822NSJ;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;

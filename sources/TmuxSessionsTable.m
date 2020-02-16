@@ -8,6 +8,7 @@
 
 #import "TmuxSessionsTable.h"
 
+#import "DebugLogging.h"
 #import "FutureMethods.h"
 #import "iTermTmuxSessionObject.h"
 #import "NSArray+iTerm.h"
@@ -38,6 +39,7 @@ extern NSString *kWindowPasteboardType;
 
 - (void)awakeFromNib
 {
+    DLog(@"dashboard: awakeFromNib");
     [tableView_ registerForDraggedTypes:[NSArray arrayWithObjects:kWindowPasteboardType, nil]];
     [tableView_ setDraggingDestinationFeedbackStyle:NSTableViewDraggingDestinationFeedbackStyleRegular];
 }
@@ -54,12 +56,17 @@ extern NSString *kWindowPasteboardType;
 
 - (void)setSessionObjects:(NSArray<iTermTmuxSessionObject *> *)sessions
 {
+    DLog(@"dashboard: setSessionObjects:%@", sessions);
+    // Reload in case a cell is being edited. Otherwise NSTableView asks for its row.
+    [tableView_ reloadData];
     [_model removeAllObjects];
     [_model addObjectsFromArray:sessions];
     [tableView_ reloadData];
 }
 
 - (void)selectSessionNumber:(int)number {
+    DLog(@"dashboard: Select session %@", @(number));
+
     NSInteger i = [_model indexOfObjectPassingTest:^BOOL(iTermTmuxSessionObject * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
         return obj.number == number;
     }];
@@ -70,13 +77,19 @@ extern NSString *kWindowPasteboardType;
     [self updateEnabledStateOfButtons];
 }
 
+- (void)endEditing {
+    [tableView_ reloadData];
+}
+
 - (IBAction)addSession:(id)sender
 {
+    DLog(@"dashboard: Add session");
     [delegate_ addSessionWithName:[self nameForNewSession]];
 }
 
 - (IBAction)removeSession:(id)sender
 {
+    DLog(@"dashboard: Remove session");
     NSNumber *number = [self selectedSessionNumber];
     if (number) {
         [delegate_ removeSessionWithNumber:number.intValue];
@@ -85,6 +98,7 @@ extern NSString *kWindowPasteboardType;
 
 - (IBAction)attach:(id)sender {
     NSNumber *number = [self selectedSessionNumber];
+    DLog(@"attach %@", number);
     if (number) {
         [delegate_ attachToSessionWithNumber:number.intValue];
     }
@@ -92,6 +106,7 @@ extern NSString *kWindowPasteboardType;
 
 - (IBAction)detach:(id)sender {
     NSNumber *number = [self selectedSessionNumber];
+    DLog(@"dashboard: detach %@", number);
     if (number) {
         [delegate_ detach];
     }
@@ -100,6 +115,7 @@ extern NSString *kWindowPasteboardType;
 #pragma mark NSTableViewDataSource
 
 - (NSInteger)numberOfRowsInTableView:(NSTableView *)aTableView {
+    DLog(@"dashboard: numberOfRowsInTableView model=%@", _model);
     return _model.count;
 }
 

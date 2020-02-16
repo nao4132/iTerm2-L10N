@@ -18,6 +18,7 @@
 }
 
 - (void)updateConfigurationWithEvent:(NSEvent *)event {
+    DLog(@"Load configuration for event %@", event);
     _event = event;
     [self.delegate standardKeyMapperWillMapKey:self];
 }
@@ -383,6 +384,10 @@
 
 #pragma mark - iTermKeyMapper
 
+- (void)keyMapperSetEvent:(NSEvent *)event {
+    [self updateConfigurationWithEvent:event];
+}
+
 - (NSString *)keyMapperStringForPreCocoaEvent:(NSEvent *)event {
     if (event.type != NSEventTypeKeyDown) {
         return nil;
@@ -404,6 +409,7 @@
     const BOOL isSpecialKey = !!(modifiers & (NSEventModifierFlagNumericPad | NSEventModifierFlagFunction));
     if (isSpecialKey) {
         // Arrow key, function key, etc.
+        DLog(@"isSpecialKey: %@ -> bypass pre-cocoa", event);
         return YES;
     }
 
@@ -416,9 +422,17 @@
     const BOOL willSendOptionModifiedKey = (isNonEmpty && optionModifiesKey);
     if (willSendOptionModifiedKey) {
         // Meta+key or Esc+ key
+        DLog(@"isNonEmpty=%@ rightAltPressed=%@ leftAltPressed=%@ leftOptionModifiesKey=%@ rightOptionModifiesKey=%@ willSendOptionModifiedKey=%@ -> bypass pre-cocoa",
+             @(isNonEmpty),
+             @(rightAltPressed),
+             @(leftAltPressed),
+             @(leftOptionModifiesKey),
+             @(rightOptionModifiesKey),
+             @(willSendOptionModifiedKey));
         return YES;
     }
 
+    DLog(@"Not bypassing pre-cocoa");
     return NO;
 }
 

@@ -40,7 +40,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nullable, nonatomic, copy) void (^didCreateSession)(PTYSession * _Nullable session);
 
 // Called on completion. ok gives whether it succeeded.
-@property (nullable, nonatomic, copy) void (^completion)(BOOL ok);
+@property (nullable, nonatomic, copy) void (^completion)(PTYSession *session, BOOL ok);
 
 // If a window is to be created, what kind of window?
 // Defaults to .none.
@@ -53,26 +53,29 @@ NS_ASSUME_NONNULL_BEGIN
 @property (readonly, nonatomic, readonly) Profile *profile;
 @property (readonly, nonatomic, readonly) PseudoTerminal *windowController;
 
++ (BOOL)profileIsWellFormed:(Profile *)profile;
+
 // These class methods are a migration path for legacy code that predates the session launcher.
 
 // Super-flexible way to create a new window or tab. If |block| is given then it is used to add a
 // new session/tab to the window; otherwise the bookmark is used in conjunction with the optional
 // URL.
-+ (PTYSession *)launchBookmark:(nullable Profile *)bookmarkData
-                    inTerminal:(nullable PseudoTerminal *)theTerm
-                       withURL:(nullable NSString *)url
-              hotkeyWindowType:(iTermHotkeyWindowType)hotkeyWindowType
-                       makeKey:(BOOL)makeKey
-                   canActivate:(BOOL)canActivate
-            respectTabbingMode:(BOOL)respectTabbingMode
-                       command:(nullable NSString *)command
-                         block:(PTYSession *(^ _Nullable)(Profile *, PseudoTerminal *))block
-                   synchronous:(BOOL)synchronous
-                    completion:(void (^ _Nullable)(BOOL))completion;
++ (void)launchBookmark:(nullable NSDictionary *)bookmarkData
+            inTerminal:(nullable PseudoTerminal *)theTerm
+               withURL:(nullable NSString *)url
+      hotkeyWindowType:(iTermHotkeyWindowType)hotkeyWindowType
+               makeKey:(BOOL)makeKey
+           canActivate:(BOOL)canActivate
+    respectTabbingMode:(BOOL)respectTabbingMode
+               command:(nullable NSString *)command
+           makeSession:(void (^ _Nullable)(Profile *profile, PseudoTerminal *windowController, void (^completion)(PTYSession *)))makeSession
+        didMakeSession:(void (^ _Nullable)(PTYSession *))didMakeSession
+            completion:(void (^ _Nullable)(PTYSession *, BOOL))completion;
 
-+ (PTYSession *)launchBookmark:(nullable Profile *)profile
-                    inTerminal:(nullable PseudoTerminal *)theTerm
-            respectTabbingMode:(BOOL)respectTabbingMode;
++ (void)launchBookmark:(nullable NSDictionary *)bookmarkData
+            inTerminal:(nullable PseudoTerminal *)theTerm
+    respectTabbingMode:(BOOL)respectTabbingMode
+            completion:(void (^ _Nullable)(PTYSession *session))completion;
 
 - (instancetype)initWithProfile:(nullable Profile *)profile
                windowController:(nullable PseudoTerminal *)windowController NS_DESIGNATED_INITIALIZER;
@@ -80,10 +83,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)init NS_UNAVAILABLE;
 
 // Launch and call completion block asynchronously.
-- (void)launchWithCompletion:(void (^ _Nullable)(BOOL ok))completion;
-
-// Launch and wait until completion. If makeSession is given, it must complete synchronously.
-- (void)launchAndWait;
+- (void)launchWithCompletion:(void (^ _Nullable)(PTYSession *session, BOOL ok))completion;
 
 @end
 

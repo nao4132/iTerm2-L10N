@@ -20,7 +20,12 @@ static NSString *const iTermNaggingControllerAbortUploadOnKeyPressAnnouncementId
 static NSString *const iTermNaggingControllerArrangementProfileMissingIdentifier = @"ThisProfileNoLongerExists";
 static NSString *const iTermNaggingControllerTmuxSupplementaryPlaneErrorIdentifier = @"Tmux2.2SupplementaryPlaneAnnouncement";
 static NSString *const iTermNaggingControllerAskAboutAlternateMouseScrollIdentifier = @"AskAboutAlternateMouseScroll";
+static NSString *const iTermNaggingControllerAskAboutMouseReportingFrustrationIdentifier = @"AskAboutMouseReportingFrustration";
+static NSString *const kTurnOffBracketedPasteOnHostChangeAnnouncementIdentifier = @"TurnOffBracketedPasteOnHostChange";
+NSString *const kTurnOffBracketedPasteOnHostChangeUserDefaultsKey = @"NoSyncTurnOffBracketedPasteOnHostChange";
+
 static NSString *const iTermNaggingControllerUserDefaultNeverAskAboutSettingAlternateMouseScroll = @"NoSyncNeverAskAboutSettingAlternateMouseScroll";
+static NSString *const iTermNaggingControllerUserDefaultMouseReportingFrustrationDetectionDisabled = @"NoSyncNeverAskAboutMouseReportingFrustration";
 
 static NSString *iTermNaggingControllerSetBackgroundImageFileIdentifier = @"SetBackgroundImageFile";
 static NSString *iTermNaggingControllerUserDefaultAlwaysAllowBackgroundImage = @"AlwaysAllowBackgroundImage";
@@ -276,6 +281,73 @@ static NSString *iTermNaggingControllerUserDefaultAlwaysDenyBackgroundImage = @"
         }
     }
 }
+
+- (void)didDetectMouseReportingFrustration {
+    if ([[NSUserDefaults standardUserDefaults] boolForKey:iTermNaggingControllerUserDefaultMouseReportingFrustrationDetectionDisabled]) {
+        return;
+    }
+    [self.delegate naggingControllerShowMessage:@"Looks like you’re trying to copy to the pasteboard, but mouse reporting has prevented making a selection. Disable mouse reporting?"
+                                     isQuestion:YES
+                                      important:YES
+                                     identifier:iTermNaggingControllerAskAboutMouseReportingFrustrationIdentifier
+                                        options:@[ @"_Temporarily", @"Permanently" ]
+                                     completion:^(int selection) {
+        [self handleMouseReportingFrustration:selection];
+    }];
+}
+
+- (void)handleMouseReportingFrustration:(int)selection {
+    switch (selection) {
+        case 0: // Temporarily
+            [self.delegate naggingControllerDisableMouseReportingPermanently:NO];
+            break;
+
+        case 1: { // Never
+            [self.delegate naggingControllerDisableMouseReportingPermanently:YES];
+            break;
+        }
+    }
+}
+
+- (void)offerToTurnOffBracketedPasteOnHostChange {
+    NSString *title;
+    title = @"Looks like paste bracketing was left on when an ssh session ended unexpectedly or an app misbehaved. Turn it off?";
+
+    [self.delegate naggingControllerShowMessage:title
+                                     isQuestion:YES
+                                      important:YES
+                                     identifier:kTurnOffBracketedPasteOnHostChangeAnnouncementIdentifier
+                                        options:@[ @"_Yes", @"Always", @"Never", @"Help" ]
+                                     completion:^(int selection) {
+        switch (selection) {
+            case -2:  // Dismiss programmatically
+                break;
+
+            case -1: // No
+                break;
+
+            case 0: // Yes
+                [self.delegate naggingControllerDisableBracketedPasteMode];
+                break;
+
+            case 1: // Always
+                [[NSUserDefaults standardUserDefaults] setBool:YES
+                                                        forKey:kTurnOffBracketedPasteOnHostChangeUserDefaultsKey];
+                [self.delegate naggingControllerDisableBracketedPasteMode];
+                break;
+
+            case 2: // Never
+                [[NSUserDefaults standardUserDefaults] setBool:NO
+                                                        forKey:kTurnOffBracketedPasteOnHostChangeUserDefaultsKey];
+                break;
+
+            case 3: // Help
+                [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://iterm2.com/paste_bracketing"]];
+                break;
+        }
+    }];
+}
+
 
 #pragma mark - Variable Reporting
 

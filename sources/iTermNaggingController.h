@@ -9,6 +9,8 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+extern NSString *const kTurnOffBracketedPasteOnHostChangeUserDefaultsKey;
+
 @protocol iTermNaggingControllerDelegate<NSObject>
 - (BOOL)naggingControllerCanShowMessageWithIdentifier:(NSString *)identifier;
 - (void)naggingControllerShowMessage:(NSString *)message
@@ -28,6 +30,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)naggingControllerAbortDownload;
 - (void)naggingControllerAbortUpload;
 - (void)naggingControllerSetBackgroundImageToFileWithName:(nullable NSString *)filename;
+- (void)naggingControllerDisableMouseReportingPermanently:(BOOL)permanently;
+- (void)naggingControllerDisableBracketedPasteMode;
 @end
 
 @interface iTermNaggingController : NSObject
@@ -58,6 +62,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)tryingToSendArrowKeysWithScrollWheel:(BOOL)isTrying;
 
 - (void)setBackgroundImageToFileWithName:(NSString *)filename;
+- (void)didDetectMouseReportingFrustration;
+
+- (void)offerToTurnOffBracketedPasteOnHostChange;
 
 @end
 

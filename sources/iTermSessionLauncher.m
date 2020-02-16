@@ -12,6 +12,7 @@
 #import "iTermApplication.h"
 #import "iTermController.h"
 #import "iTermSessionFactory.h"
+#import "iTermWarning.h"
 #import "NSDictionary+iTerm.h"
 #import "ProfileModel.h"
 #import "PTYSession.h"
@@ -19,15 +20,30 @@
 
 @implementation iTermSessionLauncher {
     BOOL _finished;
-    BOOL _synchronous;
     BOOL _haveSetSession;
     BOOL _launched;
     id _keepAlive;  // reference to self so I don't get released before completion.
 }
 
-+ (PTYSession *)launchBookmark:(NSDictionary *)bookmarkData
-                    inTerminal:(PseudoTerminal *)theTerm
-            respectTabbingMode:(BOOL)respectTabbingMode {
++ (BOOL)profileIsWellFormed:(Profile *)profile {
+    NSFont *font = [ITAddressBookMgr fontWithDesc:[profile objectForKey:KEY_NORMAL_FONT]];
+    if (!font) {
+        [iTermWarning showWarningWithTitle:[NSString stringWithFormat:@"Couldn’t find the specified font “%@” or the fallback standard fixed-pitch font, Menlo. Please ensure at least one of these is installed.", profile[KEY_NORMAL_FONT]]
+                                   actions:@[ @"OK" ]
+                                 accessory:nil
+                                identifier:nil
+                               silenceable:kiTermWarningTypePersistent
+                                   heading:@"Invalid Profile"
+                                    window:nil];
+        return NO;
+    }
+    return YES;
+}
+
++ (void)launchBookmark:(NSDictionary *)bookmarkData
+            inTerminal:(PseudoTerminal *)theTerm
+    respectTabbingMode:(BOOL)respectTabbingMode
+            completion:(void (^)(PTYSession *session))completion {
     return [self launchBookmark:bookmarkData
                      inTerminal:theTerm
                         withURL:nil
@@ -36,22 +52,22 @@
                     canActivate:YES
              respectTabbingMode:respectTabbingMode
                         command:nil
-                          block:nil
-                    synchronous:NO
+                    makeSession:nil
+                 didMakeSession:completion
                      completion:nil];
 }
 
-+ (PTYSession *)launchBookmark:(NSDictionary *)bookmarkData
-                    inTerminal:(PseudoTerminal *)theTerm
-                       withURL:(NSString *)url
-              hotkeyWindowType:(iTermHotkeyWindowType)hotkeyWindowType
-                       makeKey:(BOOL)makeKey
-                   canActivate:(BOOL)canActivate
-            respectTabbingMode:(BOOL)respectTabbingMode
-                       command:(NSString *)command
-                         block:(PTYSession *(^)(Profile *, PseudoTerminal *))block
-                   synchronous:(BOOL)synchronous
-                    completion:(void (^ _Nullable)(BOOL))completion {
++ (void)launchBookmark:(NSDictionary *)bookmarkData
+            inTerminal:(PseudoTerminal *)theTerm
+               withURL:(NSString *)url
+      hotkeyWindowType:(iTermHotkeyWindowType)hotkeyWindowType
+               makeKey:(BOOL)makeKey
+           canActivate:(BOOL)canActivate
+    respectTabbingMode:(BOOL)respectTabbingMode
+               command:(NSString *)command
+           makeSession:(void (^)(Profile *profile, PseudoTerminal *windowController, void (^completion)(PTYSession *)))makeSession
+        didMakeSession:(void (^)(PTYSession *))didMakeSession
+            completion:(void (^ _Nullable)(PTYSession *, BOOL))completion {
     iTermSessionLauncher *launcher = [[iTermSessionLauncher alloc] initWithProfile:bookmarkData windowController:theTerm];
     launcher.url = url;
     launcher.hotkeyWindowType = hotkeyWindowType;
@@ -59,24 +75,11 @@
     launcher.canActivate = canActivate;
     launcher.respectTabbingMode = respectTabbingMode;
     launcher.command = command;
-    if (block) {
-        launcher.makeSession = ^(NSDictionary * _Nonnull profile,
-                                 PseudoTerminal * _Nonnull windowController,
-                                 void (^ _Nonnull completion)(PTYSession * _Nullable)) {
-            completion(block(profile, windowController));
-        };
+    if (makeSession) {
+        launcher.makeSession = makeSession;
     }
-    __block PTYSession *session = nil;
-    launcher.didCreateSession = ^(PTYSession * _Nullable theSession) {
-        session = theSession;
-    };
-    if (synchronous) {
-        launcher.completion = completion;
-        [launcher launchAndWait];
-    } else {
-        [launcher launchWithCompletion:completion];
-    }
-    return session;
+    launcher.didCreateSession = didMakeSession;
+    [launcher launchWithCompletion:completion];
 }
 
 
@@ -94,19 +97,10 @@
     return self;
 }
 
-- (void)launchWithCompletion:(void (^ _Nullable)(BOOL ok))completion {
-    [self launchSynchronously:NO completion:completion];
-}
-
-- (void)launchAndWait {
-    [self launchSynchronously:YES completion:nil];
-}
-
-- (void)launchSynchronously:(BOOL)sync completion:(void (^ _Nullable)(BOOL ok))completion {
+- (void)launchWithCompletion:(void (^ _Nullable)(PTYSession *session, BOOL ok))completion {
     assert(!_launched);
     _launched = YES;
 
-    _synchronous = sync;
     _completion = [completion copy];
     [self prepareToLaunch];
 
@@ -225,11 +219,6 @@
         completion(session, NO);
         finished = YES;
     });
-    if (_synchronous) {
-        // If you asked for a synchronous launch but provided an asynchronous session-creation block
-        // you screwed up. Rather than deadlock, die.
-        assert(finished);
-    }
 }
 
 - (void)makeSessionByURLWithProfile:(Profile *)profile
@@ -253,9 +242,8 @@
                                                                              isUTF8:nil
                                                                       substitutions:nil
                                                                    windowController:windowController
-                                                                        synchronous:_synchronous
                                                                          completion:
-                     ^(BOOL ok) {
+                     ^(PTYSession *newSession, BOOL ok) {
                          DLog(@"launch by url finished with ok=%@", @(ok));
                          [weakSelf setFinishedWithSuccess:ok];
                      }];
@@ -274,14 +262,11 @@
                                  completion:(void (^)(PTYSession *, BOOL willCallCompletionBlock))completion {
     DLog(@"Make session by creating tab");
     __weak __typeof(self) weakSelf = self;
-    PTYSession *session = [windowController createTabWithProfile:profile
-                                                     withCommand:_command
-                                                     environment:nil
-                                                     synchronous:_synchronous
-                                                      completion:^(BOOL ok) {
-                                                          [weakSelf setFinishedWithSuccess:ok];
-                                                      }];
-    completion(session, YES);
+    [windowController asyncCreateTabWithProfile:profile
+                                    withCommand:_command
+                                    environment:nil
+                                 didMakeSession:^(PTYSession *session) { completion(session, YES); }
+                                completion:^(PTYSession *newSession, BOOL ok) { [weakSelf setFinishedWithSuccess:ok]; }];
 }
 
 - (NSDictionary *)profile:(NSDictionary *)aDict
@@ -529,13 +514,18 @@
 }
 
 - (void)setFinishedWithSuccess:(BOOL)ok {
-    DLog(@"setFInishedWithSuccess:%@", @(ok));
+    DLog(@"setFinishedWithSuccess:%@", @(ok));
     if (_finished) {
         return;
     }
     _finished = YES;
     if (_completion) {
-        _completion(ok);
+        // Ensure the completion block runs after the caller returns for better consistency.
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (self.completion) {
+                self.completion(self.session, ok);
+            }
+        });
     }
     [self maybeBreakRetainCycle];
 }

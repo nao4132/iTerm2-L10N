@@ -600,10 +600,6 @@ NSLog(@"Known bug: %s should be true, but %s is.", #expressionThatShouldBeTrue, 
     return YES;
 }
 
-- (NSString *)screenCurrentWorkingDirectory {
-    return nil;
-}
-
 - (void)screenClearHighlights {
     highlightsCleared_ = YES;
 }
@@ -620,7 +616,7 @@ NSLog(@"Known bug: %s should be true, but %s is.", #expressionThatShouldBeTrue, 
     return printingAllowed_;
 }
 
-- (void)screenDidAppendStringToCurrentLine:(NSString *)string {
+- (void)screenDidAppendStringToCurrentLine:(NSString *)string isPlainText:(BOOL)plainText {
     [triggerLine_ appendString:string];
 }
 
@@ -628,7 +624,8 @@ NSLog(@"Known bug: %s should be true, but %s is.", #expressionThatShouldBeTrue, 
     [self screenDidAppendStringToCurrentLine:[[[NSString alloc] initWithBytes:asciiData->buffer
                                                                        length:asciiData->length
                                                                      encoding:NSASCIIStringEncoding]
-                                              autorelease]];
+                                              autorelease]
+                                 isPlainText:YES];
 }
 
 - (void)screenDidReset {

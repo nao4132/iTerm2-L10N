@@ -9,17 +9,21 @@
 #import "iTermOrphanServerAdopter.h"
 
 #import "DebugLogging.h"
+#import "NSApplication+iTerm.h"
+#import "NSArray+iTerm.h"
+#import "NSFileManager+iTerm.h"
+#import "PseudoTerminal.h"
 #import "iTermAdvancedSettingsModel.h"
 #import "iTermController.h"
 #import "iTermFileDescriptorSocketPath.h"
+#import "iTermMultiServerConnection.h"
 #import "iTermSessionFactory.h"
 #import "iTermSessionLauncher.h"
-#import "NSApplication+iTerm.h"
-#import "PseudoTerminal.h"
 
 @implementation iTermOrphanServerAdopter {
-    NSMutableArray *_pathsToOrphanedServerSockets;
-    PseudoTerminal *_window;  // weak
+    NSArray<NSString *> *_pathsOfOrphanedMonoServers;
+    NSArray<NSString *> *_pathsOfMultiServers;
+    __weak PseudoTerminal *_window;
 }
 
 + (instancetype)sharedInstance {
@@ -31,26 +35,7 @@
     return instance;
 }
 
-- (instancetype)init {
-    if (![iTermAdvancedSettingsModel runJobsInServers]) {
-        return nil;
-    }
-    if ([[NSApplication sharedApplication] isRunningUnitTests]) {
-        return nil;
-    }
-    self = [super init];
-    if (self) {
-        _pathsToOrphanedServerSockets = [[self findOrphanServers] retain];
-    }
-    return self;
-}
-
-- (void)dealloc {
-    [_pathsToOrphanedServerSockets release];
-    [super dealloc];
-}
-
-- (NSMutableArray *)findOrphanServers {
+NSArray<NSString *> *iTermOrphanServerAdopterFindMonoServers(void) {
     NSMutableArray *array = [NSMutableArray array];
     NSString *dir = [NSString stringWithUTF8String:iTermFileDescriptorDirectory()];
     for (NSString *filename in [[NSFileManager defaultManager] contentsOfDirectoryAtPath:dir error:nil]) {
@@ -62,20 +47,73 @@
     return array;
 }
 
-- (void)removePath:(NSString *)path {
-    [_pathsToOrphanedServerSockets removeObject:path];
-}
-
-- (void)openWindowWithOrphans {
-    for (NSString *path in _pathsToOrphanedServerSockets) {
-        NSLog(@"--- Begin orphan %@", path);
-        [self adoptOrphanWithPath:path];
-        NSLog(@"--- End orphan");
+NSArray<NSString *> *iTermOrphanServerAdopterFindMultiServers(void) {
+    NSMutableArray<NSString *> *result = [NSMutableArray array];
+    NSString *appSupportPath = [[NSFileManager defaultManager] applicationSupportDirectory];
+    NSDirectoryEnumerator *enumerator =
+    [[NSFileManager defaultManager] enumeratorAtURL:[NSURL fileURLWithPath:appSupportPath]
+                         includingPropertiesForKeys:nil
+                                            options:NSDirectoryEnumerationSkipsSubdirectoryDescendants
+                                       errorHandler:nil];
+    for (NSURL *url in enumerator) {
+        if (![url.path.lastPathComponent stringMatchesGlobPattern:@"daemon-*.socket" caseSensitive:YES]) {
+            continue;
+        }
+        [result addObject:url.path];
     }
-    _window = nil;
+    return result;
 }
 
-- (void)adoptOrphanWithPath:(NSString *)filename {
+- (instancetype)init {
+    if (![iTermAdvancedSettingsModel runJobsInServers]) {
+        return nil;
+    }
+    if ([[NSApplication sharedApplication] isRunningUnitTests]) {
+        return nil;
+    }
+    self = [super init];
+    if (self) {
+        if ([iTermAdvancedSettingsModel multiserver]) {
+            _pathsOfMultiServers = iTermOrphanServerAdopterFindMultiServers();
+        }
+        _pathsOfOrphanedMonoServers = iTermOrphanServerAdopterFindMonoServers();
+    }
+    return self;
+}
+
+- (void)removePath:(NSString *)path {
+    _pathsOfOrphanedMonoServers = [_pathsOfOrphanedMonoServers arrayByRemovingObject:path];
+    _pathsOfMultiServers = [_pathsOfMultiServers arrayByRemovingObject:path];
+}
+
+- (void)openWindowWithOrphansWithCompletion:(void (^)(void))completion {
+#warning TODO: Test this! A lot!
+    dispatch_queue_t queue = dispatch_queue_create("com.iterm2.orphan-adopter", DISPATCH_QUEUE_SERIAL);
+    for (NSString *path in _pathsOfOrphanedMonoServers) {
+        dispatch_async(queue, ^{
+            dispatch_group_t group = dispatch_group_create();
+            dispatch_group_enter(group);
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self adoptMonoServerOrphanWithPath:path completion:^(PTYSession *session) {
+                    dispatch_group_leave(group);
+                }];
+            });
+            dispatch_group_wait(group, DISPATCH_TIME_FOREVER);
+        });
+    }
+    for (NSString *path in _pathsOfMultiServers) {
+        [self enqueueAdoptonsOfMultiServerOrphansWithPath:path queue:queue];
+    }
+    if (completion) {
+        dispatch_async(queue, ^{
+            dispatch_async(dispatch_get_main_queue(), ^{
+                completion();
+            });
+        });
+    }
+}
+
+- (void)adoptMonoServerOrphanWithPath:(NSString *)filename completion:(void (^)(PTYSession *))completion {
     DLog(@"Try to connect to orphaned server at %@", filename);
     pid_t pid = iTermFileDescriptorProcessIdFromPath(filename.UTF8String);
     if (pid < 0) {
@@ -86,64 +124,75 @@
     iTermFileDescriptorServerConnection serverConnection = iTermFileDescriptorClientRun(pid);
     if (serverConnection.ok) {
         DLog(@"Restore it");
-        if (_window) {
-            [self openOrphanedSession:serverConnection inWindow:_window];
-        } else {
-            PTYSession *session = [self openOrphanedSession:serverConnection inWindow:nil];
-            _window = [[iTermController sharedInstance] terminalWithSession:session];
-        }
+        iTermGeneralServerConnection generalConnection = {
+            .type = iTermGeneralServerConnectionTypeMono,
+            .mono = serverConnection
+        };
+        [self.delegate orphanServerAdopterOpenSessionForConnection:generalConnection
+                                                          inWindow:_window
+                                                        completion:^(PTYSession *session) {
+            assert(dispatch_queue_get_label(dispatch_get_main_queue()) == dispatch_queue_get_label(DISPATCH_CURRENT_QUEUE_LABEL));
+            if (!self->_window) {
+                self->_window = [[iTermController sharedInstance] terminalWithSession:session];
+            }
+            completion(session);
+        }];
     } else {
         DLog(@"Failed: %s", serverConnection.error);
+        completion(nil);
     }
 }
 
-- (PTYSession *)openOrphanedSession:(iTermFileDescriptorServerConnection)serverConnection
-                           inWindow:(PseudoTerminal *)desiredWindow {
-    assert([iTermAdvancedSettingsModel runJobsInServers]);
-    Profile *defaultProfile = [[ProfileModel sharedInstance] defaultBookmark];
-    PTYSession *aSession =
-    [iTermSessionLauncher launchBookmark:nil
-                              inTerminal:desiredWindow
-                                 withURL:nil
-                        hotkeyWindowType:iTermHotkeyWindowTypeNone
-                                 makeKey:NO
-                             canActivate:NO
-                      respectTabbingMode:NO
-                                 command:nil
-                                   block:
-     ^PTYSession *(Profile *profile, PseudoTerminal *term) {
-        iTermFileDescriptorServerConnection theServerConnection = serverConnection;
-        PTYSession *session = [[term.sessionFactory newSessionWithProfile:defaultProfile] autorelease];
-        [term addSessionInNewTab:session];
-        const BOOL ok = [term.sessionFactory attachOrLaunchCommandInSession:session
-                                                                  canPrompt:NO
-                                                                 objectType:iTermWindowObject
-                                                           serverConnection:&theServerConnection
-                                                                  urlString:nil
-                                                               allowURLSubs:NO
-                                                                environment:@{}
-                                                                customShell:[ITAddressBookMgr customShellForProfile:defaultProfile]
-                                                                     oldCWD:nil
-                                                             forceUseOldCWD:NO
-                                                                    command:nil
-                                                                     isUTF8:nil
-                                                              substitutions:nil
-                                                           windowController:term
-                                                                synchronous:NO
-                                                                 completion:nil];
-        return ok ? session : nil;
+- (void)enqueueAdoptonsOfMultiServerOrphansWithPath:(NSString *)filename queue:(dispatch_queue_t)queue {
+    DLog(@"Try to connect to multiserver at %@", filename);
+    NSString *basename = filename.lastPathComponent.stringByDeletingPathExtension;
+    NSString *const prefix = @"daemon-";
+    assert([basename hasPrefix:prefix]);
+    NSString *numberAsString = [basename substringFromIndex:prefix.length];
+    NSScanner *scanner = [NSScanner scannerWithString:numberAsString];
+    NSInteger number = -1;
+    if (![scanner scanInteger:&number]) {
+        return;
     }
-                             synchronous:NO
-                              completion:nil];
-    NSLog(@"restored an orphan");
-    [aSession showOrphanAnnouncement];
-    return aSession;
+    iTermMultiServerConnection *connection = [iTermMultiServerConnection connectionForSocketNumber:number
+                                                                                  createIfPossible:NO];
+    if (connection == nil) {
+        NSLog(@"Failed to connect to %@", filename);
+        return;
+    }
+
+    NSArray<iTermFileDescriptorMultiClientChild *> *children = [connection.unattachedChildren copy];
+    for (iTermFileDescriptorMultiClientChild *child in children) {
+        iTermGeneralServerConnection generalConnection = {
+            .type = iTermGeneralServerConnectionTypeMulti,
+            .multi = {
+                .pid = child.pid,
+                .number = number
+            }
+        };
+        dispatch_async(queue, ^{
+            dispatch_group_t group = dispatch_group_create();
+            dispatch_group_enter(group);
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self.delegate orphanServerAdopterOpenSessionForConnection:generalConnection
+                                                                  inWindow:self->_window
+                                                                completion:^(PTYSession *session) {
+                                                                    if (!self->_window) {
+                                                                        self->_window = [[iTermController sharedInstance] terminalWithSession:session];
+                                                                    }
+                                                                    dispatch_group_leave(group);
+                                                                }];
+            });
+            dispatch_group_wait(group, DISPATCH_TIME_FOREVER);
+        });
+    }
 }
 
 #pragma mark - Properties
 
 - (BOOL)haveOrphanServers {
-    return _pathsToOrphanedServerSockets.count > 0;
+    return _pathsOfOrphanedMonoServers.count > 0;
 }
 
 @end
+

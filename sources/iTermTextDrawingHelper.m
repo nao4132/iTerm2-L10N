@@ -2237,7 +2237,8 @@ static BOOL iTermTextDrawingHelperShouldAntiAlias(screen_char_t *c,
                                                                         i > indexRange.location ? &predecessor : NULL,
                                                                         charAsString != nil,
                                                                         _blinkingItemsVisible,
-                                                                        _blinkAllowed);
+                                                                        _blinkAllowed,
+                                                                        _preferSpeedToFullLigatureSupport);
         predecessor = c;
         if (!drawable) {
             if ((characterAttributes.drawable && c.code == DWC_RIGHT && !c.complexChar) ||
@@ -2640,11 +2641,12 @@ static BOOL iTermTextDrawingHelperShouldAntiAlias(screen_char_t *c,
                                forceTextColor:[self defaultTextColor]
                                       context:ctx];
             // Draw an underline.
-            BOOL ignore;
+            BOOL unusedBold = NO;
+            BOOL unusedItalic = NO;
             PTYFontInfo *fontInfo = [_delegate drawingHelperFontForChar:128
                                                               isComplex:NO
-                                                             renderBold:&ignore
-                                                           renderItalic:&ignore];
+                                                             renderBold:&unusedBold
+                                                           renderItalic:&unusedItalic];
             NSRect rect = NSMakeRect(x,
                                      y - round((_cellSize.height - _cellSizeWithoutSpacing.height) / 2.0),
                                      charsInLine * _cellSize.width,

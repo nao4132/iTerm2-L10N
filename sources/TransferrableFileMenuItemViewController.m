@@ -54,6 +54,10 @@ static const CGFloat kCollapsedHeight = 51;
                 status == kTransferrableFileStatusTransferring);
     }
     if ([menuItem action] == @selector(showInFinder:)) {
+        if (self.transferrableFile.localPath == nil ||
+            [NSURL fileURLWithPath:self.transferrableFile.localPath] == nil) {
+            return NO;
+        }
         return (status == kTransferrableFileStatusFinishedSuccessfully);
     }
     if ([menuItem action] == @selector(removeFromList:)) {
@@ -158,7 +162,9 @@ static const CGFloat kCollapsedHeight = 51;
 
 - (void)showInFinder:(id)sender {
     NSURL *theUrl = [NSURL fileURLWithPath:self.transferrableFile.localPath];
-    [[NSWorkspace sharedWorkspace] activateFileViewerSelectingURLs:@[ theUrl ]];
+    if (theUrl) {
+        [[NSWorkspace sharedWorkspace] activateFileViewerSelectingURLs:@[ theUrl ]];
+    }
 
 }
 - (void)removeFromList:(id)sender {

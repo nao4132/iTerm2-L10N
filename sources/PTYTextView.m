@@ -337,6 +337,8 @@ static const int kDragThreshold = 3;
         _scrollAccumulator = [[iTermScrollAccumulator alloc] init];
         _keyboardHandler = [[iTermKeyboardHandler alloc] init];
         _keyboardHandler.delegate = self;
+
+        [self arcInit];
     }
     return self;
 }
@@ -414,6 +416,8 @@ static const int kDragThreshold = 3;
     _urlActionHelper.delegate = nil;
     [_urlActionHelper release];
     [_imageBeingClickedOn release];
+    [_mouseReportingFrustrationDetector release];
+
     [super dealloc];
 }
 
@@ -901,6 +905,18 @@ static const int kDragThreshold = 3;
     NSAccessibilityPostNotification(self, NSAccessibilityRowCountChangedNotification);
 }
 
+// See WebCore's FrameSelectionMac.mm for the inspiration.
+- (CGRect)accessibilityConvertScreenRect:(CGRect)bounds {
+    NSArray *screens = [NSScreen screens];
+    if ([screens count]) {
+        CGFloat screenHeight = NSHeight([(NSScreen *)[screens objectAtIndex:0] frame]);
+        NSRect rect = bounds;
+        rect.origin.y = (screenHeight - (bounds.origin.y + bounds.size.height));
+        return rect;
+    }
+    return CGRectZero;
+}
+
 // Update accessibility, to be called periodically.
 - (void)refreshAccessibility {
     NSAccessibilityPostNotification(self, NSAccessibilityValueChangedNotification);
@@ -916,13 +932,12 @@ static const int kDragThreshold = 3;
         if (UAZoomEnabled()) {
             CGRect viewRect = NSRectToCGRect(
                 [self.window convertRectToScreen:[self convertRect:[self visibleRect] toView:nil]]);
-            CGRect selectedRect = NSRectToCGRect(
+            CGRect selectionRect = NSRectToCGRect(
                 [self.window convertRectToScreen:[self convertRect:[self cursorFrame] toView:nil]]);
-            viewRect.origin.y = ([[NSScreen mainScreen] frame].size.height -
-                                 (viewRect.origin.y + viewRect.size.height));
-            selectedRect.origin.y = ([[NSScreen mainScreen] frame].size.height -
-                                     (selectedRect.origin.y + selectedRect.size.height));
-            UAZoomChangeFocus(&viewRect, &selectedRect, kUAZoomFocusTypeInsertionPoint);
+            viewRect = [self accessibilityConvertScreenRect:viewRect];
+            selectionRect = [self accessibilityConvertScreenRect:selectionRect];
+
+            UAZoomChangeFocus(&viewRect, &selectionRect, kUAZoomFocusTypeInsertionPoint);
         }
     }
 }
@@ -1351,6 +1366,7 @@ static const int kDragThreshold = 3;
 }
 
 - (void)keyDown:(NSEvent *)event {
+    [_mouseReportingFrustrationDetector keyDown:event];
     [_keyboardHandler keyDown:event inputContext:self.inputContext];
 }
 
@@ -1365,6 +1381,7 @@ static const int kDragThreshold = 3;
 
 // TODO: disable other, right mouse for inactive panes
 - (void)otherMouseDown:(NSEvent *)event {
+    [_mouseReportingFrustrationDetector otherMouseEvent];
     [_altScreenMouseScrollInferrer nonScrollWheelEvent:event];
     [self reportMouseEvent:event];
 
@@ -1377,8 +1394,8 @@ static const int kDragThreshold = 3;
     [self updateCursor:event action:nil];
 }
 
-- (void)otherMouseUp:(NSEvent *)event
-{
+- (void)otherMouseUp:(NSEvent *)event {
+    [_mouseReportingFrustrationDetector otherMouseEvent];
     [_altScreenMouseScrollInferrer nonScrollWheelEvent:event];
     if ([self reportMouseEvent:event]) {
         return;
@@ -1392,8 +1409,8 @@ static const int kDragThreshold = 3;
     [pointer_ mouseUp:event withTouches:_numTouches];
 }
 
-- (void)otherMouseDragged:(NSEvent *)event
-{
+- (void)otherMouseDragged:(NSEvent *)event {
+    [_mouseReportingFrustrationDetector otherMouseEvent];
     [_altScreenMouseScrollInferrer nonScrollWheelEvent:event];
     [threeFingerTapGestureRecognizer_ mouseDragged];
     if ([self reportMouseEvent:event]) {
@@ -1403,6 +1420,7 @@ static const int kDragThreshold = 3;
 }
 
 - (void)rightMouseDown:(NSEvent*)event {
+    [_mouseReportingFrustrationDetector otherMouseEvent];
     [_altScreenMouseScrollInferrer nonScrollWheelEvent:event];
     if ([threeFingerTapGestureRecognizer_ rightMouseDown:event]) {
         DLog(@"Cancel right mouse down");
@@ -1421,6 +1439,7 @@ static const int kDragThreshold = 3;
 }
 
 - (void)rightMouseUp:(NSEvent *)event {
+    [_mouseReportingFrustrationDetector otherMouseEvent];
     [_altScreenMouseScrollInferrer nonScrollWheelEvent:event];
     if ([threeFingerTapGestureRecognizer_ rightMouseUp:event]) {
         return;
@@ -1435,8 +1454,8 @@ static const int kDragThreshold = 3;
     [super rightMouseUp:event];
 }
 
-- (void)rightMouseDragged:(NSEvent *)event
-{
+- (void)rightMouseDragged:(NSEvent *)event {
+    [_mouseReportingFrustrationDetector otherMouseEvent];
     [_altScreenMouseScrollInferrer nonScrollWheelEvent:event];
     [threeFingerTapGestureRecognizer_ mouseDragged];
     if ([self reportMouseEvent:event]) {
@@ -1871,6 +1890,7 @@ static const int kDragThreshold = 3;
     DLog(@"Set mouseDown=YES.");
     _mouseDown = YES;
 
+    [_mouseReportingFrustrationDetector mouseDown:event reported:[self mouseEventIsReportable:event]];
     if ([self reportMouseEvent:event]) {
         DLog(@"Returning because mouse event reported.");
         [_selection clearSelection];
@@ -2050,6 +2070,7 @@ static double EuclideanDistance(NSPoint p1, NSPoint p2) {
     // issue 3766.
     _mouseDragged = NO;
 
+    [_mouseReportingFrustrationDetector mouseUp:event reported:[self mouseEventIsReportable:event]];
     // Send mouse up event to host if xterm mouse reporting is on
     if ([self reportMouseEvent:event]) {
         if (willFollowLink) {
@@ -2224,6 +2245,7 @@ static double EuclideanDistance(NSPoint p1, NSPoint p2) {
         return;
     }
 
+    [_mouseReportingFrustrationDetector mouseDragged:event reported:[self mouseEventIsReportable:event]];
     if ([self reportMouseEvent:event]) {
         DLog(@"Reported drag");
         _committedToDrag = YES;
@@ -3062,8 +3084,7 @@ static double EuclideanDistance(NSPoint p1, NSPoint p2) {
     [[PasteboardHistory sharedInstance] save:[copyAttributedString string]];
 }
 
-- (void)paste:(id)sender
-{
+- (void)paste:(id)sender {
     DLog(@"Checking if delegate %@ can paste", _delegate);
     if ([_delegate respondsToSelector:@selector(paste:)]) {
         DLog(@"Calling paste on delegate.");
@@ -5489,6 +5510,13 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
     if (y >= [_dataSource numberOfLines]) {
         y = [_dataSource numberOfLines] - 1;
     }
+    const BOOL hasColumnWindow = (_selection.liveRange.columnWindow.location > 0 ||
+                                  _selection.liveRange.columnWindow.length < width);
+    if (hasColumnWindow &&
+        !VT100GridRangeContains(_selection.liveRange.columnWindow, x)) {
+        DLog(@"Mouse has wandered outside columnn window %@", VT100GridRangeDescription(_selection.liveRange.columnWindow));
+        [_selection clearColumnWindowForLiveSelection];
+    }
     const BOOL result = [_selection moveSelectionEndpointTo:VT100GridCoordMake(x, y)];
     DLog(@"moveSelectionEndpoint. selection=%@", _selection);
     return result;
@@ -5579,6 +5607,13 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
 
 #pragma mark - iTermSelectionDelegate
 
+- (BOOL)liveSelectionRespectsSoftBoundaries {
+    if (_selection.haveClearedColumnWindow) {
+        return NO;
+    }
+    return [[iTermController sharedInstance] selectionRespectsSoftBoundaries];
+}
+
 - (void)selectionDidChange:(iTermSelection *)selection {
     DLog(@"selectionDidChange to %@", selection);
     [_delegate refresh];
@@ -5612,7 +5647,7 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
     [self getWordForX:coord.x
                     y:coord.y
                 range:&range
-      respectDividers:[[iTermController sharedInstance] selectionRespectsSoftBoundaries]];
+      respectDividers:[self liveSelectionRespectsSoftBoundaries]];
     return range;
 }
 
@@ -5623,14 +5658,13 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
                                   to:&range
                     ignoringNewlines:NO
                       actionRequired:NO
-                     respectDividers:[[iTermController sharedInstance] selectionRespectsSoftBoundaries]];
+                     respectDividers:[self liveSelectionRespectsSoftBoundaries]];
     return range;
 }
 
 - (VT100GridWindowedRange)selectionRangeForWrappedLineAt:(VT100GridCoord)coord {
     iTermTextExtractor *extractor = [iTermTextExtractor textExtractorWithDataSource:_dataSource];
-    BOOL respectDividers = [[iTermController sharedInstance] selectionRespectsSoftBoundaries];
-    if (respectDividers) {
+    if ([self liveSelectionRespectsSoftBoundaries]) {
         [extractor restrictToLogicalWindowIncludingCoord:coord];
     }
     return [extractor rangeForWrappedLineEncompassing:coord
@@ -5643,8 +5677,7 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
 }
 
 - (VT100GridWindowedRange)selectionRangeForLineAt:(VT100GridCoord)coord {
-    BOOL respectDividers = [[iTermController sharedInstance] selectionRespectsSoftBoundaries];
-    if (respectDividers) {
+    if ([self liveSelectionRespectsSoftBoundaries]) {
         iTermTextExtractor *extractor = [iTermTextExtractor textExtractorWithDataSource:_dataSource];
         [extractor restrictToLogicalWindowIncludingCoord:coord];
         return VT100GridWindowedRangeMake(VT100GridCoordRangeMake(extractor.logicalWindow.location,
@@ -5798,8 +5831,18 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
     return [self convertPoint:[event locationInWindow] fromView:nil];
 }
 
+// Returns YES if the mouse event would be handled, ignoring trivialities like a drag that hasn't
+// changed coordinate since the last drag.
+- (BOOL)mouseEventIsReportable:(NSEvent *)event {
+    return [self handleMouseEvent:event testOnly:YES];
+}
+
 // Returns YES if the mouse event should not be handled natively.
 - (BOOL)reportMouseEvent:(NSEvent *)event {
+    return [self handleMouseEvent:event testOnly:NO];
+}
+
+- (BOOL)handleMouseEvent:(NSEvent *)event testOnly:(BOOL)testOnly {
     NSPoint point = [self pointForEvent:event];
 
     if (![self shouldReportMouseEvent:event at:point]) {
@@ -5817,7 +5860,8 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
                                         button:[self mouseReportingButtonNumberForEvent:event]
                                     coordinate:coord
                                         deltaY:[_scrollAccumulator deltaYForEvent:event lineHeight:self.enclosingScrollView.verticalLineScroll]
-                      allowDragBeforeMouseDown:_makingThreeFingerSelection];
+                      allowDragBeforeMouseDown:_makingThreeFingerSelection
+                                      testOnly:testOnly];
 }
 
 #pragma mark - NSDraggingSource

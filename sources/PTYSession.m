@@ -100,6 +100,7 @@
 #import "MovePaneController.h"
 #import "MovingAverage.h"
 #import "NSAlert+iTerm.h"
+#import "NSAppearance+iTerm.h"
 #import "NSArray+iTerm.h"
 #import "NSColor+iTerm.h"
 #import "NSData+iTerm.h"
@@ -132,6 +133,7 @@
 #import "SCPPath.h"
 #import "SearchResult.h"
 #import "SessionView.h"
+#import "TaskNotifier.h"
 #import "TerminalFile.h"
 #import "TmuxController.h"
 #import "TmuxControllerRegistry.h"
@@ -174,11 +176,9 @@ static NSString *const kSilenceAnnoyingBellAutomatically = @"NoSyncSilenceAnnoyi
 
 static NSString *const kTurnOffMouseReportingOnHostChangeUserDefaultsKey = @"NoSyncTurnOffMouseReportingOnHostChange";
 static NSString *const kTurnOffFocusReportingOnHostChangeUserDefaultsKey = @"NoSyncTurnOffFocusReportingOnHostChange";
-static NSString *const kTurnOffBracketedPasteOnHostChangeUserDefaultsKey = @"NoSyncTurnOffBracketedPasteOnHostChange";
 
 static NSString *const kTurnOffMouseReportingOnHostChangeAnnouncementIdentifier = @"TurnOffMouseReportingOnHostChange";
 static NSString *const kTurnOffFocusReportingOnHostChangeAnnouncementIdentifier = @"TurnOffFocusReportingOnHostChange";
-static NSString *const kTurnOffBracketedPasteOnHostChangeAnnouncementIdentifier = @"TurnOffBracketedPasteOnHostChange";
 
 static NSString *const kShellIntegrationOutOfDateAnnouncementIdentifier =
     @"kShellIntegrationOutOfDateAnnouncementIdentifier";
@@ -212,7 +212,8 @@ static NSString *const SESSION_ARRANGEMENT_GUID = @"Session GUID";  // A truly u
 static NSString *const SESSION_ARRANGEMENT_LIVE_SESSION = @"Live Session";  // If zoomed, this gives the "live" session's arrangement.
 static NSString *const SESSION_ARRANGEMENT_SUBSTITUTIONS = @"Substitutions";  // Dictionary for $$VAR$$ substitutions
 static NSString *const SESSION_UNIQUE_ID = @"Session Unique ID";  // DEPRECATED. A string used for restoring soft-terminated sessions for arrangements that predate the introduction of the GUID.
-static NSString *const SESSION_ARRANGEMENT_SERVER_PID = @"Server PID";  // PID for server process for restoration
+static NSString *const SESSION_ARRANGEMENT_SERVER_PID = @"Server PID";  // PID for server process for restoration. Only for monoserver.
+static NSString *const SESSION_ARRANGEMENT_SERVER_DICT = @"Server Dict";  // NSDictionary. Describes server connection. Only for multiserver.
 // TODO: Make server report the TTY to us since orphans will end up with a nil tty.
 static NSString *const SESSION_ARRANGEMENT_TTY = @"TTY";  // TTY name. Used when using restoration to connect to a restored server.
 static NSString *const SESSION_ARRANGEMENT_VARIABLES = @"Variables";  // _variables
@@ -229,7 +230,8 @@ static NSString *const SESSION_ARRANGEMENT_DIRECTORIES = @"Directories";  // Arr
 static NSString *const SESSION_ARRANGEMENT_HOSTS = @"Hosts";  // Array of VT100RemoteHost
 static NSString *const SESSION_ARRANGEMENT_CURSOR_GUIDE = @"Cursor Guide";  // BOOL
 static NSString *const SESSION_ARRANGEMENT_LAST_DIRECTORY = @"Last Directory";  // NSString
-static NSString *const SESSION_ARRANGEMENT_LAST_DIRECTORY_IS_UNSUITABLE_FOR_OLD_PWD = @"Last Directory Is Remote";  // BOOL
+static NSString *const SESSION_ARRANGEMENT_LAST_LOCAL_DIRECTORY = @"Last Local Directory";  // NSString
+static NSString *const SESSION_ARRANGEMENT_LAST_DIRECTORY_IS_UNSUITABLE_FOR_OLD_PWD_DEPRECATED = @"Last Directory Is Remote";  // BOOL
 static NSString *const SESSION_ARRANGEMENT_SELECTION = @"Selection";  // Dictionary for iTermSelection.
 static NSString *const SESSION_ARRANGEMENT_APS = @"Automatic Profile Switching";  // Dictionary of APS state.
 
@@ -308,7 +310,7 @@ static const NSUInteger kMaxHosts = 100;
 @property(nonatomic) NSTimeInterval lastResize;
 @property(atomic, assign) PTYSessionTmuxMode tmuxMode;
 @property(nonatomic, copy) NSString *lastDirectory;
-@property(nonatomic) BOOL lastDirectoryIsUnsuitableForOldPWD;
+@property(nonatomic, copy) NSString *lastLocalDirectory;
 @property(nonatomic, retain) VT100RemoteHost *lastRemoteHost;  // last remote host at time of setting current directory
 @property(nonatomic, retain) NSColor *cursorGuideColor;
 @property(nonatomic, copy) NSString *badgeFormat;
@@ -325,6 +327,7 @@ static const NSUInteger kMaxHosts = 100;
 @property(nonatomic, copy) NSString *lastCommand;
 @property(nonatomic, retain) iTermAutomaticProfileSwitcher *automaticProfileSwitcher;
 @property(nonatomic, retain) VT100RemoteHost *currentHost;
+@property(nonatomic, retain) iTermExpectation *pasteBracketingOopsieExpectation;
 @end
 
 @implementation PTYSession {
@@ -721,7 +724,7 @@ static const NSUInteger kMaxHosts = 100;
         _expect = [[iTermExpect alloc] init];
         [[NSNotificationCenter defaultCenter] addObserver:self
                                                  selector:@selector(coprocessChanged)
-                                                     name:@"kCoprocessStatusChangeNotification"
+                                                     name:kCoprocessStatusChangeNotification
                                                    object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self
                                                  selector:@selector(sessionContentsChanged:)
@@ -790,6 +793,9 @@ static const NSUInteger kMaxHosts = 100;
 ITERM_WEAKLY_REFERENCEABLE
 
 - (void)iterm_dealloc {
+    if (_textview.delegate == self) {
+        _textview.delegate = nil;
+    }
     [_view release];
     [_logging stop];
     if (@available(macOS 10.11, *)) {
@@ -883,6 +889,7 @@ ITERM_WEAKLY_REFERENCEABLE
 
     [_cursorGuideColor release];
     [_lastDirectory release];
+    [_lastLocalDirectory release];
     [_lastRemoteHost release];
     [_textview release];  // I'm not sure it's ever nonnil here
     [_currentMarkOrNotePosition release];
@@ -903,6 +910,7 @@ ITERM_WEAKLY_REFERENCEABLE
     [_logging release];
     [_naggingController release];
     [_expect release];
+    [_pasteBracketingOopsieExpectation release];
 
     [super dealloc];
 }
@@ -912,7 +920,7 @@ ITERM_WEAKLY_REFERENCEABLE
                [self class], self, [_screen width], [_screen height], @(self.useMetal), _guid];
 }
 
-- (void)didFinishInitialization:(BOOL)ok {
+- (void)didFinishInitialization {
     [_pwdPoller poll];
     if ([self.variablesScope valueForVariableName:iTermVariableKeySessionUsername] == nil) {
         [self.variablesScope setValue:NSUserName() forVariableNamed:iTermVariableKeySessionUsername];
@@ -1182,7 +1190,13 @@ ITERM_WEAKLY_REFERENCEABLE
         if (arrangement[SESSION_ARRANGEMENT_LAST_DIRECTORY]) {
             [aSession->_lastDirectory autorelease];
             aSession->_lastDirectory = [arrangement[SESSION_ARRANGEMENT_LAST_DIRECTORY] copy];
-            aSession->_lastDirectoryIsUnsuitableForOldPWD = [arrangement[SESSION_ARRANGEMENT_LAST_DIRECTORY_IS_UNSUITABLE_FOR_OLD_PWD] boolValue];
+            const BOOL isRemote = [arrangement[SESSION_ARRANGEMENT_LAST_DIRECTORY_IS_UNSUITABLE_FOR_OLD_PWD_DEPRECATED] boolValue];
+            if (!isRemote) {
+                aSession.lastLocalDirectory = aSession.lastDirectory;
+            }
+        }
+        if (arrangement[SESSION_ARRANGEMENT_LAST_LOCAL_DIRECTORY]) {
+            aSession.lastLocalDirectory = arrangement[SESSION_ARRANGEMENT_LAST_LOCAL_DIRECTORY];
         }
     }
 
@@ -1381,8 +1395,11 @@ ITERM_WEAKLY_REFERENCEABLE
     NSDictionary *contents = arrangement[SESSION_ARRANGEMENT_CONTENTS];
     BOOL restoreContents = !tmuxPaneNumber && contents && [iTermAdvancedSettingsModel restoreWindowContents];
     BOOL attachedToServer = NO;
-    typedef void (^iTermBooleanCompletionBlock)(BOOL ok);
-    void (^runCommandBlock)(iTermBooleanCompletionBlock) = ^(void (^completion)(BOOL)) { completion(YES); };
+    typedef void (^iTermSessionCreationCompletionBlock)(PTYSession *, BOOL ok);
+    void (^runCommandBlock)(iTermSessionCreationCompletionBlock) =
+    ^(iTermSessionCreationCompletionBlock innerCompletion) {
+        innerCompletion(aSession, YES);
+    };
     if (!tmuxPaneNumber) {
         DLog(@"No tmux pane ID during session restoration");
         // |contents| will be non-nil when using system window restoration.
@@ -1391,7 +1408,8 @@ ITERM_WEAKLY_REFERENCEABLE
             DLog(@"Configured to run jobs in servers");
             // iTerm2 is currently configured to run jobs in servers, but we
             // have to check if the arrangement was saved with that setting on.
-            if (arrangement[SESSION_ARRANGEMENT_SERVER_PID]) {
+            BOOL didAttach = NO;
+            if ([NSNumber castFrom:arrangement[SESSION_ARRANGEMENT_SERVER_PID]]) {
                 DLog(@"Have a server PID in the arrangement");
                 pid_t serverPid = [arrangement[SESSION_ARRANGEMENT_SERVER_PID] intValue];
                 DLog(@"Try to attach to pid %d", (int)serverPid);
@@ -1399,20 +1417,31 @@ ITERM_WEAKLY_REFERENCEABLE
                 if (serverPid != -1 && [aSession tryToAttachToServerWithProcessId:serverPid
                                                                               tty:arrangement[SESSION_ARRANGEMENT_TTY]]) {
                     DLog(@"Success!");
-
-                    if ([arrangement[SESSION_ARRANGEMENT_IS_TMUX_GATEWAY] boolValue]) {
-                        DLog(@"Was a tmux gateway. Start recovery mode in parser.");
-                        // Before attaching to the server we can put the parser into "tmux recovery mode".
-                        [aSession.terminal.parser startTmuxRecoveryMode];
-                    }
-
-                    runCommand = NO;
-                    attachedToServer = YES;
-                    shouldEnterTmuxMode = ([arrangement[SESSION_ARRANGEMENT_IS_TMUX_GATEWAY] boolValue] &&
-                                           arrangement[SESSION_ARRANGEMENT_TMUX_GATEWAY_SESSION_NAME] != nil &&
-                                           arrangement[SESSION_ARRANGEMENT_TMUX_GATEWAY_SESSION_ID] != nil);
-                    tmuxDCSIdentifier = arrangement[SESSION_ARRANGEMENT_TMUX_DCS_ID];
+                    didAttach = YES;
                 }
+            } else if ([iTermAdvancedSettingsModel multiserver] &&
+                       [NSDictionary castFrom:arrangement[SESSION_ARRANGEMENT_SERVER_DICT]]) {
+                DLog(@"Have a server dict in the arrangement");
+                NSDictionary *serverDict = arrangement[SESSION_ARRANGEMENT_SERVER_DICT];
+                DLog(@"Try to attach to %@", serverDict);
+                if ([aSession tryToAttachToMultiserverWithRestorationIdentifier:serverDict]) {
+                    DLog(@"Attached to multiserver!");
+                    didAttach = YES;
+                }
+            }
+            if (didAttach) {
+                if ([arrangement[SESSION_ARRANGEMENT_IS_TMUX_GATEWAY] boolValue]) {
+                    DLog(@"Was a tmux gateway. Start recovery mode in parser.");
+                    // Before attaching to the server we can put the parser into "tmux recovery mode".
+                    [aSession.terminal.parser startTmuxRecoveryMode];
+                }
+
+                runCommand = NO;
+                attachedToServer = YES;
+                shouldEnterTmuxMode = ([arrangement[SESSION_ARRANGEMENT_IS_TMUX_GATEWAY] boolValue] &&
+                                       arrangement[SESSION_ARRANGEMENT_TMUX_GATEWAY_SESSION_NAME] != nil &&
+                                       arrangement[SESSION_ARRANGEMENT_TMUX_GATEWAY_SESSION_ID] != nil);
+                tmuxDCSIdentifier = arrangement[SESSION_ARRANGEMENT_TMUX_DCS_ID];
             }
         }
 
@@ -1479,7 +1508,7 @@ ITERM_WEAKLY_REFERENCEABLE
                 substitutionsArg = aSession.substitutions;
                 customShell = aSession.customShell;
             }
-            runCommandBlock = ^(iTermBooleanCompletionBlock completion) {
+            runCommandBlock = ^(iTermSessionCreationCompletionBlock completion) {
                 iTermSessionFactory *factory = [[[iTermSessionFactory alloc] init] autorelease];
                 [factory attachOrLaunchCommandInSession:aSession
                                               canPrompt:NO
@@ -1495,7 +1524,6 @@ ITERM_WEAKLY_REFERENCEABLE
                                                  isUTF8:isUTF8Arg
                                           substitutions:substitutionsArg
                                        windowController:(PseudoTerminal *)aSession.delegate.realParentWindow
-                                            synchronous:NO
                                              completion:completion];
             };
         }
@@ -1511,7 +1539,7 @@ ITERM_WEAKLY_REFERENCEABLE
     }
     [aSession.screen restoreInitialSize];
 
-    void (^finish)(BOOL) = ^(BOOL ok) {
+    void (^finish)(PTYSession *, BOOL) = ^(PTYSession *newSession, BOOL ok) {
         if (!ok) {
             return;
         }
@@ -1528,7 +1556,7 @@ ITERM_WEAKLY_REFERENCEABLE
                                                        state:state
                                            tmuxDCSIdentifier:tmuxDCSIdentifier
                                               missingProfile:missingProfile];
-        [aSession didFinishInitialization:YES];
+        [aSession didFinishInitialization];
     };
     if ([aSession.profile[KEY_AUTOLOG] boolValue]) {
         [aSession retain];
@@ -1546,7 +1574,7 @@ ITERM_WEAKLY_REFERENCEABLE
         if (arrangement[SESSION_ARRANGEMENT_AUTOLOG_FILENAME] && restoreContents) {
             startLogging(arrangement[SESSION_ARRANGEMENT_AUTOLOG_FILENAME]);
         } else {
-            [aSession fetchAutoLogFilenameSynchronously:NO completion:startLogging];
+            [aSession fetchAutoLogFilenameWithCompletion:startLogging];
         }
     } else {
         runCommandBlock(finish);
@@ -1559,7 +1587,9 @@ ITERM_WEAKLY_REFERENCEABLE
     if (_logging) {
         return _logging;
     }
-    _logging = [[iTermLoggingHelper alloc] initWithRawLogger:_shell plainLogger:self];
+    _logging = [[iTermLoggingHelper alloc] initWithRawLogger:_shell
+                                                 plainLogger:self
+                                                 profileGUID:self.profile[KEY_GUID]];
     return _logging;
 }
 
@@ -1683,7 +1713,20 @@ ITERM_WEAKLY_REFERENCEABLE
     }
 }
 
-- (void)attachToServer:(iTermFileDescriptorServerConnection)serverConnection {
+- (BOOL)tryToAttachToMultiserverWithRestorationIdentifier:(NSDictionary *)restorationIdentifier {
+    if ([_shell tryToAttachToMultiserverWithRestorationIdentifier:restorationIdentifier]) {
+        @synchronized(self) {
+            _registered = YES;
+        }
+        DLog(@"Success, attached.");
+        return YES;
+    } else {
+        DLog(@"Failed to attach");
+        return NO;
+    }
+}
+
+- (void)attachToServer:(iTermGeneralServerConnection)serverConnection {
     if ([iTermAdvancedSettingsModel runJobsInServers]) {
         DLog(@"Attaching to a server...");
         [_shell attachToServer:serverConnection];
@@ -1866,6 +1909,35 @@ ITERM_WEAKLY_REFERENCEABLE
     return [iTermPromptOnCloseReason profileAlwaysPrompts:_profile];
 }
 
+- (NSSet<NSString *> *)jobsToIgnore {
+    NSArray<NSString *> *builtInJobsToIgnore = @[ @"login", @"iTerm2" ];
+    return [NSSet setWithArray:[[_profile objectForKey:KEY_JOBS] ?: @[] arrayByAddingObjectsFromArray:builtInJobsToIgnore]];
+}
+
+// A trivial process is one that's always running, like the user's shell. This
+// is used to decide if there should be a "document edited" indicator in the
+// window's close button.
+- (BOOL)processIsTrivial:(iTermProcessInfo *)info {
+    NSSet<NSString *> *ignoredNames = [self jobsToIgnore];
+    if ([ignoredNames containsObject:info.name]) {
+        return YES;
+    }
+    if ([info.commandLine hasPrefix:@"-"]) {
+        return YES;
+    }
+    if (!self.program) {
+        return NO;
+    }
+    NSString *const programType = [self programType];
+    if ([programType isEqualToString:kProgramTypeShellLauncher] ||
+        [programType isEqualToString:kProgramTypeCustomShell]) {
+        return info.parentProcessID == _shell.pid;
+    } else if ([programType isEqualToString:kProgramTypeCommand]) {
+        return info.processID == _shell.pid;
+    }
+    return NO;
+}
+
 - (BOOL)hasNontrivialJob {
     DLog(@"Checking for a nontrivial job...");
     pid_t thePid = [_shell pid];
@@ -1874,15 +1946,10 @@ ITERM_WEAKLY_REFERENCEABLE
         return NO;
     }
     // iTerm2 --launch_shell could be a child job temporarily.
-    NSArray<NSString *> *builtInJobsToIgnore = @[ @"login", @"iTerm2" ];
-    NSSet<NSString *> *ignoredNames = [NSSet setWithArray:[[_profile objectForKey:KEY_JOBS] ?: @[] arrayByAddingObjectsFromArray:builtInJobsToIgnore]];
-    DLog(@"Ignoring %@", ignoredNames);
+    DLog(@"Ignoring %@", [self jobsToIgnore]);
     __block BOOL result = NO;
     [info enumerateTree:^(iTermProcessInfo *info, BOOL *stop) {
-        if ([ignoredNames containsObject:info.name]) {
-            return;
-        }
-        if ([info.commandLine hasPrefix:@"-"]) {
+        if ([self processIsTrivial:info]) {
             return;
         }
         DLog(@"Process with name %@ and command line %@ is nontrivial", info.name, info.commandLine);
@@ -1950,7 +2017,6 @@ ITERM_WEAKLY_REFERENCEABLE
 
 - (void)computeArgvForCommand:(NSString *)command
                 substitutions:(NSDictionary *)substitutions
-                  synchronous:(BOOL)synchronous
                    completion:(void (^)(NSArray<NSString *> *))completion {
     NSString *program = [command stringByPerformingSubstitutions:substitutions];
     NSArray *components = [program componentsInShellCommand];
@@ -1966,10 +2032,9 @@ ITERM_WEAKLY_REFERENCEABLE
 
 - (void)computeEnvironmentForNewJobFromEnvironment:(NSDictionary *)environment
                                      substitutions:(NSDictionary *)substitutions
-                                       synchronous:(BOOL)synchronous
                                         completion:(void (^)(NSDictionary *env))completion {
-    DLog(@"computeEnvironmentForNewJobFromEnvironment:%@ substitutions:%@ synchronous:%@",
-         environment, substitutions, @(synchronous));
+    DLog(@"computeEnvironmentForNewJobFromEnvironment:%@ substitutions:%@",
+         environment, substitutions);
     NSMutableDictionary *env = [[environment mutableCopy] autorelease];
     if (env[TERM_ENVNAME] == nil) {
         env[TERM_ENVNAME] = _termVariable;
@@ -2039,7 +2104,6 @@ ITERM_WEAKLY_REFERENCEABLE
          customShell:(NSString *)customShell
               isUTF8:(BOOL)isUTF8
        substitutions:(NSDictionary *)substitutions
-         synchronous:(BOOL)synchronous
           completion:(void (^)(BOOL))completion {
     DLog(@"startProgram:%@ environment:%@ isUTF8:%@ substitutions:%@",
          command, environment, @(isUTF8), substitutions);
@@ -2050,14 +2114,13 @@ ITERM_WEAKLY_REFERENCEABLE
     self.isUTF8 = isUTF8;
     self.substitutions = substitutions ?: @{};
 
-    [self computeArgvForCommand:command substitutions:substitutions synchronous:synchronous completion:^(NSArray<NSString *> *argv) {
+    [self computeArgvForCommand:command substitutions:substitutions completion:^(NSArray<NSString *> *argv) {
         DLog(@"argv=%@", argv);
-        [self computeEnvironmentForNewJobFromEnvironment:environment ?: @{} substitutions:substitutions synchronous:synchronous completion:^(NSDictionary *env) {
+        [self computeEnvironmentForNewJobFromEnvironment:environment ?: @{} substitutions:substitutions completion:^(NSDictionary *env) {
             @synchronized(self) {
                 _registered = YES;
             }
-            [self fetchAutoLogFilenameSynchronously:synchronous
-                                         completion:^(NSString * _Nonnull autoLogFilename) {
+            [self fetchAutoLogFilenameWithCompletion:^(NSString * _Nonnull autoLogFilename) {
                 [[self loggingHelper] setPath:autoLogFilename
                                       enabled:autoLogFilename != nil
                                     plainText:[iTermProfilePreferences boolForKey:KEY_PLAIN_TEXT_LOGGING
@@ -2071,7 +2134,6 @@ ITERM_WEAKLY_REFERENCEABLE
                               gridSize:_screen.size
                               viewSize:_screen.viewSize
                                 isUTF8:isUTF8
-                           synchronous:synchronous
                             completion:^{
                                 [self sendInitialText];
                                 if (completion) {
@@ -2102,8 +2164,8 @@ ITERM_WEAKLY_REFERENCEABLE
                              canActivate:NO
                       respectTabbingMode:NO
                                  command:nil
-                                   block:nil
-                             synchronous:NO
+                             makeSession:nil
+                          didMakeSession:nil
                               completion:nil];
 }
 
@@ -2885,7 +2947,7 @@ ITERM_WEAKLY_REFERENCEABLE
         DLog(@"  brokenPipe: Already exited");
         return;
     }
-    // Ensure we don't leak the unix domain socket file descriptor.
+    // Ensure we don't leak the monoserver unix domain socket file descriptor.
     [_shell killWithMode:iTermJobManagerKillingModeBrokenPipe];
     if ([self shouldPostUserNotification] &&
         [iTermProfilePreferences boolForKey:KEY_SEND_SESSION_ENDED_ALERT inProfile:self.profile]) {
@@ -2991,7 +3053,6 @@ ITERM_WEAKLY_REFERENCEABLE
            customShell:_customShell
                 isUTF8:_isUTF8
          substitutions:_substitutions
-           synchronous:YES
             completion:nil];
     [_naggingController willRecycleSession];
     DLog(@"  replaceTerminatedShellWithNewInstance: return with terminal=%@", _screen.terminal);
@@ -3157,6 +3218,9 @@ ITERM_WEAKLY_REFERENCEABLE
             }
         }
         if ([ITAddressBookMgr shortcutIdentifier:identifier title:title matchesItem:item]) {
+            if (item.hasSubmenu) {
+                return YES;
+            }
             [NSApp sendAction:[item action]
                            to:[item target]
                          from:item];
@@ -4393,6 +4457,16 @@ ITERM_WEAKLY_REFERENCEABLE
     return [self arrangementWithContents:NO];
 }
 
+- (NSString *)programType {
+    if ([self.program isEqualToString:[ITAddressBookMgr shellLauncherCommandWithCustomShell:self.customShell]]) {
+        if (self.customShell.length) {
+            return kProgramTypeCustomShell;
+        }
+        return kProgramTypeShellLauncher;
+    }
+    return kProgramTypeCommand;
+}
+
 - (NSDictionary *)arrangementWithContents:(BOOL)includeContents {
     NSMutableDictionary* result = [NSMutableDictionary dictionaryWithCapacity:3];
     result[SESSION_ARRANGEMENT_COLUMNS] = @(_screen.width);
@@ -4402,18 +4476,20 @@ ITERM_WEAKLY_REFERENCEABLE
     if (_substitutions) {
         result[SESSION_ARRANGEMENT_SUBSTITUTIONS] = _substitutions;
     }
-    if ([self.program isEqualToString:[ITAddressBookMgr shellLauncherCommandWithCustomShell:self.customShell]]) {
+    
+    NSString *const programType = [self programType];
+    if ([programType isEqualToString:kProgramTypeCustomShell]) {
         // The shell launcher command could change from run to run (e.g., if you move iTerm2).
         // I don't want to use a magic string, so setting program to an empty dict.
-        if (self.customShell.length) {
-            NSDictionary *dict = @{ kProgramType: kProgramTypeCustomShell };
-            dict = [dict dictionaryBySettingObject:self.customShell forKey:kCustomShell];
-            result[SESSION_ARRANGEMENT_PROGRAM] = dict;
-        } else {
-            NSDictionary *dict = @{ kProgramType: kProgramTypeShellLauncher };
-            result[SESSION_ARRANGEMENT_PROGRAM] = dict;
-        }
-    } else if (self.program) {
+        assert(self.customShell.length);
+        NSDictionary *dict = @{ kProgramType: kProgramTypeCustomShell };
+        dict = [dict dictionaryBySettingObject:self.customShell forKey:kCustomShell];
+        result[SESSION_ARRANGEMENT_PROGRAM] = dict;
+    } else if ([programType isEqualToString:kProgramTypeShellLauncher]) {
+        NSDictionary *dict = @{ kProgramType: kProgramTypeShellLauncher };
+        result[SESSION_ARRANGEMENT_PROGRAM] = dict;
+    } else if ([programType isEqualToString:kProgramTypeCommand] &&
+               self.program) {
         result[SESSION_ARRANGEMENT_PROGRAM] = @{ kProgramType: kProgramTypeCommand,
                                                  kProgramCommand: self.program };
     }
@@ -4447,7 +4523,9 @@ ITERM_WEAKLY_REFERENCEABLE
         if (self.lastDirectory) {
             DLog(@"Saving arrangement for %@ with lastDirectory of %@", self, self.lastDirectory);
             result[SESSION_ARRANGEMENT_LAST_DIRECTORY] = self.lastDirectory;
-            result[SESSION_ARRANGEMENT_LAST_DIRECTORY_IS_UNSUITABLE_FOR_OLD_PWD] = @(self.lastDirectoryIsUnsuitableForOldPWD);
+        }
+        if (self.lastLocalDirectory) {
+            result[SESSION_ARRANGEMENT_LAST_LOCAL_DIRECTORY] = self.lastLocalDirectory;
         }
         result[SESSION_ARRANGEMENT_SELECTION] =
             [self.textview.selection dictionaryValueWithYOffset:-numberOfLinesDropped];
@@ -4462,7 +4540,12 @@ ITERM_WEAKLY_REFERENCEABLE
         // These values are used for restoring sessions after a crash. It's only saved when contents
         // are included since saved window arrangements have no business knowing the process id.
         if ([iTermAdvancedSettingsModel runJobsInServers] && _shell.isSessionRestorationPossible) {
-            result[SESSION_ARRANGEMENT_SERVER_PID] = _shell.sessionRestorationIdentifier;
+            NSObject *restorationIdentifier = _shell.sessionRestorationIdentifier;
+            if ([restorationIdentifier isKindOfClass:[NSNumber class]]) {
+                result[SESSION_ARRANGEMENT_SERVER_PID] = restorationIdentifier;
+            } else if ([restorationIdentifier isKindOfClass:[NSDictionary class]]) {
+                result[SESSION_ARRANGEMENT_SERVER_DICT] = restorationIdentifier;
+            }
             if (self.tty) {
                 result[SESSION_ARRANGEMENT_TTY] = self.tty;
             }
@@ -5089,8 +5172,10 @@ ITERM_WEAKLY_REFERENCEABLE
     NSString *guid = [bookmark objectForKey:KEY_GUID];
     if (self.isDivorced) {
         ITAssertWithMessage([[ProfileModel sessionsInstance] bookmarkWithGuid:guid] != nil,
-                            @"I am divorced with guid %@ but the sessions instance has no such guid. Log:\n%@\n\nModel log:\n%@",
-                            guid, _divorceDecree, [[ProfileModel sessionsInstance] debugHistoryForGuid:guid]);
+                            @"I am divorced with guid %@ but the sessions instance has no such guid. Log:\n%@\n\nModel log:\n%@\nEnd.",
+                            guid,
+                            _divorceDecree,
+                            [[[[ProfileModel sessionsInstance] debugHistoryForGuid:guid] componentsJoinedByString:@"\n"] it_compressedString]);
         return guid;
     }
     [self setIsDivorced:YES withDecree:@"PLACEHOLDER DECREE"];
@@ -6036,6 +6121,7 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
                                                    clientName:preferredTmuxClientName
                                                       profile:profile
                                                  profileModel:model];
+
     [self.variablesScope setValue:_tmuxController.clientName forVariableNamed:iTermVariableKeySessionTmuxClientName];
     _tmuxController.ambiguousIsDoubleWidth = _treatAmbiguousWidthAsDoubleWidth;
     _tmuxController.unicodeVersion = _unicodeVersion;
@@ -6078,6 +6164,7 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
     [self printTmuxMessage:@"  C    Run tmux command."];
 
     if ([iTermPreferences boolForKey:kPreferenceKeyAutoHideTmuxClientSession]) {
+        _tmuxController.initialWindowHint = self.view.window.frame;
         _hideAfterTmuxWindowOpens = YES;
     }
 }
@@ -6956,7 +7043,8 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
             Profile *profile = [[ProfileModel sharedInstance] bookmarkWithGuid:keyBindingText];
             [iTermSessionLauncher launchBookmark:profile
                                       inTerminal:nil
-                              respectTabbingMode:NO];
+                              respectTabbingMode:NO
+                                      completion:nil];
             return YES;
         }
         case KEY_ACTION_UNDO:
@@ -7107,16 +7195,32 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
         case KEY_ACTION_NEW_TAB_WITH_PROFILE:
             [[_delegate realParentWindow] newTabWithBookmarkGuid:keyBindingText];
             break;
-        case KEY_ACTION_SPLIT_HORIZONTALLY_WITH_PROFILE:
-            [[_delegate realParentWindow] splitVertically:NO
-                                         withBookmarkGuid:keyBindingText
-                                              synchronous:NO];
+        case KEY_ACTION_SPLIT_HORIZONTALLY_WITH_PROFILE: {
+            Profile *profile = [[ProfileModel sharedInstance] bookmarkWithGuid:keyBindingText];
+            if (!profile) {
+                break;
+            }
+            [[_delegate realParentWindow] asyncSplitVertically:NO
+                                                        before:NO
+                                                       profile:profile
+                                                 targetSession:[[_delegate realParentWindow] currentSession]
+                                                    completion:nil
+                                                         ready:nil];
             break;
-        case KEY_ACTION_SPLIT_VERTICALLY_WITH_PROFILE:
-            [[_delegate realParentWindow] splitVertically:YES
-                                         withBookmarkGuid:keyBindingText
-                                              synchronous:NO];
+        }
+        case KEY_ACTION_SPLIT_VERTICALLY_WITH_PROFILE: {
+            Profile *profile = [[ProfileModel sharedInstance] bookmarkWithGuid:keyBindingText];
+            if (!profile) {
+                break;
+            }
+            [[_delegate realParentWindow] asyncSplitVertically:YES
+                                                        before:NO
+                                                       profile:profile
+                                                 targetSession:[[_delegate realParentWindow] currentSession]
+                                                    completion:nil
+                                                         ready:nil];
             break;
+        }
         case KEY_ACTION_SET_PROFILE: {
             Profile *newProfile = [[ProfileModel sharedInstance] bookmarkWithGuid:keyBindingText];
             if (newProfile) {
@@ -7822,13 +7926,45 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
     return [self encoding];
 }
 
-- (NSString *)textViewCurrentWorkingDirectory {
-    return [_shell getWorkingDirectory];
+// This uses the local directory because it is the last desperate gasp of URL action file finding.
+- (void)textViewGetCurrentWorkingDirectoryWithCompletion:(void (^)(NSString *workingDirectory))completion {
+    [self asyncCurrentLocalWorkingDirectory:completion];
 }
 
+// NOTE: This will not fetch the current directory if it's not already known to avoid blocking
+// the main thread. Don't use this unless you have to be synchronous.
+// Use asyncGetCurrentLocatioNWithCompletion instead.
 - (NSURL *)textViewCurrentLocation {
     VT100RemoteHost *host = [self currentHost];
-    NSString *path = _lastDirectory ?: [_shell getWorkingDirectory];
+    NSString *path = _lastDirectory;
+    NSURLComponents *components = [[[NSURLComponents alloc] init] autorelease];
+    components.host = host.hostname;
+    components.user = host.username;
+    components.path = path;
+    components.scheme = @"file";
+    return [components URL];
+}
+
+- (void)asyncGetCurrentLocationWithCompletion:(void (^)(NSURL *url))completion {
+    // NOTE: Use local directory here because this becomes the proxy icon, and it's basically
+    // useless when given a remote directory.
+    __weak __typeof(self) weakSelf = self;
+    [self asyncCurrentLocalWorkingDirectory:^(NSString *pwd) {
+        completion([weakSelf urlForHost:weakSelf.currentHost path:pwd]);
+    }];
+}
+
+- (void)updateLocalDirectoryWithCompletion:(void (^)(NSString *pwd))completion {
+    __weak __typeof(self) weakSelf = self;
+    [_shell getWorkingDirectoryWithCompletion:^(NSString *pwd) {
+        // Don't call setLastDirectory:remote:pushed: because we don't want to update the
+        // path variable if the session is ssh'ed somewhere.
+        weakSelf.lastLocalDirectory = pwd;
+        completion(pwd);
+    }];
+}
+
+- (NSURL *)urlForHost:(VT100RemoteHost *)host path:(NSString *)path {
     NSURLComponents *components = [[[NSURLComponents alloc] init] autorelease];
     components.host = host.hostname;
     components.user = host.username;
@@ -7884,10 +8020,12 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
     } else {
         profile = [self profileForSplit];
     }
-    [[_delegate realParentWindow] splitVertically:vertically
-                                     withBookmark:profile
-                                    targetSession:self
-                                      synchronous:NO];
+    [[_delegate realParentWindow] asyncSplitVertically:vertically
+                                                before:NO
+                                               profile:profile
+                                         targetSession:self
+                                            completion:nil
+                                                 ready:nil];
 }
 
 - (void)textViewSelectNextTab
@@ -8008,7 +8146,8 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
                           button:(MouseButtonNumber)button
                       coordinate:(VT100GridCoord)coord
                           deltaY:(CGFloat)deltaY
-        allowDragBeforeMouseDown:(BOOL)allowDragBeforeMouseDown {
+        allowDragBeforeMouseDown:(BOOL)allowDragBeforeMouseDown
+                        testOnly:(BOOL)testOnly {
     DLog(@"Report event type %lu, modifiers=%lu, button=%d, coord=%@",
          (unsigned long)eventType, (unsigned long)modifiers, button,
          VT100GridCoordDescription(coord));
@@ -8021,12 +8160,14 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
                 case MOUSE_REPORTING_NORMAL:
                 case MOUSE_REPORTING_BUTTON_MOTION:
                 case MOUSE_REPORTING_ALL_MOTION:
-                    _reportingMouseDown = YES;
-                    _lastReportedCoord = coord;
-                    [self writeLatin1EncodedData:[_terminal.output mousePress:button
-                                                                withModifiers:modifiers
-                                                                           at:coord]
-                                broadcastAllowed:NO];
+                    if (!testOnly) {
+                        _reportingMouseDown = YES;
+                        _lastReportedCoord = coord;
+                        [self writeLatin1EncodedData:[_terminal.output mousePress:button
+                                                                    withModifiers:modifiers
+                                                                               at:coord]
+                                    broadcastAllowed:NO];
+                    }
                     return YES;
 
                 case MOUSE_REPORTING_NONE:
@@ -8038,6 +8179,19 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
         case NSEventTypeLeftMouseUp:
         case NSEventTypeRightMouseUp:
         case NSEventTypeOtherMouseUp:
+            if (testOnly) {
+                switch ([_terminal mouseMode]) {
+                    case MOUSE_REPORTING_NORMAL:
+                    case MOUSE_REPORTING_BUTTON_MOTION:
+                    case MOUSE_REPORTING_ALL_MOTION:
+                        return YES;
+
+                    case MOUSE_REPORTING_NONE:
+                    case MOUSE_REPORTING_HIGHLIGHT:
+                        break;
+                }
+                return NO;
+            }
             if (_reportingMouseDown) {
                 _reportingMouseDown = NO;
                 _lastReportedCoord = VT100GridCoordMake(-1, -1);
@@ -8062,8 +8216,13 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
 
 
         case NSEventTypeMouseMoved:
-            if ([_terminal mouseMode] == MOUSE_REPORTING_ALL_MOTION &&
-                !VT100GridCoordEquals(coord, _lastReportedCoord)) {
+            if ([_terminal mouseMode] != MOUSE_REPORTING_ALL_MOTION) {
+                return NO;
+            }
+            if (testOnly) {
+                return YES;
+            }
+            if (!VT100GridCoordEquals(coord, _lastReportedCoord)) {
                 _lastReportedCoord = coord;
                 [self writeLatin1EncodedData:[_terminal.output mouseMotion:MOUSE_BUTTON_NONE
                                                              withModifiers:modifiers
@@ -8076,6 +8235,19 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
         case NSEventTypeLeftMouseDragged:
         case NSEventTypeRightMouseDragged:
         case NSEventTypeOtherMouseDragged:
+            if (testOnly) {
+                switch ([_terminal mouseMode]) {
+                    case MOUSE_REPORTING_BUTTON_MOTION:
+                    case MOUSE_REPORTING_ALL_MOTION:
+                    case MOUSE_REPORTING_NORMAL:
+                        return YES;
+
+                    case MOUSE_REPORTING_NONE:
+                    case MOUSE_REPORTING_HIGHLIGHT:
+                        break;
+                }
+                return NO;
+            }
             if ((_reportingMouseDown || allowDragBeforeMouseDown) &&
                 !VT100GridCoordEquals(coord, _lastReportedCoord)) {
                 _lastReportedCoord = coord;
@@ -8105,6 +8277,9 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
                 case MOUSE_REPORTING_NORMAL:
                 case MOUSE_REPORTING_BUTTON_MOTION:
                 case MOUSE_REPORTING_ALL_MOTION:
+                    if (testOnly) {
+                        return YES;
+                    }
                     if (deltaY != 0) {
                         int steps;
                         if ([iTermAdvancedSettingsModel proportionalScrollWheelReporting]) {
@@ -8455,6 +8630,10 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
     return self.expect;
 }
 
+- (void)textViewDidDetectMouseReportingFrustration {
+    [self.naggingController didDetectMouseReportingFrustration];
+}
+
 - (void)bury {
     if (self.isTmuxClient) {
         if (!self.delegate) {
@@ -8533,7 +8712,7 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
     event.defaultDelay = 0.02;
     event.chunkKey = @"";
     event.delayKey = @"";
-    event.flags = event.flags | kPasteFlagsDisableWarnings;
+    event.flags = kPasteFlagsDisableWarnings;
     [_pasteHelper tryToPasteEvent:event];
 }
 
@@ -8808,9 +8987,10 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
     _screen.trackCursorLineMovement = NO;
 }
 
-- (void)screenDidAppendStringToCurrentLine:(NSString *)string {
+- (void)screenDidAppendStringToCurrentLine:(NSString *)string
+                               isPlainText:(BOOL)plainText {
     [self appendStringToTriggerLine:string];
-    if (_logging.enabled && _logging.plainText && !self.isTmuxGateway) {
+    if (plainText && _logging.enabled && _logging.plainText && !self.isTmuxGateway) {
         [_logging logData:[string dataUsingEncoding:_terminal.encoding]];
     }
 }
@@ -8820,7 +9000,7 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
         NSString *string = [[[NSString alloc] initWithBytes:asciiData->buffer
                                                      length:asciiData->length
                                                    encoding:NSASCIIStringEncoding] autorelease];
-        [self screenDidAppendStringToCurrentLine:string];
+        [self screenDidAppendStringToCurrentLine:string isPlainText:YES];
     } else {
         if (_logging.enabled && _logging.plainText && !self.isTmuxGateway) {
             [_logging logData:[NSData dataWithBytesNoCopy:asciiData->buffer
@@ -9072,8 +9252,9 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
     [[_delegate realParentWindow] incrementBadge];
 }
 
-- (NSString *)screenCurrentWorkingDirectory {
-    return [_shell getWorkingDirectory];
+- (void)screenGetWorkingDirectoryWithCompletion:(void (^)(NSString *))completion {
+    [_pwdPoller addOneTimeCompletion:completion];
+    [_pwdPoller poll];
 }
 
 - (void)screenSetCursorVisible:(BOOL)visible {
@@ -9848,47 +10029,16 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
 }
 
 - (void)offerToTurnOffBracketedPasteOnHostChange {
-    NSString *title =
-        @"Looks like paste bracketing was left on when an ssh session ended unexpectedly or an app misbehaved. Turn it off?";
-    iTermAnnouncementViewController *announcement =
-    [iTermAnnouncementViewController announcementWithTitle:title
-                                                     style:kiTermAnnouncementViewStyleQuestion
-                                               withActions:@[ @"_Yes", @"Always", @"Never", @"Help" ]
-                                                completion:^(int selection) {
-            switch (selection) {
-                case -2:  // Dismiss programmatically
-                    break;
-
-                case -1: // No
-                    break;
-
-                case 0: // Yes
-                    self.terminal.bracketedPasteMode = NO;
-                    break;
-
-                case 1: // Always
-                    [[NSUserDefaults standardUserDefaults] setBool:YES
-                                                            forKey:kTurnOffBracketedPasteOnHostChangeUserDefaultsKey];
-                    self.terminal.bracketedPasteMode = NO;
-                    break;
-
-                case 2: // Never
-                    [[NSUserDefaults standardUserDefaults] setBool:NO
-                                                            forKey:kTurnOffBracketedPasteOnHostChangeUserDefaultsKey];
-                    break;
-
-                case 3: // Help
-                    [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://iterm2.com/paste_bracketing"]];
-                    break;
-            }
-        }];
-    [self queueAnnouncement:announcement identifier:kTurnOffBracketedPasteOnHostChangeAnnouncementIdentifier];
+    [self.naggingController offerToTurnOffBracketedPasteOnHostChange];
 }
 
 - (void)tryAutoProfileSwitchWithHostname:(NSString *)hostname
                                 username:(NSString *)username
                                     path:(NSString *)path
                                      job:(NSString *)job {
+    if ([iTermProfilePreferences boolForKey:KEY_PREVENT_APS inProfile:self.profile]) {
+        return;
+    }
     [_automaticProfileSwitcher setHostname:hostname username:username path:path job:job];
 }
 
@@ -10313,9 +10463,10 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
         [_directories addObject:lastDirectory];
         [self trimDirectoriesIfNeeded];
     }
-    [_lastDirectory autorelease];
-    _lastDirectory = [lastDirectory copy];
-    _lastDirectoryIsUnsuitableForOldPWD = directoryIsRemote;
+    self.lastDirectory = lastDirectory;
+    if (!directoryIsRemote) {
+        self.lastLocalDirectory = lastDirectory;
+    }
     if (lastDirectory) {
         DLog(@"Set path to %@", lastDirectory);
         self.variablesScope.path = lastDirectory;
@@ -10324,26 +10475,47 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
     [_delegate sessionCurrentDirectoryDidChange:self];
 }
 
-- (NSString *)currentLocalWorkingDirectoryOrInitialDirectory {
-    DLog(@"currentLocalWorkingDirectory=%@ environment[pwd]=%@", self.currentLocalWorkingDirectory, self.environment[@"PWD"]);
-    return self.currentLocalWorkingDirectory ?: self.environment[@"PWD"];
+- (void)asyncCurrentLocalWorkingDirectoryOrInitialDirectory:(void (^)(NSString *pwd))completion {
+    NSString *envPwd = self.environment[@"PWD"];
+    DLog(@"asyncCurrentLocalWorkingDirectoryOrInitialDirectory environment[pwd]=%@", envPwd);
+    [self asyncCurrentLocalWorkingDirectory:^(NSString *pwd) {
+        if (!pwd) {
+            completion(envPwd);
+            return;
+        }
+        completion(pwd);
+    }];
 }
 
+- (void)asyncCurrentLocalWorkingDirectory:(void (^)(NSString *pwd))completion {
+    if (_lastLocalDirectory) {
+        completion(_lastLocalDirectory);
+        return;
+    }
+    __weak __typeof(self) weakSelf = self;
+    [self updateLocalDirectoryWithCompletion:^(NSString *pwd) {
+        completion(weakSelf.lastLocalDirectory);
+    }];
+}
+
+// POTENTIALLY SLOW - AVOID CALLING!
 - (NSString *)currentLocalWorkingDirectory {
-    if (_lastDirectoryIsUnsuitableForOldPWD || _lastDirectory == nil) {
-        DLog(@"Last directory is unsuitable or nil");
-        // Ask the kernel what the child's process's working directory is.
-        return [_shell getWorkingDirectory];
-    } else {
+    if (self.lastLocalDirectory != nil) {
         // If a shell integration-provided working directory is available, prefer to use it because
         // it has unresolved symlinks. The path provided by -getWorkingDirectory has expanded symlinks
         // and isn't what the user expects to see. This was raised in issue 3383. My first fix was
         // to expand symlinks on _lastDirectory and use it if it matches what the kernel reports.
         // That was a bad idea because expanding symlinks is slow on network file systems (Issue 4901).
         // Instead, we'll use _lastDirectory if we believe it's on localhost.
+        // Furthermore, getWorkingDirectory is slow and blocking and it would be better never to call
+        // it.
         DLog(@"Using last directory from shell integration: %@", _lastDirectory);
-        return _lastDirectory;
+        return self.lastLocalDirectory;
     }
+    DLog(@"Last directory is unsuitable or nil");
+    // Ask the kernel what the child's process's working directory is.
+    self.lastLocalDirectory = [_shell getWorkingDirectory];
+    return self.lastLocalDirectory;
 }
 
 - (void)setLastRemoteHost:(VT100RemoteHost *)lastRemoteHost {
@@ -10359,10 +10531,12 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
 // all the time.
 - (void)screenLogWorkingDirectoryAtLine:(int)line
                           withDirectory:(NSString *)directory
-                                 pushed:(BOOL)pushed {
-    DLog(@"screenLogWorkingDirectoryAtLine:%@ withDirectory:%@ pushed:%@", @(line), directory, @(pushed));
+                                 pushed:(BOOL)pushed
+                                 timely:(BOOL)timely {
+    DLog(@"screenLogWorkingDirectoryAtLine:%@ withDirectory:%@ pushed:%@ timely:%@",
+         @(line), directory, @(pushed), @(timely));
 
-    if (pushed) {
+    if (pushed && timely) {
         // If we're currently polling for a working directory, do not create a
         // mark for the result when the poll completes because this mark is
         // from a higher-quality data source.
@@ -10380,20 +10554,21 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
                                                                onHost:[_screen remoteHostOnLine:line]
                                                              isChange:!isSame];
     }
-    // This has been a big ugly hairball for a long time. Because of the
-    // working directory poller I think it's safe to simplify it now. Before,
-    // we'd track whether the update was trustworthy and likely to happen
-    // again. These days, it should always be regular so that is not
-    // interesting. Instead, we just want to make sure we know if the directory
-    // is local or remote because we want to ignore local directories when we
-    // know the user is ssh'ed somewhere.
-    const BOOL directoryIsRemote = pushed && remoteHost && !remoteHost.isLocalhost;
+    if (timely) {
+        // This has been a big ugly hairball for a long time. Because of the
+        // working directory poller I think it's safe to simplify it now. Before,
+        // we'd track whether the update was trustworthy and likely to happen
+        // again. These days, it should always be regular so that is not
+        // interesting. Instead, we just want to make sure we know if the directory
+        // is local or remote because we want to ignore local directories when we
+        // know the user is ssh'ed somewhere.
+        const BOOL directoryIsRemote = pushed && remoteHost && !remoteHost.isLocalhost;
 
-    // Update lastDirectory, proxy icon, "path" variable.
-    [self setLastDirectory:directory remote:directoryIsRemote pushed:pushed];
-
-    if (pushed) {
-        self.lastRemoteHost = remoteHost;
+        // Update lastDirectory, lastLocalDirectory (maybe), proxy icon, "path" variable.
+        [self setLastDirectory:directory remote:directoryIsRemote pushed:pushed];
+        if (pushed) {
+            self.lastRemoteHost = remoteHost;
+        }
     }
 }
 
@@ -10754,6 +10929,11 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
 
 - (void)pasteHelperWriteString:(NSString *)string {
     [self writeTask:string];
+    if (_pasteHelper.pasteContext.bytesWritten == 0 &&
+        _pasteHelper.pasteContext.pasteEvent.flags & kPasteFlagsBracket &&
+        [_terminal bracketedPasteMode]) {
+        [self watchForPasteBracketingOopsieWithPrefix:[_pasteHelper.pasteContext.pasteEvent.originalString it_substringToIndex:4]];
+    }
 }
 
 - (void)pasteHelperKeyDown:(NSEvent *)event {
@@ -10822,7 +11002,9 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
 }
 
 - (void)automaticProfileSwitcherLoadProfile:(iTermSavedProfile *)savedProfile {
-    [self setProfile:savedProfile.originalProfile preservingName:NO adjustWindow:NO];
+    Profile *underlyingProfile = [[ProfileModel sharedInstance] bookmarkWithGuid:savedProfile.originalProfile[KEY_GUID]];
+    Profile *replacementProfile = underlyingProfile ?: savedProfile.originalProfile;
+    [self setProfile:replacementProfile preservingName:NO adjustWindow:NO];
     if (savedProfile.isDivorced) {
         NSMutableDictionary *overrides = [NSMutableDictionary dictionary];
         for (NSString *key in savedProfile.overriddenFields) {
@@ -11376,12 +11558,13 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
     return response;
 }
 
-- (ITMGetPromptResponse *)handleGetPromptRequest:(ITMGetPromptRequest *)request {
+- (void)handleGetPromptRequest:(ITMGetPromptRequest *)request completion:(void (^)(ITMGetPromptResponse *response))completion {
     VT100ScreenMark *mark = [_screen lastPromptMark];
     ITMGetPromptResponse *response = [[[ITMGetPromptResponse alloc] init] autorelease];
     if (!mark) {
         response.status = ITMGetPromptResponse_Status_PromptUnavailable;
-        return response;
+        completion(response);
+        return;
     }
 
     if (mark.promptRange.start.x >= 0) {
@@ -11406,10 +11589,10 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
         response.outputRange.end.y = _screen.currentGrid.cursor.y + _screen.numberOfScrollbackLines + _screen.totalScrollbackOverflow;
     }
 
-    response.workingDirectory = self.currentLocalWorkingDirectory;
     response.command = mark.command ?: self.currentCommand;
     response.status = ITMGetPromptResponse_Status_Ok;
-    return response;
+    response.workingDirectory = [_screen workingDirectoryOnLine:mark.promptRange.end.y] ?: self.lastDirectory;
+    completion(response);
 }
 
 - (ITMSetProfilePropertyResponse_Status)handleSetProfilePropertyForAssignments:(NSArray<iTermTuple<NSString *, id> *> *)tuples
@@ -11588,6 +11771,16 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
                                                                         colorMap:_colorMap
                                                                         tabStyle:[self.view.window.ptyWindow it_tabStyle]
                                                                    mainAndActive:(self.view.window.isMainWindow && NSApp.isActive)];
+}
+
+- (BOOL)statusBarHasDarkBackground {
+    if (self.view.window.ptyWindow.it_terminalWindowUseMinimalStyle) {
+        NSColor *color = self.view.window.ptyWindow.it_terminalWindowDecorationControlColor;
+        return [color isDark];
+    }
+    // This is called early in the appearance change process and subviews of the contentview aren't
+    // up to date yet.
+    return self.view.window.contentView.effectiveAppearance.it_isDark;
 }
 
 - (NSColor *)statusBarDefaultTextColor {
@@ -11780,7 +11973,7 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
 
 #pragma mark - iTermWorkingDirectoryPollerDelegate
 
-- (BOOL)workingDirectoryPollerShouldPoll {
+- (BOOL)useLocalDirectoryPollerResult {
     if (_workingDirectoryPollerDisabled) {
         DLog(@"Working directory poller disabled");
         return NO;
@@ -11796,17 +11989,27 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
     return YES;
 }
 
+- (BOOL)workingDirectoryPollerShouldPoll {
+    return YES;
+}
+
 - (pid_t)workingDirectoryPollerProcessID {
     return _shell.pid;;
 }
 
 - (void)workingDirectoryPollerDidFindWorkingDirectory:(NSString *)pwd invalidated:(BOOL)invalidated {
-    if (_shouldExpectCurrentDirUpdates && ![iTermAdvancedSettingsModel disablePotentiallyInsecureEscapeSequences]) {
-        return;
-    }
-    if (invalidated) {
-        DLog(@"Not creating a mark because of invalidation");
-        [self setLastDirectory:pwd remote:NO pushed:NO];
+    if (invalidated || ![self useLocalDirectoryPollerResult]) {
+        DLog(@"Not creating a mark. invalidated=%@", @(invalidated));
+        // This is definitely a local directory. It may have been invalidated because we got a push
+        // for a remote directory, but it's still useful to know the local directory for the purposes
+        // of session restoration.
+        self.lastLocalDirectory = pwd;
+
+        // Do not call setLastDirectory:remote:pushed: because there's no sense updating the path
+        // variable for an invalidated update when we might have a better remote working directory.
+        //
+        // Update the proxy icon since it only cares about the local directory.
+        [_delegate sessionCurrentDirectoryDidChange:self];
         return;
     }
 
@@ -12192,6 +12395,26 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
 
 - (void)naggingControllerSetBackgroundImageToFileWithName:(NSString *)filename {
     [self setSessionSpecificProfileValues:@{ KEY_BACKGROUND_IMAGE_LOCATION: filename.length ? filename : [NSNull null] }];
+}
+
+- (void)naggingControllerDisableMouseReportingPermanently:(BOOL)permanently {
+    if (permanently) {
+        if (self.isDivorced) {
+            [self setSessionSpecificProfileValues:@{ KEY_XTERM_MOUSE_REPORTING: @NO}];
+        } else {
+            [iTermProfilePreferences setBool:NO
+                                      forKey:KEY_XTERM_MOUSE_REPORTING
+                                   inProfile:self.profile
+                                       model:[ProfileModel sharedInstance]];
+            [[NSNotificationCenter defaultCenter] postNotificationName:kSessionProfileDidChange
+                                                                object:self.profile[KEY_GUID]];
+        }
+    }
+    [self.terminal setMouseMode:MOUSE_REPORTING_NONE];
+}
+
+- (void)naggingControllerDisableBracketedPasteMode {
+    self.terminal.bracketedPasteMode = NO;
 }
 
 @end

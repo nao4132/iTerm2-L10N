@@ -46,22 +46,24 @@
 #import "iTermFileDescriptorSocketPath.h"
 #import "iTermFontPanel.h"
 #import "iTermFullScreenWindowManager.h"
+#import "iTermGlobalScopeController.h"
 #import "iTermHotKeyController.h"
 #import "iTermHotKeyProfileBindingController.h"
 #import "iTermIntegerNumberFormatter.h"
 #import "iTermLaunchExperienceController.h"
 #import "iTermLaunchServices.h"
-#import "iTermLocalHostNameGuesser.h"
+#import "iTermLoggingHelper.h"
 #import "iTermLSOF.h"
 #import "iTermMenuBarObserver.h"
 #import "iTermMigrationHelper.h"
 #import "iTermModifierRemapper.h"
-#import "iTermObject.h"
 #import "iTermOnboardingWindowController.h"
 #import "iTermPreferences.h"
+#import "iTermProfileModelJournal.h"
 #import "iTermPythonRuntimeDownloader.h"
 #import "iTermScriptHistory.h"
 #import "iTermScriptImporter.h"
+#import "iTermSessionFactory.h"
 #import "iTermAdvancedSettingsModel.h"
 #import "iTermOpenQuicklyWindowController.h"
 #import "iTermOrphanServerAdopter.h"
@@ -69,6 +71,7 @@
 #import "iTermPasteHelper.h"
 #import "iTermPreciseTimer.h"
 #import "iTermPreferences.h"
+#import "iTermProfilesMenuController.h"
 #import "iTermPromptOnCloseReason.h"
 #import "iTermProfilePreferences.h"
 #import "iTermProfilesWindowController.h"
@@ -89,10 +92,10 @@
 #import "iTermToolbeltView.h"
 #import "iTermURLStore.h"
 #import "iTermUserDefaults.h"
-#import "iTermVariableScope+Global.h"
 #import "iTermWarning.h"
 #import "iTermWebSocketCookieJar.h"
 #import "MovePaneController.h"
+#import "NSAppearance+iTerm.h"
 #import "NSApplication+iTerm.h"
 #import "NSArray+iTerm.h"
 #import "NSBundle+iTerm.h"
@@ -150,7 +153,7 @@ static BOOL gStartupActivitiesPerformed = NO;
 static NSString *LEGACY_DEFAULT_ARRANGEMENT_NAME = @"Default";
 static BOOL hasBecomeActive = NO;
 
-@interface iTermApplicationDelegate () <iTermPasswordManagerDelegate, iTermObject>
+@interface iTermApplicationDelegate () <iTermOrphanServerAdopterDelegate, iTermPasswordManagerDelegate>
 
 @property(nonatomic, readwrite) BOOL workspaceSessionActive;
 
@@ -211,8 +214,6 @@ static BOOL hasBecomeActive = NO;
 
     NSArray<NSDictionary *> *_buriedSessionsState;
 
-    // Location of mouse when the app became inactive.
-    NSPoint _savedMouseLocation;
     iTermScriptsMenuController *_scriptsMenuController;
     enum {
         iTermUntitledFileOpenUnsafe,
@@ -223,7 +224,9 @@ static BOOL hasBecomeActive = NO;
     } _untitledFileOpenStatus;
     
     BOOL _disableTermination;
-    iTermVariables *_userVariables;
+
+    iTermFocusFollowsMouseController *_focusFollowsMouseController;
+    iTermGlobalScopeController *_globalScopeController;
 }
 
 - (instancetype)init {
@@ -290,9 +293,10 @@ static BOOL hasBecomeActive = NO;
                                                            andSelector:@selector(getUrl:withReplyEvent:)
                                                          forEventClass:kInternetEventClass
                                                             andEventID:kAEGetURL];
-
+        [[iTermOrphanServerAdopter sharedInstance] setDelegate:self];
         launchTime_ = [[NSDate date] retain];
         _workspaceSessionActive = YES;
+        _focusFollowsMouseController = [[iTermFocusFollowsMouseController alloc] init];
     }
 
     return self;
@@ -302,6 +306,8 @@ static BOOL hasBecomeActive = NO;
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     [[[NSWorkspace sharedWorkspace] notificationCenter] removeObserver:self];
     [_appNapStoppingActivity release];
+    [_focusFollowsMouseController release];
+    [_globalScopeController release];
     [super dealloc];
 }
 
@@ -632,21 +638,24 @@ static BOOL hasBecomeActive = NO;
             }
         }
 
-        PseudoTerminal *term = [self terminalToOpenFileIn];
-        DLog(@"application:openFile: launching new session in window %@", term);
-        PTYSession *session = [iTermSessionLauncher launchBookmark:bookmark
-                                                        inTerminal:term
-                                                respectTabbingMode:NO];
-        term = (id)session.delegate.realParentWindow;
-
-        if (term) {
+        PseudoTerminal *windowController = [self terminalToOpenFileIn];
+        DLog(@"application:openFile: launching new session in window %@", windowController);
+        [iTermSessionLauncher launchBookmark:bookmark
+                                  inTerminal:windowController
+                          respectTabbingMode:NO
+                                  completion:^(PTYSession *session) {
+            PseudoTerminal *term = (id)session.delegate.realParentWindow;
+            if (!term) {
+                return;
+            }
             // If term is a hotkey window, reveal it.
             iTermProfileHotKey *profileHotkey = [[iTermHotKeyController sharedInstance] profileHotKeyForWindowController:term];
-            if (profileHotkey) {
-                DLog(@"application:openFile: revealing hotkey window");
-                [[iTermHotKeyController sharedInstance] showWindowForProfileHotKey:profileHotkey url:nil];
+            if (!profileHotkey) {
+                return;
             }
-        }
+            DLog(@"application:openFile: revealing hotkey window");
+            [[iTermHotKeyController sharedInstance] showWindowForProfileHotKey:profileHotkey url:nil];
+        }];
     }
     return YES;
 }
@@ -888,12 +897,10 @@ static BOOL hasBecomeActive = NO;
     [aMenu addItem:[NSMenuItem separatorItem]];
     [self newSessionMenu:aMenu
                    title:@"New Window…"
-                  target:[iTermController sharedInstance]
                 selector:@selector(newSessionInWindowAtIndex:)
          openAllSelector:@selector(newSessionsInNewWindow:)];
     [self newSessionMenu:aMenu
                    title:@"New Tab…"
-                  target:frontTerminal
                 selector:@selector(newSessionInTabAtIndex:)
          openAllSelector:@selector(newSessionsInWindow:)];
     [self _addArrangementsMenuTo:aMenu];
@@ -961,12 +968,6 @@ static BOOL hasBecomeActive = NO;
                         break;
                 }
             }
-        } else {
-            // Restore hotkey window from pre-3.1 version.
-            legacyState = [coder decodeObjectForKey:kHotkeyWindowRestorableState];
-            if (legacyState) {
-                [[iTermHotKeyController sharedInstance] createHiddenWindowFromLegacyRestorableState:legacyState];
-            }
         }
     }
     _buriedSessionsState = [[coder decodeObjectForKey:iTermBuriedSessionState] retain];
@@ -987,7 +988,6 @@ static BOOL hasBecomeActive = NO;
 
 - (void)applicationDidResignActive:(NSNotification *)aNotification {
     DLog(@"******** Resign Active\n%@", [NSThread callStackSymbols]);
-    _savedMouseLocation = [NSEvent mouseLocation];
 }
 
 - (void)applicationWillHide:(NSNotification *)aNotification {
@@ -998,98 +998,8 @@ static BOOL hasBecomeActive = NO;
 
 - (void)applicationDidBecomeActive:(NSNotification *)aNotification {
     hasBecomeActive = YES;
-
-    if ([iTermPreferences boolForKey:kPreferenceKeyFocusFollowsMouse]) {
-        const NSPoint mouseLocation = [NSEvent mouseLocation];
-        if ([iTermAdvancedSettingsModel aggressiveFocusFollowsMouse]) {
-            DLog(@"Using aggressive FFM");
-            // If focus follows mouse is on, find the window under the cursor and make it key. If a PTYTextView
-            // is under the cursor make it first responder.
-            if (!NSEqualPoints(mouseLocation, _savedMouseLocation)) {
-                // Dispatch async because when you cmd-tab into iTerm2 the windows are briefly
-                // out of order. Looks like an OS bug to me. They fix themselves right away,
-                // and a dispatch async seems to give it enough time to right itself before
-                // we iterate front to back.
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    [self selectWindowAtScreenCoordinate:mouseLocation];
-                });
-            }
-        } else {
-            DLog(@"Using non-aggressive FFM");
-            NSView *view = [NSView viewAtScreenCoordinate:mouseLocation];
-            [[PTYTextView castFrom:view] refuseFirstResponderAtCurrentMouseLocation];
-        }
-    }
     [self hideStuckToolTips];
     iTermPreciseTimerClearLogs();
-}
-
-- (void)selectWindowAtScreenCoordinate:(NSPoint)mousePoint {
-    NSView *view = [NSView viewAtScreenCoordinate:mousePoint];
-    NSWindow *window = view.window;
-    if (view) {
-        DLog(@"Will activate %@", window.title);
-        [window makeKeyAndOrderFront:nil];
-        if ([view isKindOfClass:[PTYTextView class]]) {
-            [window makeFirstResponder:view];
-        }
-        return;
-    }
-}
-
-- (NSString *)effectiveTheme {
-    BOOL dark = NO;
-    BOOL light = NO;
-    BOOL highContrast = NO;
-    BOOL minimal = NO;
-
-    switch ((iTermPreferencesTabStyle)[iTermPreferences intForKey:kPreferenceKeyTabStyle]) {
-        case TAB_STYLE_DARK:
-            dark = YES;
-            break;
-
-        case TAB_STYLE_LIGHT:
-            light = YES;
-            break;
-            
-        case TAB_STYLE_DARK_HIGH_CONTRAST:
-            dark = YES;
-            highContrast = YES;
-            break;
-
-        case TAB_STYLE_LIGHT_HIGH_CONTRAST:
-            light = YES;
-            highContrast = YES;
-            break;
-
-        case TAB_STYLE_MINIMAL:
-            minimal = YES;
-            // fall through
-
-        case TAB_STYLE_COMPACT:
-        case TAB_STYLE_AUTOMATIC: {
-            NSString *systemMode = [[NSUserDefaults standardUserDefaults] stringForKey:@"AppleInterfaceStyle"];
-            if ([systemMode isEqual:@"Dark"]) {
-                dark = YES;
-            } else {
-                light = YES;
-            }
-            break;
-        }
-    }
-    NSMutableArray *array = [NSMutableArray array];
-    if (dark) {
-        [array addObject:@"dark"];
-    } else if (light) {
-        [array addObject:@"light"];
-    }
-    if (highContrast) {
-        [array addObject:@"highContrast"];
-    }
-    if (minimal) {
-        [array addObject:@"minimal"];
-    }
-    return [array componentsJoinedByString:@" "];
 }
 
 - (void)applicationWillFinishLaunching:(NSNotification *)aNotification {
@@ -1104,26 +1014,7 @@ static BOOL hasBecomeActive = NO;
         DLog(@"applicationWillFinishLaunching:");
     }
 
-    [[iTermVariableScope globalsScope] setValue:@(getpid()) forVariableNamed:iTermVariableKeyApplicationPID];
-    _userVariables = [[iTermVariables alloc] initWithContext:iTermVariablesSuggestionContextNone
-                                                       owner:self];
-    [[iTermVariableScope globalsScope] setValue:_userVariables forVariableNamed:@"user"];
-    [[iTermVariableScope globalsScope] setValue:[self effectiveTheme]
-                               forVariableNamed:iTermVariableKeyApplicationEffectiveTheme];
-    void (^themeDidChange)(id _Nonnull) = ^(id _Nonnull newValue) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [[iTermVariableScope globalsScope] setValue:[self effectiveTheme]
-                                       forVariableNamed:iTermVariableKeyApplicationEffectiveTheme];
-        });
-    };
-    [[NSUserDefaults standardUserDefaults] it_addObserverForKey:@"AppleInterfaceStyle"
-                                                          block:themeDidChange];
-    [[NSUserDefaults standardUserDefaults] it_addObserverForKey:kPreferenceKeyTabStyle
-                                                          block:themeDidChange];
-
-    [[iTermLocalHostNameGuesser sharedInstance] callBlockWhenReady:^(NSString *name) {
-        [[iTermVariableScope globalsScope] setValue:name forVariableNamed:iTermVariableKeyApplicationLocalhostName];
-    }];
+    _globalScopeController = [[iTermGlobalScopeController alloc] init];
 
     [PTYSession registerBuiltInFunctions];
     [PTYTab registerBuiltInFunctions];
@@ -1156,6 +1047,10 @@ static BOOL hasBecomeActive = NO;
                                   block:^(id before, id after) {
                                       [[iTermController sharedInstance] refreshSoftwareUpdateUserDefaults];
                                   }];
+    [iTermLoggingHelper observeNotificationsWithHandler:^(NSString * _Nonnull guid) {
+        [[PreferencePanel sharedInstance] openToProfileWithGuid:guid
+                                                            key:KEY_AUTOLOG];
+    }];
     [self openUntitledFileBecameSafe];
 }
 
@@ -1254,7 +1149,7 @@ static BOOL hasBecomeActive = NO;
             [self restoreBuriedSessionsState];
             if ([[iTermController sharedInstance] numberOfDecodesPending] == 0) {
                 _orphansAdopted = YES;
-                [[iTermOrphanServerAdopter sharedInstance] openWindowWithOrphans];
+                [[iTermOrphanServerAdopter sharedInstance] openWindowWithOrphansWithCompletion:nil];
             } else {
                 [[NSNotificationCenter defaultCenter] addObserver:self
                                                          selector:@selector(itermDidDecodeWindowRestorableState:)
@@ -1325,7 +1220,7 @@ static BOOL hasBecomeActive = NO;
 - (void)itermDidDecodeWindowRestorableState:(NSNotification *)notification {
     if (!_orphansAdopted && [[iTermController sharedInstance] numberOfDecodesPending] == 0) {
         _orphansAdopted = YES;
-        [[iTermOrphanServerAdopter sharedInstance] openWindowWithOrphans];
+        [[iTermOrphanServerAdopter sharedInstance] openWindowWithOrphansWithCompletion:nil];
     }
 }
 
@@ -1386,8 +1281,8 @@ static BOOL hasBecomeActive = NO;
                                      canActivate:NO
                               respectTabbingMode:YES
                                          command:nil
-                                           block:nil
-                                     synchronous:NO
+                                     makeSession:nil
+                                  didMakeSession:nil
                                       completion:nil];
         }
     }
@@ -1417,7 +1312,7 @@ static BOOL hasBecomeActive = NO;
 
 - (void)updateAddressBookMenu:(NSNotification *)aNotification {
     DLog(@"Updating Profile menu");
-    JournalParams params;
+    iTermProfileModelJournalParams *params = [[[iTermProfileModelJournalParams alloc] init] autorelease];
     if ([iTermAdvancedSettingsModel openProfilesInNewWindow]) {
         params.selector = @selector(newSessionInWindowAtIndex:);
         params.alternateSelector = @selector(newSessionInTabAtIndex:);
@@ -1433,10 +1328,10 @@ static BOOL hasBecomeActive = NO;
     params.alternateOpenAllSelector = @selector(newSessionsInWindow:);
     params.target = [iTermController sharedInstance];
 
-    [ProfileModel applyJournal:[aNotification userInfo]
-                         toMenu:bookmarkMenu
-                 startingAtItem:5
-                         params:&params];
+    [iTermProfilesMenuController applyJournal:[aNotification userInfo]
+                                       toMenu:bookmarkMenu
+                               startingAtItem:5
+                                       params:params];
 }
 
 #pragma mark - Startup Helpers
@@ -1607,7 +1502,6 @@ static BOOL hasBecomeActive = NO;
 
 - (void)newSessionMenu:(NSMenu *)superMenu
                  title:(NSString*)title
-                target:(id)aTarget
               selector:(SEL)selector
        openAllSelector:(SEL)openAllSelector {
     //new window menu
@@ -2041,6 +1935,7 @@ static BOOL hasBecomeActive = NO;
                                                              environment:environment
                                                                      pwd:nil
                                                                  options:iTermSingleUseWindowOptionsDoNotEscapeArguments
+                                                          didMakeSession:nil
                                                               completion:nil];
     }];
 }
@@ -2374,14 +2269,49 @@ static BOOL hasBecomeActive = NO;
     DLog(@"%@:\n%@", notification.name, [NSThread callStackSymbols]);
 }
 
-#pragma mark - iTermObject
+#pragma mark - iTermOrphanServerAdopterDelegate
 
-- (iTermBuiltInFunctions *)objectMethodRegistry {
-    return nil;
-}
-
-- (iTermVariableScope *)objectScope {
-    return [iTermVariableScope globalsScope];
+- (void)orphanServerAdopterOpenSessionForConnection:(iTermGeneralServerConnection)generalConnection
+                                           inWindow:(id)desiredWindow
+                                         completion:(void (^)(PTYSession *session))completion {
+    assert([iTermAdvancedSettingsModel runJobsInServers]);
+    Profile *defaultProfile = [[ProfileModel sharedInstance] defaultBookmark];
+    [iTermSessionLauncher launchBookmark:nil
+                              inTerminal:desiredWindow
+                                 withURL:nil
+                        hotkeyWindowType:iTermHotkeyWindowTypeNone
+                                 makeKey:NO
+                             canActivate:NO
+                      respectTabbingMode:NO
+                                 command:nil
+                             makeSession:^(NSDictionary * _Nonnull profile,
+                                           PseudoTerminal * _Nonnull term,
+                                           void (^ _Nonnull didMakeSession)(PTYSession * _Nonnull)) {
+        PTYSession *session = [term.sessionFactory newSessionWithProfile:defaultProfile];
+        [term addSessionInNewTab:session];
+        iTermGeneralServerConnection temp = generalConnection;
+        const BOOL ok = [term.sessionFactory attachOrLaunchCommandInSession:session
+                                                                  canPrompt:NO
+                                                                 objectType:iTermWindowObject
+                                                           serverConnection:&temp
+                                                                  urlString:nil
+                                                               allowURLSubs:NO
+                                                                environment:@{}
+                                                                customShell:[ITAddressBookMgr customShellForProfile:defaultProfile]
+                                                                     oldCWD:nil
+                                                             forceUseOldCWD:NO
+                                                                    command:nil
+                                                                     isUTF8:nil
+                                                              substitutions:nil
+                                                           windowController:term
+                                                                 completion:nil];
+        didMakeSession(ok ? session : nil);
+    }
+                          didMakeSession:^(PTYSession * _Nonnull session) {
+        [session showOrphanAnnouncement];
+        completion(session);
+    }
+                              completion:nil];
 }
 
 @end

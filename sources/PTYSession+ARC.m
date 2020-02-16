@@ -10,16 +10,22 @@
 #import "DebugLogging.h"
 #import "ITAddressBookMgr.h"
 #import "iTermAdvancedSettingsModel.h"
+#import "iTermExpect.h"
 #import "iTermExpressionEvaluator.h"
 #import "iTermProfilePreferences.h"
 #import "iTermVariableScope.h"
 #import "iTermWarning.h"
+#import "NSStringITerm.h"
 #import "PTYSession.h"
+
+@interface PTYSession(Private)
+@property(nonatomic, retain) iTermExpectation *pasteBracketingOopsieExpectation;
+- (void)offerToTurnOffBracketedPasteOnHostChange;
+@end
 
 @implementation PTYSession (ARC)
 
-- (void)fetchAutoLogFilenameSynchronously:(BOOL)synchronous
-                               completion:(void (^)(NSString *filename))completion {
+- (void)fetchAutoLogFilenameWithCompletion:(void (^)(NSString *filename))completion {
     [self setTermIDIfPossible];
     if (![self.profile[KEY_AUTOLOG] boolValue]) {
         completion(nil);
@@ -30,7 +36,7 @@
     dateFormatter.dateFormat = @"yyyyMMdd_HHmmss";
     NSString *format = [iTermAdvancedSettingsModel autoLogFormat];
     iTermExpressionEvaluator *evaluator = [[iTermExpressionEvaluator alloc] initWithInterpolatedString:format scope:self.variablesScope];
-    [evaluator evaluateWithTimeout:synchronous ? 0 : 5
+    [evaluator evaluateWithTimeout:5
                         completion:^(iTermExpressionEvaluator * _Nonnull evaluator) {
         if (evaluator.error) {
             NSString *message = [NSString stringWithFormat:@"Cannot start logging to session with profile “%@”: %@",
@@ -60,5 +66,27 @@
                      forVariableNamed:iTermVariableKeySessionTermID];
     }
 }
+
+- (void)watchForPasteBracketingOopsieWithPrefix:(NSString *)prefix {
+    NSString *const redflag = @"00~";
+
+    if ([prefix hasPrefix:redflag]) {
+        return;
+    }
+    __weak __typeof(self) weakSelf = self;
+    self.pasteBracketingOopsieExpectation =
+    [self.expect expectRegularExpression:[NSString stringWithFormat:@"(%@)?%@", redflag, prefix.it_escapedForRegex]
+                              completion:^(NSArray<NSString *> * _Nonnull captureGroups) {
+        if ([captureGroups[1] isEqualToString:redflag]) {
+            [weakSelf didFindPasteBracketingOopsie];
+        }
+    }];
+    [self.expect setTimeout:0.5 forExpectation:self.pasteBracketingOopsieExpectation];
+}
+
+- (void)didFindPasteBracketingOopsie {
+    [self.expect cancelExpectation:self.pasteBracketingOopsieExpectation];
+    [self offerToTurnOffBracketedPasteOnHostChange];
+ }
 
 @end

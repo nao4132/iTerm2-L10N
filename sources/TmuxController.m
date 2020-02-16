@@ -33,6 +33,7 @@
 #import "TmuxWindowOpener.h"
 #import "TSVParser.h"
 
+NSString *const kTmuxControllerSessionsWillChange = @"kTmuxControllerSessionsWillChange";
 NSString *const kTmuxControllerSessionsDidChange = @"kTmuxControllerSessionsDidChange";
 NSString *const kTmuxControllerDetachedNotification = @"kTmuxControllerDetachedNotification";
 NSString *const kTmuxControllerWindowsChangeNotification = @"kTmuxControllerWindowsChangeNotification";
@@ -687,6 +688,9 @@ static NSDictionary *iTermTmuxControllerDefaultFontOverridesFromProfile(Profile 
 }
 
 - (void)windowDidResize:(NSWindowController<iTermWindowController> *)term {
+    if (term.closing) {
+        return;
+    }
     if (_variableWindowSize) {
         [self variableSizeWindowDidResize:term];
         return;
@@ -806,7 +810,7 @@ static NSDictionary *iTermTmuxControllerDefaultFontOverridesFromProfile(Profile 
                                              responseTarget:self
                                            responseSelector:@selector(handleResizeWindowResponse:)
                                              responseObject:nil
-                                                      flags:0];
+                                                      flags:kTmuxGatewayCommandShouldTolerateErrors];
         return dict;
     }];
 }
@@ -2166,6 +2170,8 @@ static NSDictionary *iTermTmuxControllerDefaultFontOverridesFromProfile(Profile 
 - (void)listSessionsResponse:(NSString *)result
 {
     DLog(@"%@ got list-session response:\n%@", self, result);
+    [[NSNotificationCenter defaultCenter] postNotificationName:kTmuxControllerSessionsWillChange
+                                                        object:nil];
     self.sessionObjects = [[result componentsSeparatedByRegex:@"\n"] mapWithBlock:^iTermTmuxSessionObject *(NSString *line) {
         const NSInteger space = [line rangeOfString:@" "].location;
         if (space == NSNotFound) {
@@ -2325,9 +2331,14 @@ static NSDictionary *iTermTmuxControllerDefaultFontOverridesFromProfile(Profile 
     PTYTab *tab = [self window:[windowIndex intValue]];
     NSWindowController<iTermWindowController> * term = [tab realParentWindow];
     NSValue *p = [origins_ objectForKey:windowIndex];
-    if (term && p && ![term anyFullScreen] && term.tabs.count == 1) {
-        [[term window] setFrameOrigin:[p pointValue]];
+    if (term && ![term anyFullScreen] && term.tabs.count == 1) {
+        if (p) {
+            [[term window] setFrameOrigin:[p pointValue]];
+        } else if (!NSEqualRects(NSZeroRect, _initialWindowHint)) {
+            [[term window] setFrameOrigin:_initialWindowHint.origin];
+        }
     }
+    _initialWindowHint = NSZeroRect;
     [self saveAffinities];
     if (pendingWindowOpens_.count == 0) {
         [self sendInitialWindowsOpenedNotificationIfNeeded];

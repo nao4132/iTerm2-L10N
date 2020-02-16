@@ -101,6 +101,7 @@
 @property(nonatomic, readonly) BOOL shouldShowToolbelt;
 @property(nonatomic, readonly) NSArray *tabs;
 @property(nonatomic, readonly) BOOL windowIsResizing;
+@property(nonatomic, readonly) BOOL closing;
 
 #pragma mark - Basics
 
@@ -358,22 +359,14 @@
 
 #pragma mark - Splits
 
-// Create a new split. The new session uses the profile with |guid|.
-- (PTYSession *)splitVertically:(BOOL)isVertical
-               withBookmarkGuid:(NSString*)guid
-                    synchronous:(BOOL)synchronous;
-
-// Create a new split with a provided profile.
-- (PTYSession *)splitVertically:(BOOL)isVertical
-                    withProfile:(Profile *)profile
-                    synchronous:(BOOL)synchronous;
-
-// Create a new split with a specified bookmark. |targetSession| is the session
+// Create a new split with a specified bookmark. `targetSession` is the session
 // to split.
-- (PTYSession *)splitVertically:(BOOL)isVertical
-                   withBookmark:(Profile*)theBookmark
-                  targetSession:(PTYSession*)targetSession
-                    synchronous:(BOOL)synchronous;
+- (void)asyncSplitVertically:(BOOL)isVertical
+                      before:(BOOL)before
+                     profile:(Profile *)theBookmark
+               targetSession:(PTYSession *)targetSession
+                  completion:(void (^)(PTYSession *, BOOL ok))completion
+                       ready:(void (^)(PTYSession *, BOOL ok))ready;
 
 // Create a new split with the specified bookmark. The passed-in session is
 // inserted either before (left/above) or after (right/below) the target
@@ -384,7 +377,6 @@
           addingSession:(PTYSession*)newSession
           targetSession:(PTYSession*)targetSession
            performSetup:(BOOL)performSetup;
-
 // Indicates if the current session can be split.
 - (BOOL)canSplitPaneVertically:(BOOL)isVertical withBookmark:(Profile*)theBookmark;
 

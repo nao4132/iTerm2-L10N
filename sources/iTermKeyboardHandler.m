@@ -171,11 +171,13 @@ static iTermKeyboardHandler *sCurrentKeyboardHandler;
 - (BOOL)shouldSendEventToController:(NSEvent *)event
                             context:(iTermKeyboardHandlerContext)context {
     if (_hadMarkedTextBeforeHandlingKeypressEvent) {
+        DLog(@"_hadMarkedTextBeforeHandlingKeypressEvent=YES");
         return NO;
     }
 
     if (context.hasActionableKeyMapping) {
         // Delegate will do something useful
+        DLog(@"context.hasActionableKeyMapping");
         return YES;
     }
 
@@ -237,6 +239,7 @@ static iTermKeyboardHandler *sCurrentKeyboardHandler;
                    context:(iTermKeyboardHandlerContext)context
               inputContext:(NSTextInputContext *)inputContext {
     const unsigned int modflag = [event it_modifierFlags];
+    [_keyMapper keyMapperSetEvent:event];
 
     // Should we process the event immediately in the delegate?
     if ([self shouldSendEventToController:event context:context]) {

@@ -4,6 +4,7 @@
 #import "iTermBadgeLabel.h"
 #import "iTermColorMap.h"
 #import "iTermFindDriver.h"
+#import "iTermFocusFollowsMouseController.h"
 #import "iTermIndicatorsHelper.h"
 #import "iTermKeyboardHandler.h"
 #import "iTermLogicalMovementHelper.h"
@@ -126,7 +127,8 @@ typedef NS_ENUM(NSInteger, PTYCharType) {
 - (void)textViewMovePane;
 - (void)textViewSwapPane;
 - (NSStringEncoding)textViewEncoding;
-- (NSString *)textViewCurrentWorkingDirectory;
+- (void)textViewGetCurrentWorkingDirectoryWithCompletion:(void (^)(NSString *workingDirectory))completion;
+
 - (BOOL)textViewShouldPlaceCursorAt:(VT100GridCoord)coord verticalOk:(BOOL *)verticalOk;
 // If the textview isn't in the key window, the delegate can return YES in this
 // method to cause the cursor to be drawn as though it were key.
@@ -138,7 +140,8 @@ typedef NS_ENUM(NSInteger, PTYCharType) {
                           button:(MouseButtonNumber)button
                       coordinate:(VT100GridCoord)coord
                           deltaY:(CGFloat)deltaY
-        allowDragBeforeMouseDown:(BOOL)allowDragBeforeMouseDown;
+        allowDragBeforeMouseDown:(BOOL)allowDragBeforeMouseDown
+                        testOnly:(BOOL)testOnly;
 
 - (VT100GridAbsCoordRange)textViewRangeOfLastCommandOutput;
 - (VT100GridAbsCoordRange)textViewRangeOfCurrentCommand;
@@ -197,6 +200,7 @@ typedef NS_ENUM(NSInteger, PTYCharType) {
 - (iTermVariableScope *)textViewVariablesScope;
 - (BOOL)textViewTerminalBackgroundColorDeterminesWindowDecorationColor;
 - (void)textViewDidUpdateDropTargetVisibility;
+- (void)textViewDidDetectMouseReportingFrustration;
 @end
 
 @interface iTermHighlightedRow : NSObject
@@ -207,6 +211,7 @@ typedef NS_ENUM(NSInteger, PTYCharType) {
 
 @interface PTYTextView : NSView <
   iTermColorMapDelegate,
+  iTermFocusFollowsMouseFocusReceiver,
   iTermIndicatorsHelperDelegate,
   iTermSemanticHistoryControllerDelegate,
   iTermTextDrawingHelperDelegate,
@@ -586,11 +591,6 @@ scrollToFirstResult:(BOOL)scrollToFirstResult;
                   cursorCoord:(VT100GridCoord)cursorCoord;
 
 - (iTermLogicalMovementHelper *)logicalMovementHelperForCursorCoordinate:(VT100GridCoord)cursorCoord;
-
-// For focus follows mouse. Allows a new split pane to become focused even though the mouse pointer
-// is elsewhere. Records the mouse position. Refuses first responder as long as the mouse doesn't
-// move.
-- (void)refuseFirstResponderAtCurrentMouseLocation;
 
 // Undoes -refuseFirstResponderAtCurrentMouseLocation.
 - (void)resetMouseLocationToRefuseFirstResponderAt;

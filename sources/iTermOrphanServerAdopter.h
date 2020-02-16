@@ -7,13 +7,23 @@
 //
 
 #import <Foundation/Foundation.h>
+#import "PTYTask.h"
+
+@class PTYSession;
+
+@protocol iTermOrphanServerAdopterDelegate<NSObject>
+- (void)orphanServerAdopterOpenSessionForConnection:(iTermGeneralServerConnection)connection
+                                           inWindow:(id)window
+                                         completion:(void (^)(PTYSession *))completion;
+@end
 
 @interface iTermOrphanServerAdopter : NSObject
 
 @property(nonatomic, readonly) BOOL haveOrphanServers;
+@property(nonatomic, weak) id<iTermOrphanServerAdopterDelegate> delegate;
 
 + (instancetype)sharedInstance;
-- (void)openWindowWithOrphans;
+- (void)openWindowWithOrphansWithCompletion:(void (^)(void))completion;
 - (void)removePath:(NSString *)path;
 
 @end

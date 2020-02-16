@@ -44,7 +44,7 @@
     }];
 }
 
-+ (instancetype)imageOfSize:(NSSize)size drawBlock:(void (^)(void))block {
++ (instancetype)imageOfSize:(NSSize)size drawBlock:(void (^ NS_NOESCAPE)(void))block {
     NSImage *image = [[NSImage alloc] initWithSize:size];
     [image it_drawWithBlock:block];
     return image;
@@ -314,6 +314,9 @@
 
 - (NSImage *)it_flippedImage {
     const NSSize size = self.size;
+    if (size.width == 0 || size.height == 0) {
+        return self;
+    }
     NSAffineTransform *transform = [NSAffineTransform transform];
     [transform scaleXBy:1 yBy:-1];
     NSAffineTransform *center = [NSAffineTransform transform];

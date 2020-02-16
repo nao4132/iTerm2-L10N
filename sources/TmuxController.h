@@ -18,6 +18,8 @@
 @class PseudoTerminal;
 @class EquivalenceClassSet;
 
+// Posted just before sessions change (names, addition, deletion)
+extern NSString *const kTmuxControllerSessionsWillChange;
 // Posted when sessions change (names, addition, deletion)
 extern NSString *const kTmuxControllerSessionsDidChange;
 // Posted after detaching
@@ -57,6 +59,7 @@ extern NSString *const kTmuxControllerDidFetchSetTitlesStringOption;
 @property(nonatomic, readonly) BOOL shouldSetTitles;
 @property(nonatomic, readonly) BOOL serverIsLocal;
 @property(nonatomic, readonly) NSString *defaultTerminal;
+@property(nonatomic) NSRect initialWindowHint;
 
 - (instancetype)initWithGateway:(TmuxGateway *)gateway
                      clientName:(NSString *)clientName

@@ -58,20 +58,22 @@ NS_ASSUME_NONNULL_BEGIN
         return;
     }
 
-    const CGFloat maxWidth = self.bounds.size.width - point.x;
+    const CGFloat maxWidth = reallyDraw ? self.bounds.size.width - point.x : INFINITY;
     if (reallyDraw) {
         NSColor *textColor = attrs[NSForegroundColorAttributeName];
         if (!textColor) {
             attrs = [attrs dictionaryBySettingObject:self.textColor forKey:NSForegroundColorAttributeName];
         }
+        const CGFloat height = [string sizeWithAttributes:attrs].height;
+
         NSRect rect = {
             .origin = {
                 .x = point.x,
-                .y = point.y - floor(_baselineOffset)
+                .y = point.y
             },
             .size = {
                 .width = self.bounds.size.width - point.x,
-                .height = self.bounds.size.height - point.y
+                .height = height
             }
         };
         [string drawInRect:rect withAttributes:attrs];

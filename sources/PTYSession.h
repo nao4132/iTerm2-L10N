@@ -476,6 +476,15 @@ typedef enum {
 // A more resilient version of the above. If the current directory cannot be determined it uses the initial directory. This allows the creation of session in succession with proper pwd recycling behavior.
 @property(nonatomic, readonly) NSString *currentLocalWorkingDirectoryOrInitialDirectory;
 
+// Async version of currentLocalWorkingDirectory.
+- (void)asyncCurrentLocalWorkingDirectory:(void (^)(NSString *pwd))completion;
+
+// Async version of currentLocalWorkingDirectoryOrInitialDirectory
+- (void)asyncCurrentLocalWorkingDirectoryOrInitialDirectory:(void (^)(NSString *pwd))completion;
+
+// Gets the local directory as URL. Weirdly, combines the remote hostname and the local path because this is really only used for the proxy icon.
+- (void)asyncGetCurrentLocationWithCompletion:(void (^)(NSURL *url))completion;
+
 // A UUID that uniquely identifies this session.
 // Used to link serialized data back to a restored session (e.g., which session
 // a command in command history belongs to). Also to link content from an
@@ -542,7 +551,7 @@ typedef enum {
 - (instancetype)init NS_UNAVAILABLE;
 - (instancetype)initSynthetic:(BOOL)synthetic NS_DESIGNATED_INITIALIZER;
 
-- (void)didFinishInitialization:(BOOL)ok;
+- (void)didFinishInitialization;
 
 // Jump to a particular point in time.
 - (long long)irSeekToAtLeast:(long long)timestamp;
@@ -588,13 +597,12 @@ typedef enum {
          customShell:(NSString *)customShell
               isUTF8:(BOOL)isUTF8
        substitutions:(NSDictionary *)substitutions
-         synchronous:(BOOL)synchronous
           completion:(void (^)(BOOL))completion;
 
 // This is an alternative to runCommandWithOldCwd and startProgram. It attaches
 // to an existing server. Use only if [iTermAdvancedSettingsModel runJobsInServers]
 // is YES.
-- (void)attachToServer:(iTermFileDescriptorServerConnection)serverConnection;
+- (void)attachToServer:(iTermGeneralServerConnection)serverConnection;
 
 - (void)softTerminate;
 - (void)terminate;
@@ -837,7 +845,8 @@ typedef enum {
 #pragma mark - API
 
 - (ITMGetBufferResponse *)handleGetBufferRequest:(ITMGetBufferRequest *)request;
-- (ITMGetPromptResponse *)handleGetPromptRequest:(ITMGetPromptRequest *)request;
+- (void)handleGetPromptRequest:(ITMGetPromptRequest *)request
+                    completion:(void (^)(ITMGetPromptResponse *response))completion;
 - (ITMNotificationResponse *)handleAPINotificationRequest:(ITMNotificationRequest *)request
                                             connectionKey:(NSString *)connectionKey;
 

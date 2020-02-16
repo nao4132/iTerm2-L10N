@@ -300,7 +300,6 @@ NSString *const iTermProcessTypeDidChangeNotification = @"iTermProcessTypeDidCha
                    relatedView:nil
                           type:kPreferenceInfoTypeCheckbox];
     info.onChange = ^() { [weakSelf postRefreshNotification]; };
-
     info = [self defineControl:_hideScrollbar
                            key:kPreferenceKeyHideScrollbar
                    relatedView:nil

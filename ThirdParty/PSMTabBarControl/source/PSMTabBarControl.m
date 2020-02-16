@@ -54,6 +54,8 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionMinimumSpaceForLabel =
 PSMTabBarControlOptionKey PSMTabBarControlOptionHighVisibility = @"PSMTabBarControlOptionHighVisibility";
 PSMTabBarControlOptionKey PSMTabBarControlOptionColoredDrawBottomLineForHorizontalTabBar =
     @"PSMTabBarControlOptionColoredDrawBottomLineForHorizontalTabBar";
+PSMTabBarControlOptionKey PSMTabBarControlOptionFontSizeOverride =
+    @"PSMTabBarControlOptionFontSizeOverride";
 
 @interface PSMTabBarControl ()<PSMTabBarControlProtocol>
 @end
@@ -89,7 +91,7 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionColoredDrawBottomLineForHorizont
     BOOL _closeClicked;
 
     // iTerm2 additions
-    int _modifier;
+    NSUInteger _modifier;
     BOOL _hasCloseButton;
 }
 
@@ -2208,7 +2210,10 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionColoredDrawBottomLineForHorizont
 }
 
 - (void)modifierChanged:(NSNotification *)aNotification {
-    int mask = ([[[aNotification userInfo] objectForKey:kPSMTabModifierKey] intValue]);
+    NSUInteger mask = ([[[aNotification userInfo] objectForKey:kPSMTabModifierKey] unsignedIntegerValue]);
+    if (mask == NSUIntegerMax) {
+        mask = 0;
+    }
     [self setModifier:mask];
 }
 
@@ -2229,7 +2234,7 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionColoredDrawBottomLineForHorizont
     return str;
 }
 
-- (void)setModifier:(int)mask {
+- (void)setModifier:(NSUInteger)mask {
     _modifier = mask;
     NSString *str = [self _modifierString];
 

@@ -8,6 +8,7 @@
 
 #import "TmuxDashboardController.h"
 
+#import "DebugLogging.h"
 #import "ITAddressBookMgr.h"
 #import "iTermInitialDirectory.h"
 #import "iTermNotificationCenter.h"
@@ -49,6 +50,7 @@
     if (self) {
         [self window];
 
+        DLog(@"dashboard: Initialize with tmux controller %@", self.tmuxController);
         [sessionsTable_ selectSessionNumber:[[self tmuxController] sessionId]];
         [self reloadWindows];
         [[NSNotificationCenter defaultCenter] addObserver:self
@@ -58,6 +60,10 @@
         [[NSNotificationCenter defaultCenter] addObserver:self
                                                  selector:@selector(tmuxControllerSessionsDidChange:)
                                                      name:kTmuxControllerSessionsDidChange
+                                                   object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(tmuxControllerSessionsWillChange:)
+                                                     name:kTmuxControllerSessionsWillChange
                                                    object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self
                                                  selector:@selector(tmuxControllerWindowsDidChange:)
@@ -98,6 +104,7 @@
 
 - (void)windowDidLoad
 {
+    DLog(@"dashboard: windowDidLoad");
     [super windowDidLoad];
     [self tmuxControllerRegistryDidChange:nil];
     if ([connectionsButton_ numberOfItems] > 0) {
@@ -212,6 +219,7 @@
 }
 
 - (void)setWindows:(TSVDocument *)doc forSession:(NSNumber *)sessionNumber {
+    DLog(@"dashboard: setWindows:%@ forSession:%@", doc, sessionNumber);
     if ([sessionNumber isEqual:[sessionsTable_ selectedSessionNumber]]) {
         NSMutableArray *windows = [NSMutableArray array];
         for (NSArray *record in doc.records) {
@@ -302,6 +310,10 @@
     [sessionsTable_ setSessionObjects:@[]];
 }
 
+- (void)tmuxControllerSessionsWillChange:(NSNotification *)notification {
+    [sessionsTable_ endEditing];
+}
+
 - (void)tmuxControllerSessionsDidChange:(NSNotification *)notification {
     [sessionsTable_ setSessionObjects:[[self tmuxController] sessionObjects]];
 }
@@ -341,29 +353,59 @@
 }
 
 - (void)tmuxControllerRegistryDidChange:(NSNotification *)notification {
+    DLog(@"dashboard: tmuxControllerRegistryDidChange");
     NSString *previousSelection = [[self currentClient] copy];
     [connectionsButton_.menu cancelTracking];
     [connectionsButton_.cell dismissPopUp];
     [connectionsButton_ removeAllItems];
-    [connectionsButton_ addItemsWithTitles:[[TmuxControllerRegistry sharedInstance] clientNames]];
-    if (previousSelection && [connectionsButton_ itemWithTitle:previousSelection]) {
-        [connectionsButton_ selectItemWithTitle:previousSelection];
+
+    // Get a load of this! Nonbreaking spaces are converted to regular spaces in menu item
+    // titles, which means they do not round trip. So we use the identifier to find the connection
+    // by name.
+    [[[TmuxControllerRegistry sharedInstance] clientNames] enumerateObjectsUsingBlock:^(NSString * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+        NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:obj action:nil keyEquivalent:@""];
+        item.identifier = obj;
+        [connectionsButton_.menu addItem:item];
+    }];
+    if (previousSelection && [self haveConnection:previousSelection]) {
+        [self selectConnection:previousSelection];
     } else if ([connectionsButton_ numberOfItems] > 0) {
         [connectionsButton_ selectItemAtIndex:0];
     }
     [self connectionSelectionDidChange:nil];
 }
 
+- (BOOL)haveConnection:(NSString *)identifier {
+    for (NSMenuItem *item in connectionsButton_.menu.itemArray) {
+        if ([item.identifier isEqualToString:identifier]) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+- (void)selectConnection:(NSString *)identifier {
+    for (NSMenuItem *item in connectionsButton_.menu.itemArray) {
+        if ([item.identifier isEqualToString:identifier]) {
+            [connectionsButton_ selectItem:item];
+            return;
+        }
+    }
+}
+
 - (TmuxController *)tmuxController {
+    DLog(@"dashboard: Looking for tmux controller for current client, %@", self.currentClient);
+    DLog(@"dashboard: Registry: %@", [TmuxControllerRegistry sharedInstance]);
     return [[TmuxControllerRegistry sharedInstance] controllerForClient:[self currentClient]];  // TODO: track the current client when multiples are supported
 }
 
 - (NSString *)currentClient {
-    return [[connectionsButton_ selectedItem] title];
+    return [[connectionsButton_ selectedItem] identifier];
 }
 
 
 - (IBAction)connectionSelectionDidChange:(id)sender {
+    DLog(@"dashboard: connectionSelectionDidChange controller=%@", [self tmuxController]);
     [sessionsTable_ setSessionObjects:[[self tmuxController] sessionObjects]];
     [self reloadWindows];
 }

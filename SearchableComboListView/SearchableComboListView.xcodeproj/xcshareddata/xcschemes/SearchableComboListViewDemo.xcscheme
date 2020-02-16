@@ -14,16 +14,16 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "A6F718872263A5AA0053488E"
-               BuildableName = "libitmalloc.dylib"
-               BlueprintName = "itmalloc"
-               ReferencedContainer = "container:iTerm2.xcodeproj">
+               BlueprintIdentifier = "A6B5580823DCD1DB00F5DF2D"
+               BuildableName = "SearchableComboListViewDemo.app"
+               BlueprintName = "SearchableComboListViewDemo"
+               ReferencedContainer = "container:SearchableComboListView.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
-      buildConfiguration = "Development"
+      buildConfiguration = "Debug"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES">
@@ -31,7 +31,7 @@
       </Testables>
    </TestAction>
    <LaunchAction
-      buildConfiguration = "Development"
+      buildConfiguration = "Debug"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       launchStyle = "0"
@@ -40,37 +40,39 @@
       debugDocumentVersioning = "YES"
       debugServiceExtension = "internal"
       allowLocationSimulation = "YES">
-      <MacroExpansion>
+      <BuildableProductRunnable
+         runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "A6F718872263A5AA0053488E"
-            BuildableName = "libitmalloc.dylib"
-            BlueprintName = "itmalloc"
-            ReferencedContainer = "container:iTerm2.xcodeproj">
+            BlueprintIdentifier = "A6B5580823DCD1DB00F5DF2D"
+            BuildableName = "SearchableComboListViewDemo.app"
+            BlueprintName = "SearchableComboListViewDemo"
+            ReferencedContainer = "container:SearchableComboListView.xcodeproj">
          </BuildableReference>
-      </MacroExpansion>
+      </BuildableProductRunnable>
    </LaunchAction>
    <ProfileAction
-      buildConfiguration = "Deployment"
+      buildConfiguration = "Release"
       shouldUseLaunchSchemeArgsEnv = "YES"
       savedToolIdentifier = ""
       useCustomWorkingDirectory = "NO"
       debugDocumentVersioning = "YES">
-      <MacroExpansion>
+      <BuildableProductRunnable
+         runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "A6F718872263A5AA0053488E"
-            BuildableName = "libitmalloc.dylib"
-            BlueprintName = "itmalloc"
-            ReferencedContainer = "container:iTerm2.xcodeproj">
+            BlueprintIdentifier = "A6B5580823DCD1DB00F5DF2D"
+            BuildableName = "SearchableComboListViewDemo.app"
+            BlueprintName = "SearchableComboListViewDemo"
+            ReferencedContainer = "container:SearchableComboListView.xcodeproj">
          </BuildableReference>
-      </MacroExpansion>
+      </BuildableProductRunnable>
    </ProfileAction>
    <AnalyzeAction
-      buildConfiguration = "Development">
+      buildConfiguration = "Debug">
    </AnalyzeAction>
    <ArchiveAction
-      buildConfiguration = "Deployment"
+      buildConfiguration = "Release"
       revealArchiveInOrganizer = "YES">
    </ArchiveAction>
 </Scheme>

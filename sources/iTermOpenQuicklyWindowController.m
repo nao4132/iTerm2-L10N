@@ -208,8 +208,8 @@
                                          canActivate:YES
                                   respectTabbingMode:NO
                                              command:nil
-                                               block:nil
-                                         synchronous:NO
+                                         makeSession:nil
+                                      didMakeSession:nil
                                           completion:nil];
             } else {
                 // Create the hotkey window for this profile
@@ -237,6 +237,7 @@
         } else if ([object isKindOfClass:[iTermOpenQuicklyScriptItem class]]) {
             iTermOpenQuicklyScriptItem *item = [iTermOpenQuicklyScriptItem castFrom:object];
             [[[[iTermApplication sharedApplication] delegate] scriptsMenuController] launchScriptWithRelativePath:item.identifier
+                                                                                                        arguments:@""
                                                                                                explicitUserAction:YES];
         } else if ([object isKindOfClass:[iTermOpenQuicklyColorPresetItem class]]) {
             iTermOpenQuicklyColorPresetItem *item = [iTermOpenQuicklyColorPresetItem castFrom:object];

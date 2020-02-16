@@ -35,7 +35,8 @@
 - (BOOL)screenAllowTitleSetting;
 
 // Called after text was added to the current line. Can be used to check triggers.
-- (void)screenDidAppendStringToCurrentLine:(NSString *)string;
+- (void)screenDidAppendStringToCurrentLine:(NSString *)string
+                               isPlainText:(BOOL)plainText;
 - (void)screenDidAppendAsciiDataToCurrentLine:(AsciiData *)asciiData;
 
 // Change the cursor's appearance.
@@ -177,7 +178,7 @@
 
 - (void)screenDisinterSession;
 
-- (NSString *)screenCurrentWorkingDirectory;
+- (void)screenGetWorkingDirectoryWithCompletion:(void (^)(NSString *workingDirectory))completion;
 
 // Show/hide the cursor.
 - (void)screenSetCursorVisible:(BOOL)visible;
@@ -242,7 +243,8 @@
 
 - (void)screenLogWorkingDirectoryAtLine:(int)line
                           withDirectory:(NSString *)directory
-                                 pushed:(BOOL)pushed;
+                                 pushed:(BOOL)pushed
+                                 timely:(BOOL)timely;
 
 - (void)screenSuggestShellIntegrationUpgrade;
 - (void)screenDidDetectShell:(NSString *)shell;

@@ -11,6 +11,7 @@
 #import "DebugLogging.h"
 
 #import "NSEvent+iTerm.h"
+#import "NSImage+iTerm.h"
 #import "NSObject+iTerm.h"
 #import "NSView+iTerm.h"
 #import "PTYTabView.h"
@@ -20,6 +21,7 @@
 #import "iTermFakeWindowTitleLabel.h"
 #import "iTermGenericStatusBarContainer.h"
 #import "iTermPreferences.h"
+#import "iTermRoundedCornerImageCreator.h"
 #import "iTermWindowSizeView.h"
 #import "iTermStandardWindowButtonsView.h"
 #import "iTermStatusBarViewController.h"
@@ -30,6 +32,8 @@
 #import "NSAppearance+iTerm.h"
 #import "NSTextField+iTerm.h"
 #import "PTYTabView.h"
+
+static const CGFloat iTermWindowBorderRadius = 12;
 
 const CGFloat iTermStandardButtonsViewHeight = 25;
 const CGFloat iTermStandardButtonsViewWidth = 69;
@@ -93,10 +97,16 @@ typedef struct {
     iTermWindowSizeView *_windowSizeView NS_AVAILABLE_MAC(10_14);
 
     iTermLayerBackedSolidColorView *_titleBackgroundView NS_AVAILABLE_MAC(10_14);
-    iTermLayerBackedSolidColorView *_topBorderView NS_AVAILABLE_MAC(10_14);
-    iTermLayerBackedSolidColorView *_rightBorderView NS_AVAILABLE_MAC(10_14);
-    iTermLayerBackedSolidColorView *_bottomBorderView NS_AVAILABLE_MAC(10_14);
-    iTermLayerBackedSolidColorView *_leftBorderView NS_AVAILABLE_MAC(10_14);
+    
+    NSImageView *_topLeftCornerRoundImageView NS_AVAILABLE_MAC(10_14);
+    NSImageView *_topRightCornerRoundImageView NS_AVAILABLE_MAC(10_14);
+    NSImageView *_bottomLeftCornerRoundImageView NS_AVAILABLE_MAC(10_14);
+    NSImageView *_bottomRightCornerRoundImageView NS_AVAILABLE_MAC(10_14);
+    
+    NSView *_leftBorderView NS_AVAILABLE_MAC(10_14);
+    NSView *_rightBorderView NS_AVAILABLE_MAC(10_14);
+    NSView *_topBorderView NS_AVAILABLE_MAC(10_14);
+    NSView *_bottomBorderView NS_AVAILABLE_MAC(10_14);
 }
 
 - (instancetype)initWithFrame:(NSRect)frameRect
@@ -151,8 +161,11 @@ typedef struct {
         _stoplightHotbox.hidden = YES;
         _stoplightHotbox.delegate = self;
         
-        int theModifier =
+        NSUInteger theModifier =
             [iTermPreferences maskForModifierTag:[iTermPreferences intForKey:kPreferenceKeySwitchTabModifier]];
+        if (theModifier == NSUIntegerMax) {
+            theModifier = 0;
+        }
         [_tabBarControl setModifier:theModifier];
         _tabBarControl.insets = [self.delegate tabBarInsets];
         switch ([iTermPreferences intForKey:kPreferenceKeyTabPosition]) {
@@ -207,6 +220,54 @@ typedef struct {
         _windowTitleLabel.hidden = YES;
         _windowTitleLabel.autoresizingMask = (NSViewMinYMargin | NSViewWidthSizable);
         [self addSubview:_windowTitleLabel];
+        
+        if (@available(macOS 10.14, *)) {
+            NSColor *borderColor = [NSColor colorWithWhite:0.5 alpha:0.75];
+            {
+                iTermRoundedCornerImageCreator *creator = [[iTermRoundedCornerImageCreator alloc] initWithColor:borderColor
+                                                                                                           size:NSMakeSize(iTermWindowBorderRadius, iTermWindowBorderRadius)
+                                                                                                         radius:iTermWindowBorderRadius
+                                                                                                strokeThickness:0.5];
+                NSImage *topLeftCornerImage = [creator topLeft];
+                NSImage *topRightCornerImage = [creator topRight];
+                NSImage *bottomLeftCornerImage = [creator bottomLeft];
+                NSImage *bottomRightCornerImage = [creator bottomRight];
+                
+                _topLeftCornerRoundImageView = [NSImageView imageViewWithImage:topLeftCornerImage];
+                _topRightCornerRoundImageView = [NSImageView imageViewWithImage:topRightCornerImage];
+                _bottomLeftCornerRoundImageView = [NSImageView imageViewWithImage:bottomLeftCornerImage];
+                _bottomRightCornerRoundImageView = [NSImageView imageViewWithImage:bottomRightCornerImage];
+
+                _topLeftCornerRoundImageView.hidden = YES;
+                _topRightCornerRoundImageView.hidden = YES;
+                _bottomLeftCornerRoundImageView.hidden = YES;
+                _bottomRightCornerRoundImageView.hidden = YES;
+
+                [self addSubview:_topLeftCornerRoundImageView];
+                [self addSubview:_topRightCornerRoundImageView];
+                [self addSubview:_bottomLeftCornerRoundImageView];
+                [self addSubview:_bottomRightCornerRoundImageView];
+            }
+            {
+                _leftBorderView = [[NSView alloc] init];
+                _leftBorderView.wantsLayer = YES;
+                _leftBorderView.layer.backgroundColor = borderColor.CGColor;
+                _rightBorderView = [[NSView alloc] init];
+                _rightBorderView.wantsLayer = YES;
+                _rightBorderView.layer.backgroundColor = borderColor.CGColor;
+                _topBorderView = [[NSView alloc] init];
+                _topBorderView.wantsLayer = YES;
+                _topBorderView.layer.backgroundColor = borderColor.CGColor;
+                _bottomBorderView = [[NSView alloc] init];
+                _bottomBorderView.wantsLayer = YES;
+                _bottomBorderView.layer.backgroundColor = borderColor.CGColor;
+                
+                [self addSubview:_leftBorderView];
+                [self addSubview:_rightBorderView];
+                [self addSubview:_topBorderView];
+                [self addSubview:_bottomBorderView];
+            }
+        }
     }
     return self;
 }
@@ -510,38 +571,6 @@ typedef struct {
             [backgroundColor set];
             NSRectFill(self.frameForTitleBackgroundView);
         }
-
-        NSBezierPath *path = [NSBezierPath bezierPath];
-        static CGFloat inset = 0.5;
-        const CGFloat left = inset;
-        const CGFloat bottom = inset;
-        const CGFloat top = self.frame.size.height - inset;
-        const CGFloat right = self.frame.size.width - inset;
-
-        const BOOL haveLeft = self.delegate.haveLeftBorder;
-        const BOOL haveTop = self.delegate.haveTopBorder;
-        const BOOL haveRight = self.delegate.haveRightBorderRegardlessOfScrollBar;
-        const BOOL haveBottom = self.delegate.haveBottomBorder;
-
-        if (haveLeft) {
-            [path moveToPoint:NSMakePoint(left, bottom)];
-            [path lineToPoint:NSMakePoint(left, top)];
-        }
-        if (haveTop) {
-            [path moveToPoint:NSMakePoint(left, top)];
-            [path lineToPoint:NSMakePoint(right, top)];
-        }
-        if (haveRight) {
-            [path moveToPoint:NSMakePoint(right, top)];
-            [path lineToPoint:NSMakePoint(right, bottom)];
-        }
-        if (haveBottom) {
-            [path moveToPoint:NSMakePoint(right, bottom)];
-            [path lineToPoint:NSMakePoint(left, bottom)];
-        }
-        [[NSColor colorWithWhite:0.5 alpha:1] set];
-        [path stroke];
-
         return;
     }
 
@@ -570,7 +599,6 @@ typedef struct {
 }
 
 - (void)updateTitleAndBorderViews NS_AVAILABLE_MAC(10_14) {
-#warning TODO: Test on 10.15
     const BOOL haveLayer = _useMetal;
     const BOOL wantsTitleBackgroundView = haveLayer && [_delegate rootTerminalViewShouldDrawWindowTitleInPlaceOfTabBar];
     if (wantsTitleBackgroundView) {
@@ -587,67 +615,60 @@ typedef struct {
         [_titleBackgroundView removeFromSuperview];
     }
 
-    const BOOL wantsLeftBorder = haveLayer && self.delegate.haveLeftBorder;
-    const BOOL wantsTopBorder = haveLayer && self.delegate.haveTopBorder;
-    const BOOL wantsRightBorder = haveLayer && self.delegate.haveRightBorderRegardlessOfScrollBar;
-    const BOOL wantsBottomBorder = haveLayer && self.delegate.haveBottomBorder;
+    const BOOL haveLeft = self.delegate.haveLeftBorder;
+    const BOOL haveTop = self.delegate.haveTopBorder;
+    const BOOL haveRight = self.delegate.haveRightBorderRegardlessOfScrollBar;
+    const BOOL haveBottom = self.delegate.haveBottomBorder;
 
-    if (wantsLeftBorder) {
-        const NSRect frame = [self frameForLeftBorderView];
-        if (!_leftBorderView) {
-            _leftBorderView = [[iTermLayerBackedSolidColorView alloc] initWithFrame:frame];
-            _leftBorderView.color = [NSColor colorWithWhite:0.5 alpha:1];
-            _leftBorderView.autoresizingMask = NSViewHeightSizable | NSViewMaxXMargin;
-        }
-        _leftBorderView.frame = frame;
-        if (_leftBorderView.superview != self) {
-            [self addSubview:_leftBorderView];
-        }
-    } else {
-        [_leftBorderView removeFromSuperview];
+    const CGFloat radius = iTermWindowBorderRadius;
+    {
+        const CGFloat top = self.bounds.size.height - radius;
+        const CGFloat right = self.bounds.size.width - radius;
+        const CGFloat bottom = 0;
+        
+        _topLeftCornerRoundImageView.frame = NSMakeRect(0, top, radius, radius);
+        _topRightCornerRoundImageView.frame = NSMakeRect(right, top, radius, radius);
+        _bottomLeftCornerRoundImageView.frame = NSMakeRect(0, bottom, radius, radius);
+        _bottomRightCornerRoundImageView.frame = NSMakeRect(right, bottom, radius, radius);
     }
-    if (wantsTopBorder) {
-        const NSRect frame = [self frameForTopBorderView];
-        if (!_topBorderView) {
-            _topBorderView = [[iTermLayerBackedSolidColorView alloc] initWithFrame:frame];
-            _topBorderView.color = [NSColor colorWithWhite:0.5 alpha:1];
-            _topBorderView.autoresizingMask = NSViewWidthSizable | NSViewMinYMargin;
-        }
-        _topBorderView.frame = frame;
-        if (_topBorderView.superview != self) {
-            [self addSubview:_topBorderView];
-        }
-    } else {
-        [_topBorderView removeFromSuperview];
+    
+    {
+        _leftBorderView.hidden = !haveLeft;
+        _rightBorderView.hidden = !haveRight;
+        _topBorderView.hidden = !haveTop;
+        _bottomBorderView.hidden = !haveBottom;
+
+        const CGFloat topInset = haveTop ? radius : 0;
+        const CGFloat bottomInset = haveBottom ? radius : 0;
+        const CGFloat leftInset = haveLeft ? radius : 0;
+        const CGFloat rightInset = haveRight ? radius : 0;
+
+        const CGFloat thickness = 0.5;
+        _leftBorderView.frame = NSMakeRect(0,
+                                         bottomInset,
+                                         thickness,
+                                         self.bounds.size.height - topInset - bottomInset);
+        
+        _rightBorderView.frame = NSMakeRect(self.bounds.size.width - thickness,
+                                          bottomInset,
+                                          thickness,
+                                          self.bounds.size.height - topInset - bottomInset);
+        _bottomBorderView.frame = NSMakeRect(leftInset,
+                                            0,
+                                            self.bounds.size.width - leftInset - rightInset,
+                                            thickness);
+        
+        _topBorderView.frame = NSMakeRect(leftInset,
+                                         self.bounds.size.height - thickness,
+                                         self.bounds.size.width - leftInset - rightInset,
+                                         thickness);
     }
-    if (wantsRightBorder) {
-        const NSRect frame = [self frameForRightBorderView];
-        if (!_rightBorderView) {
-            _rightBorderView = [[iTermLayerBackedSolidColorView alloc] initWithFrame:frame];
-            _rightBorderView.color = [NSColor colorWithWhite:0.5 alpha:1];
-            _rightBorderView.autoresizingMask = NSViewHeightSizable | NSViewMinXMargin;
-        }
-        _rightBorderView.frame = frame;
-        if (_rightBorderView.superview != self) {
-            [self addSubview:_rightBorderView];
-        }
-    } else {
-        [_rightBorderView removeFromSuperview];
-    }
-    if (wantsBottomBorder) {
-        const NSRect frame = [self frameForBottomBorderView];
-        if (!_bottomBorderView) {
-            _bottomBorderView = [[iTermLayerBackedSolidColorView alloc] initWithFrame:frame];
-            _bottomBorderView.color = [NSColor colorWithWhite:0.5 alpha:1];
-            _bottomBorderView.autoresizingMask = NSViewWidthSizable | NSViewMaxYMargin;
-        }
-        _bottomBorderView.frame = frame;
-        if (_bottomBorderView.superview != self) {
-            [self addSubview:_bottomBorderView];
-        }
-    } else {
-        [_bottomBorderView removeFromSuperview];
-    }
+    
+    
+    _bottomLeftCornerRoundImageView.hidden = !(haveLeft && haveBottom);
+    _bottomRightCornerRoundImageView.hidden = !(haveRight && haveBottom);
+    _topLeftCornerRoundImageView.hidden = !(haveLeft && haveTop);
+    _topRightCornerRoundImageView.hidden = !(haveRight && haveTop);
 }
 
 - (void)setUseMetal:(BOOL)useMetal {
@@ -883,9 +904,9 @@ typedef struct {
 
 - (NSRect)toolbeltFrameInWindow:(NSWindow *)thisWindow {
     CGFloat width = floor(_toolbeltWidth);
-    CGFloat top = [_delegate haveTopBorder] ? 1 : 0;
-    CGFloat bottom = [_delegate haveBottomBorder] ? 1 : 0;
-    CGFloat right = [_delegate haveRightBorder] ? 1 : 0;
+    CGFloat top = [self topBorderInset];
+    CGFloat bottom = [self bottomBorderInset];
+    CGFloat right = [self rightBorderInset];
     NSRect toolbeltFrame = NSMakeRect(self.bounds.size.width - width - right,
                                       bottom,
                                       width,
@@ -963,12 +984,7 @@ typedef struct {
     } else {
         width = _delegate.window.frame.size.width;
     }
-    if ([_delegate haveLeftBorder]) {
-        --width;
-    }
-    if ([_delegate haveRightBorder]) {
-        --width;
-    }
+    width -= [self leftBorderInset] + [self rightBorderInset];
     return width;
 }
 
@@ -1017,6 +1033,34 @@ typedef struct {
             [self.delegate rootTerminalViewShouldLeaveEmptyAreaAtTop]);
 }
 
+- (CGFloat)leftBorderInset {
+    if (@available(macOS 10.15, *)) {
+        return 0;
+    }
+    return [_delegate haveLeftBorder] ? 1 : 0;
+}
+
+- (CGFloat)rightBorderInset {
+    if (@available(macOS 10.15, *)) {
+        return 0;
+    }
+    return [_delegate haveRightBorder] ? 1 : 0;
+}
+
+- (CGFloat)bottomBorderInset {
+    if (@available(macOS 10.15, *)) {
+        return 0;
+    }
+    return [_delegate haveBottomBorder] ? 1 : 0;
+}
+
+- (CGFloat)topBorderInset {
+    if (@available(macOS 10.15, *)) {
+        return 0;
+    }
+    return [_delegate haveTopBorder] ? 1 : 0;
+}
+
 - (void)layoutSubviewsWithHiddenTabBarForWindow:(NSWindow *)thisWindow {
     if (!_tabBarControlOnLoan) {
         self.tabBarControl.hidden = YES;
@@ -1028,22 +1072,20 @@ typedef struct {
 
     [self removeLeftTabBarDragHandle];
     iTermDecorationHeights decorationHeights = {
-        .bottom = [_delegate haveBottomBorder] ? 1 : 0,
+        .bottom = [self bottomBorderInset],
         .top = _delegate.divisionViewShouldBeVisible ? kDivisionViewHeight : 0
     };
-    if ([_delegate haveTopBorder]) {
-        decorationHeights.top++;
-    }
+    decorationHeights.top += [self topBorderInset];
     if ([self shouldLeaveEmptyAreaAtTop]) {
         decorationHeights.top += _tabBarControl.height;
     }
-    const NSRect frame = NSMakeRect([_delegate haveLeftBorder] ? 1 : 0,
+    const NSRect frame = NSMakeRect([self leftBorderInset],
                                     decorationHeights.bottom,
                                     [self tabviewWidth],
                                     [[thisWindow contentView] frame].size.height - decorationHeights.top - decorationHeights.bottom);
     [self layoutStatusBar:&decorationHeights window:thisWindow frame:frame];
     NSRect tabViewFrame =
-        NSMakeRect([_delegate haveLeftBorder] ? 1 : 0,
+        NSMakeRect([self leftBorderInset],
                    decorationHeights.bottom,
                    [self tabviewWidth],
                    [[thisWindow contentView] frame].size.height - decorationHeights.top - decorationHeights.bottom);
@@ -1068,7 +1110,7 @@ typedef struct {
 - (void)layoutSubviewsTopTabBarVisible:(BOOL)topTabBarVisible forWindow:(NSWindow *)thisWindow {
     [self removeLeftTabBarDragHandle];
     iTermDecorationHeights decorationHeights = {
-        .bottom = _delegate.haveBottomBorder ? 1 : 0,
+        .bottom = [self bottomBorderInset],
         .top = 0
     };
     if (!_tabBarControlOnLoan) {
@@ -1076,20 +1118,20 @@ typedef struct {
             decorationHeights.top += _tabBarControl.height;
         }
     }
-    if (_delegate.haveTopBorder && ![self.delegate rootTerminalViewShouldDrawWindowTitleInPlaceOfTabBar]) {
-        decorationHeights.top += 1;
+    if (![self.delegate rootTerminalViewShouldDrawWindowTitleInPlaceOfTabBar]) {
+        decorationHeights.top += [self topBorderInset];
     }
     if (_delegate.divisionViewShouldBeVisible) {
         decorationHeights.top += kDivisionViewHeight;
     }
-    const NSRect frame = NSMakeRect(_delegate.haveLeftBorder ? 1 : 0,
+    const NSRect frame = NSMakeRect([self leftBorderInset],
                                     decorationHeights.bottom,
                                     [self tabviewWidth],
                                     [[thisWindow contentView] frame].size.height - decorationHeights.bottom - decorationHeights.top);
     iTermDecorationHeights temp = decorationHeights;
     [self layoutStatusBar:&temp window:thisWindow frame:frame];
 
-    NSRect tabViewFrame = NSMakeRect(_delegate.haveLeftBorder ? 1 : 0,
+    NSRect tabViewFrame = NSMakeRect([self leftBorderInset],
                                      temp.bottom,
                                      [self tabviewWidth],
                                      [[thisWindow contentView] frame].size.height - temp.bottom - temp.top);
@@ -1130,8 +1172,8 @@ typedef struct {
     DLog(@"repositionWidgets - putting tabs at bottom");
     [self removeLeftTabBarDragHandle];
     // setup aRect to make room for the tabs at the bottom.
-    NSRect tabBarFrame = NSMakeRect(_delegate.haveLeftBorder ? 1 : 0,
-                                    _delegate.haveBottomBorder ? 1 : 0,
+    NSRect tabBarFrame = NSMakeRect([self leftBorderInset],
+                                    [self bottomBorderInset],
                                     [self tabviewWidth],
                                     _tabBarControl.height);
     self.tabBarControl.insets = [self.delegate tabBarInsets];
@@ -1141,9 +1183,7 @@ typedef struct {
         .top = 0,
         .bottom = tabBarFrame.origin.y
     };
-    if (_delegate.haveTopBorder) {
-        decorationHeights.top += 1;
-    }
+    decorationHeights.top += [self topBorderInset];
     if (_delegate.divisionViewShouldBeVisible) {
         decorationHeights.top += kDivisionViewHeight;
     }
@@ -1219,16 +1259,12 @@ typedef struct {
         .top = 0,
         .bottom = 0
     };
-    if (_delegate.haveBottomBorder) {
-        decorationHeights.bottom += 1;
-    }
-    if (_delegate.haveTopBorder) {
-        decorationHeights.top += 1;
-    }
+    decorationHeights.bottom += [self bottomBorderInset];
+    decorationHeights.top += [self topBorderInset];
     if (_delegate.divisionViewShouldBeVisible) {
         decorationHeights.top += kDivisionViewHeight;
     }
-    NSRect tabBarFrame = NSMakeRect(_delegate.haveLeftBorder ? 1 : 0,
+    NSRect tabBarFrame = NSMakeRect([self leftBorderInset],
                                     decorationHeights.bottom,
                                     _leftTabBarWidth,
                                     [thisWindow.contentView frame].size.height - decorationHeights.bottom - decorationHeights.top);
@@ -1236,11 +1272,8 @@ typedef struct {
     [self setTabBarFrame:tabBarFrame];
     [self setTabBarControlAutoresizingMask:(NSViewHeightSizable | NSViewMaxXMargin)];
 
-    CGFloat widthAdjustment = 0;
     // Can't have a left border.
-    if (_delegate.haveRightBorder) {
-        widthAdjustment += 1;
-    }
+    CGFloat widthAdjustment = [self rightBorderInset];
     CGFloat xOffset = 0;
     if (self.tabBarControl.flashing) {
         xOffset = -NSMaxX(tabBarFrame);

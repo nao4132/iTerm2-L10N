@@ -20,6 +20,7 @@
 #import "iTermMalloc.h"
 #import "iTermObject.h"
 #import "iTermPreferences.h"
+#import "iTermProfileModelJournal.h"
 #import "iTermProfilePreferences.h"
 #import "iTermPythonArgumentParser.h"
 #import "iTermScriptFunctionCall.h"
@@ -729,7 +730,7 @@ static iTermAPIHelper *sAPIHelperInstance;
 - (void)profileDidChange:(NSNotification *)notification {
     NSArray<BookmarkJournalEntry *> *entries = notification.userInfo[@"array"];
     NSSet<NSString *> *guids = [NSSet setWithArray:[entries mapWithBlock:^id(BookmarkJournalEntry *entry) {
-        return entry->guid;
+        return entry.guid;
     }]];
     for (NSString *guid in guids) {
         [_profileChangeSubscriptions enumerateKeysAndObjectsUsingBlock:^(id  _Nonnull key, ITMNotificationRequest * _Nonnull request, BOOL * _Nonnull stop) {
@@ -1323,7 +1324,7 @@ static iTermAPIHelper *sAPIHelperInstance;
         response.status = ITMGetPromptResponse_Status_SessionNotFound;
         handler(response);
     } else {
-        handler([session handleGetPromptRequest:request]);
+        [session handleGetPromptRequest:request completion:handler];
     }
 }
 
@@ -2077,19 +2078,17 @@ static iTermAPIHelper *sAPIHelperInstance;
 
     iTermSessionLauncher *launcher = [[iTermSessionLauncher alloc] initWithProfile:profile windowController:term];
     launcher.canActivate = NO;
-    launcher.makeSession = ^(NSDictionary * _Nonnull profile, PseudoTerminal * _Nonnull term, void (^ _Nonnull completion)(PTYSession * _Nullable)) {
+    launcher.makeSession = ^(NSDictionary * _Nonnull profile, PseudoTerminal * _Nonnull term, void (^ _Nonnull didMakeSession)(PTYSession * _Nullable)) {
         profile = [self profileByCustomizing:profile withProperties:request.customProfilePropertiesArray];
-        PTYSession *session = [term createTabWithProfile:profile
-                                             withCommand:nil
-                                             environment:nil
-                                             synchronous:NO
-                                              completion:nil];
-        completion(session);
+        [term asyncCreateTabWithProfile:profile
+                            withCommand:nil
+                            environment:nil
+                         didMakeSession:^(PTYSession *session) { didMakeSession(session); }
+                             completion:nil];
     };
-    __weak iTermSessionLauncher *weakLauncher = launcher;
     __weak __typeof(self) weakSelf = self;
-    [launcher launchWithCompletion:^(BOOL ok) {
-        [weakSelf didCreateSession:weakLauncher.session forRequest:request handler:handler];
+    [launcher launchWithCompletion:^(PTYSession *session, BOOL ok) {
+        [weakSelf didCreateSession:ok ? session : nil forRequest:request handler:handler];
     }];
 }
 
@@ -2180,8 +2179,7 @@ static iTermAPIHelper *sAPIHelperInstance;
                             before:request.before
                            profile:profile
                      targetSession:session
-                       synchronous:NO
-                        completion:^(PTYSession *newSession) {
+                   completion:^(PTYSession *newSession, BOOL ok) {
             if (newSession && newSession.guid) {  // The test for newSession.guid is just to quiet the analyzer
                 [response.sessionIdArray addObject:newSession.guid];
             } else if (newSession == nil && !session.isTmuxClient) {

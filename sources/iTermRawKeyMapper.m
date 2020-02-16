@@ -7,9 +7,13 @@
 
 #import "iTermRawKeyMapper.h"
 
+#import "DebugLogging.h"
 #import "NSEvent+iTerm.h"
 
 @implementation iTermRawKeyMapper
+
+- (void)keyMapperSetEvent:(NSEvent *)event {
+}
 
 - (NSString *)keyMapperStringForPreCocoaEvent:(NSEvent *)event {
     return [self rawKeyStringForEvent:event];
@@ -24,6 +28,7 @@
 }
 
 - (BOOL)keyMapperShouldBypassPreCocoaForEvent:(NSEvent *)event {
+    DLog(@"Raw key  mapper never bypasses pre-cocoa");
     return NO;
 }
 

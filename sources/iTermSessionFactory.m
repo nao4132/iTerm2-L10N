@@ -9,6 +9,7 @@
 
 #import "DebugLogging.h"
 #import "iTermAdvancedSettingsModel.h"
+#import "iTermController.h"
 #import "iTermInitialDirectory.h"
 #import "iTermProfilePreferences.h"
 #import "iTermParameterPanelWindowController.h"
@@ -75,10 +76,9 @@ NS_ASSUME_NONNULL_BEGIN
                               environment:(NSDictionary * _Nonnull)environment
                               customShell:(NSString *)customShell
                                    isUTF8:(BOOL)isUTF8
-                         serverConnection:(iTermFileDescriptorServerConnection * _Nullable)serverConnection
+                         serverConnection:(iTermGeneralServerConnection * _Nullable)serverConnection
                             substitutions:(NSDictionary *)substitutions
-                         windowController:(PseudoTerminal * _Nonnull)windowController
-                              synchronous:(BOOL)synchronous {
+                         windowController:(PseudoTerminal * _Nonnull)windowController {
     DLog(@"finishAttachingOrLaunchingSession:%@ cmd:%@ environment:%@ isUTF8:%@ substitutions:%@ windowController:%@",
          aSession, cmd, environment, @(isUTF8), substitutions, windowController);
 
@@ -97,7 +97,6 @@ NS_ASSUME_NONNULL_BEGIN
                  inSession:aSession
              substitutions:substitutions
           windowController:windowController
-               synchronous:synchronous
                 completion:completion];
     }
 }
@@ -105,7 +104,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)attachOrLaunchCommandInSession:(PTYSession *)aSession
                              canPrompt:(BOOL)canPrompt
                             objectType:(iTermObjectType)objectType
-                      serverConnection:(iTermFileDescriptorServerConnection * _Nullable)serverConnection
+                      serverConnection:(iTermGeneralServerConnection * _Nullable)serverConnection
                              urlString:(nullable NSString *)urlString
                           allowURLSubs:(BOOL)allowURLSubs
                            environment:(nullable NSDictionary *)environment
@@ -116,8 +115,7 @@ NS_ASSUME_NONNULL_BEGIN
                                 isUTF8:(nullable NSNumber *)isUTF8Number
                          substitutions:(nullable NSDictionary *)providedSubs
                       windowController:(PseudoTerminal * _Nonnull)windowController
-                           synchronous:(BOOL)synchronous
-                            completion:(void (^ _Nullable)(BOOL))completion {
+                            completion:(void (^ _Nullable)(PTYSession * _Nullable, BOOL))completion {
     DLog(@"attachOrLaunchCommandInSession:%@ canPrompt:%@ objectType:%@ urlString:%@ allowURLSubs:%@ environment:%@ oldCWD:%@ forceUseOldCWD:%@ command:%@ isUTF8:%@ substitutions:%@ windowController:%@",
          aSession, @(canPrompt), @(objectType), urlString, @(allowURLSubs), environment, oldCWD,
          @(forceUseOldCWD), command, isUTF8Number, providedSubs, windowController);
@@ -150,8 +148,13 @@ NS_ASSUME_NONNULL_BEGIN
     }
     if (!substitutions) {
         if (completion) {
-            [aSession didFinishInitialization:NO];
-            completion(NO);
+            [aSession didFinishInitialization];
+            // Ensure the controller has it before removing it, since this might get called by the controller.
+            // TODO: Remove cyclic dependency
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [[[iTermController sharedInstance] terminalWithSession:aSession] closeSessionWithoutConfirmation:aSession];
+            });
+            completion(nil, NO);
         }
         return NO;
     }
@@ -192,12 +195,12 @@ NS_ASSUME_NONNULL_BEGIN
                 DLog(@"pwd was empty. Use home directory of %@", pwd);
             }
         }
-        void (^wrapper)(BOOL) = ^(BOOL ok) {
+        void (^wrapper)(BOOL) = ^(BOOL ok){
             DLog(@"factory completion wrapper starting");
-            [aSession didFinishInitialization:ok];
+            [aSession didFinishInitialization];
             DLog(@"factory did finish initialization");
             if (completion) {
-                completion(ok);
+                completion(aSession, ok);
             }
         };
         [self finishAttachingOrLaunchingSession:aSession
@@ -208,8 +211,7 @@ NS_ASSUME_NONNULL_BEGIN
                                          isUTF8:isUTF8
                                serverConnection:serverConnection
                                   substitutions:substitutions
-                               windowController:windowController
-                                    synchronous:synchronous];
+                               windowController:windowController];
     };
 
     NSString *pwd;
@@ -227,7 +229,6 @@ NS_ASSUME_NONNULL_BEGIN
         [aSession it_setAssociatedObject:initialDirectory forKey:key];
         [initialDirectory evaluateWithOldPWD:oldCWD
                                        scope:aSession.variablesScope
-                                 synchronous:synchronous
                                   completion:^(NSString *pwd) {
                                       [aSession it_setAssociatedObject:nil forKey:key];
                                       pwdCompletion(pwd);
@@ -255,14 +256,12 @@ NS_ASSUME_NONNULL_BEGIN
            inSession:(PTYSession*)theSession
         substitutions:(NSDictionary *)substitutions
     windowController:(PseudoTerminal *)term
-         synchronous:(BOOL)synchronous
           completion:(void (^ _Nullable)(BOOL))completion {
     [theSession startProgram:command
                  environment:prog_env
                  customShell:customShell
                       isUTF8:isUTF8
                substitutions:substitutions
-                 synchronous:synchronous
                   completion:^(BOOL ok) {
                       [term setWindowTitle];
                       if (completion) {

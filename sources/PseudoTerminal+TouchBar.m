@@ -557,7 +557,9 @@ ITERM_IGNORE_PARTIAL_BEGIN
                                                                   inject:nil
                                                              environment:nil
                                                                      pwd:nil
-                                                                 options:iTermSingleUseWindowOptionsDoNotEscapeArguments
+                                                                 options:(iTermSingleUseWindowOptionsDoNotEscapeArguments |
+                                                                          iTermSingleUseWindowOptionsCloseOnTermination)
+                                                          didMakeSession:nil
                                                               completion:nil];
     }
 }

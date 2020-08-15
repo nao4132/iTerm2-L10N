@@ -4,6 +4,7 @@
 #import "iTermApplication.h"
 #import "iTermApplicationDelegate.h"
 #import "iTermEventTap.h"
+#import "iTermFlagsChangedNotification.h"
 #import "iTermNotificationCenter.h"
 #import "iTermSecureKeyboardEntryController.h"
 #import "NSArray+iTerm.h"
@@ -64,11 +65,13 @@ NSString *const iTermEventTapEventTappedNotification = @"iTermEventTapEventTappe
 }
 
 - (void)addObserver:(id<iTermEventTapObserver>)observer {
+    DLog(@"Add observer %@", observer);
     [_observers addObject:observer.weakSelf];
     [self setEnabled:[self shouldBeEnabled]];
 }
 
 - (void)removeObserver:(id<iTermEventTapObserver>)observer {
+    DLog(@"Remove observer %@", observer);
     [_observers removeObject:observer];
     [self setEnabled:[self shouldBeEnabled]];
 }
@@ -76,7 +79,7 @@ NSString *const iTermEventTapEventTappedNotification = @"iTermEventTapEventTappe
 #pragma mark - Accessors
 
 - (void)setEnabled:(BOOL)enabled {
-    DLog(@"iTermEventTap setEnabled:%@", @(enabled));
+    DLog(@"iTermEventTap setEnabled:%@\n%@", @(enabled), [NSThread callStackSymbols]);
     if (enabled && !self.isEnabled) {
         [self startEventTap];
     } else if (!enabled && self.isEnabled) {
@@ -91,11 +94,18 @@ NSString *const iTermEventTapEventTappedNotification = @"iTermEventTapEventTappe
 #pragma mark - Private
 
 - (BOOL)shouldBeEnabled {
+    DLog(@"Before pruning observers are %@", self.observers);
     [self pruneReleasedObservers];
-    if (IsSecureEventInputEnabled()) {
+    DLog(@"%@ remappingDelegate=%@ observers=%@", self, self.remappingDelegate, self.observers);
+    if (![self allowedByEventTap]) {
+        DLog(@"Event tap %@ not allowed by secure input", self.class);
         return NO;
     }
     return (self.remappingDelegate != nil) || (self.observers.count > 0);
+}
+
+- (BOOL)allowedByEventTap {
+    return !IsSecureEventInputEnabled();
 }
 
 /*
@@ -264,7 +274,7 @@ error:
 @implementation iTermFlagsChangedEventTap
 
 + (instancetype)sharedInstanceCreatingIfNeeded:(BOOL)createIfNeeded {
-    ITUpgradedNSAssert([NSThread isMainThread], @"Don't call this off the main thread because it's not thread-safe");
+    ITAssertWithMessage([NSThread isMainThread], @"Don't call this off the main thread because it's not thread-safe");
     static dispatch_once_t onceToken;
     static id instance;
     if (!createIfNeeded) {
@@ -301,16 +311,35 @@ error:
     if (remappingDelegate == nil) {
         remappingDelegate = self;
     }
+    DLog(@"Set remapping delegate to %@\n%@", remappingDelegate, [NSThread callStackSymbols]);
     [super setRemappingDelegate:remappingDelegate];
 }
 
 - (void)flagsDidChange:(iTermFlagsChangedNotification *)notification {
     if (@available(macOS 10.13, *)) {
-        if (IsSecureEventInputEnabled()) {
-            DLog(@"Injecting flagsChanged event %@ because secure input is on", notification.event);
+        if (_count == 0) {
+            DLog(@"Injecting flagsChanged event %@ because count is 0", notification.event);
             [self handleEvent:notification.event.CGEvent ofType:kCGEventFlagsChanged];
+        } else {
+            DLog(@"NOT injecting flagsChanged event because count is %@", @(_count));
         }
+        [self resetCount];
     }
+}
+
+- (CGEventRef)handleEvent:(CGEventRef)originalEvent ofType:(CGEventType)type {
+    _count++;
+    DLog(@"Incr count to %@", @(_count));
+    return [super handleEvent:originalEvent ofType:type];
+}
+
+- (void)resetCount {
+    DLog(@"Reset count");
+    _count = 0;
+}
+
+- (BOOL)allowedByEventTap {
+    return YES;
 }
 
 #pragma mark - iTermEventTapRemappingDelegate

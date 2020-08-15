@@ -69,6 +69,13 @@
 
 - (void)awakeFromNib {
     // Initialize the table
+#ifdef MAC_OS_X_VERSION_10_16
+    if (@available(macOS 10.16, *)) {
+        _table.style = NSTableViewStyleInset;
+        // Possibly a 10.16 beta bug? Using intercell spacing clips the selection rect.
+        _table.intercellSpacing = NSZeroSize;
+    }
+#endif
     [_table setDoubleAction:@selector(doubleClick:)];
 
     // Initialize the window's contentView
@@ -167,6 +174,9 @@
         NSRect frameOfLastVisibleCell = [_table frameOfCellAtColumn:0
                                                                 row:numberOfVisibleRowsDesired - 1];
         contentSize.height += NSMaxY(frameOfLastVisibleCell);
+        if (@available(macOS 10.16, *)) {
+            contentSize.height += 10;
+        }
     }
     frame.size.height = contentSize.height;
 
@@ -237,7 +247,7 @@
         } else if ([object isKindOfClass:[iTermOpenQuicklyScriptItem class]]) {
             iTermOpenQuicklyScriptItem *item = [iTermOpenQuicklyScriptItem castFrom:object];
             [[[[iTermApplication sharedApplication] delegate] scriptsMenuController] launchScriptWithRelativePath:item.identifier
-                                                                                                        arguments:@""
+                                                                                                        arguments:@[]
                                                                                                explicitUserAction:YES];
         } else if ([object isKindOfClass:[iTermOpenQuicklyColorPresetItem class]]) {
             iTermOpenQuicklyColorPresetItem *item = [iTermOpenQuicklyColorPresetItem castFrom:object];
@@ -302,7 +312,11 @@
 }
 
 - (NSTableRowView *)tableView:(NSTableView *)tableView rowViewForRow:(NSInteger)row {
-    return [[[iTermOpenQuicklyTableRowView alloc] init] autorelease];
+    if (@available(macOS 10.16, *)) {
+        return [[[iTermOpenQuicklyTableRowView_BigSur alloc] init] autorelease];
+    } else {
+        return [[[iTermOpenQuicklyTableRowView alloc] init] autorelease];
+    }
 }
 
 - (void)updateTextColorForAllRows {
@@ -418,6 +432,11 @@
     [theString appendAttributedString:[self attributedStringFromString:value
                                                  byHighlightingIndices:highlight]];
     return theString;
+}
+
+- (NSAttributedString *)openQuicklyModelAttributedStringForDetail:(NSString *)detail {
+    return [self attributedStringFromString:detail
+                      byHighlightingIndices:nil];
 }
 
 #pragma mark - String Formatting

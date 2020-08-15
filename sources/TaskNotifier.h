@@ -2,8 +2,6 @@
 
 #import <Foundation/Foundation.h>
 
-// Posted just before select() is called.
-extern NSString *const kTaskNotifierDidSpin;
 extern NSString *const kCoprocessStatusChangeNotification;
 
 @class Coprocess;
@@ -16,10 +14,8 @@ extern NSString *const kCoprocessStatusChangeNotification;
 @property (nonatomic, readonly) pid_t pid;
 @property (nonatomic, readonly) pid_t pidToWaitOn;
 
-@property (nonatomic, readonly) BOOL isCoprocessOnly;
 @property (nonatomic, readonly) BOOL hasCoprocess;
 @property (nonatomic, strong) Coprocess *coprocess;
-@property (nonatomic, readonly) BOOL coprocessOnlyTaskIsDead;
 
 @property (nonatomic, readonly) BOOL wantsRead;
 @property (nonatomic, readonly) BOOL wantsWrite;

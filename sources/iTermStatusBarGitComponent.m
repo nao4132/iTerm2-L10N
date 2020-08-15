@@ -111,7 +111,7 @@ static const NSTimeInterval iTermStatusBarGitComponentDefaultCadence = 2;
 }
 
 - (NSImage *)statusBarComponentIcon {
-    return [NSImage it_imageNamed:@"StatusBarIconGitBranch" forClass:[self class]];
+    return [NSImage it_cacheableImageNamed:@"StatusBarIconGitBranch" forClass:[self class]];
 }
 
 - (NSString *)statusBarComponentShortDescription {
@@ -376,6 +376,10 @@ static const NSTimeInterval iTermStatusBarGitComponentDefaultCadence = 2;
     return YES;
 }
 
+- (BOOL)statusBarComponentIsEmpty {
+    return (self.currentState.branch.length == 0);
+}
+
 - (void)killSession:(id)sender {
     [[[iTermController sharedInstance] terminalWithSession:_session] closeSessionWithoutConfirmation:_session];
 }
@@ -398,6 +402,9 @@ static const NSTimeInterval iTermStatusBarGitComponentDefaultCadence = 2;
 
 - (void)openMenuWithView:(NSView *)view {
     NSView *containingView = view.superview;
+    if (!containingView.window) {
+        return;
+    }
     if (_session) {
         NSMenu *menu = [[NSMenu alloc] init];
         NSString *actionName = [_status stringByReplacingOccurrencesOfString:@"…" withString:@""];

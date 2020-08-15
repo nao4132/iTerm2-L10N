@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.Cocoa.XIB" version="3.0" toolsVersion="15702" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES">
+<document type="com.apple.InterfaceBuilder3.Cocoa.XIB" version="3.0" toolsVersion="16097" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES">
     <dependencies>
         <deployment identifier="macosx"/>
-        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="15702"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="16097"/>
     </dependencies>
     <objects>
         <customObject id="-2" userLabel="File's Owner" customClass="NSApplication">
@@ -12,6 +12,7 @@
         </customObject>
         <customObject id="-1" userLabel="First Responder" customClass="FirstResponder"/>
         <customObject id="-3" userLabel="Application" customClass="NSObject"/>
+        <customObject id="2Vu-IH-16w" customClass="ColorsMenuItemView"/>
         <menu title="MainMenu" systemMenu="main" id="29" userLabel="MainMenu">
             <items>
                 <menuItem title="iTerm2" id="56">
@@ -259,6 +260,7 @@
                                                 <action selector="forceDetachTmux:" target="-1" id="d8H-zq-jSZ"/>
                                             </connections>
                                         </menuItem>
+                                        <menuItem isSeparatorItem="YES" id="DAw-wn-hTl"/>
                                         <menuItem title="New Tmux Window" alternate="YES" keyEquivalent="N" identifier="tmux.New Tmux Window" id="1455">
                                             <modifierMask key="keyEquivalentModifierMask" control="YES" command="YES"/>
                                             <connections>
@@ -271,6 +273,14 @@
                                                 <action selector="newTmuxTab:" target="-1" id="1453"/>
                                             </connections>
                                         </menuItem>
+                                        <menuItem isSeparatorItem="YES" id="Kge-Ia-xho"/>
+                                        <menuItem title="Pause Pane" alternate="YES" keyEquivalent="P" identifier="trmux.Pause Pane" id="Rtn-t8-0OH">
+                                            <modifierMask key="keyEquivalentModifierMask" control="YES" command="YES"/>
+                                            <connections>
+                                                <action selector="toggleTmuxPausePane:" target="-1" id="m3O-yf-6Rt"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem isSeparatorItem="YES" id="R9F-Od-qZO"/>
                                         <menuItem title="Dashboard" alternate="YES" identifier="tmux.Dashboard" id="1461">
                                             <string key="keyEquivalent" base64-UTF8="YES">
 DQ
@@ -416,6 +426,12 @@ DQ
                                             <modifierMask key="keyEquivalentModifierMask"/>
                                             <connections>
                                                 <action selector="toggleMultiLinePasteWarning:" target="201" id="BeA-rG-dNT"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Prompt to Convert Tabs to Spaces when Pasting" identifier="Paste Special.Prompt to Convert Tabs to Spaces when Pasting" id="GqP-hQ-yD1">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="promptToConvertTabsToSpacesWhenPasting:" target="201" id="1YE-bw-C1K"/>
                                             </connections>
                                         </menuItem>
                                         <menuItem title="Limit Multi-Line Paste Warning to Shell Prompt" tag="1" identifier="Paste Special.Limit Multi-Line Paste Warning to Shell Prompt" id="L16-T3-OVz">
@@ -696,6 +712,11 @@ Gw
                                     <action selector="toggleAutoCommandHistory:" target="-1" id="asy-Rr-9Eu"/>
                                 </connections>
                             </menuItem>
+                            <menuItem title="Composer" keyEquivalent="." identifier="Composer" id="Bhs-45-5yR">
+                                <connections>
+                                    <action selector="compose:" target="-1" id="dCP-co-yhy"/>
+                                </connections>
+                            </menuItem>
                             <menuItem isSeparatorItem="YES" id="gzL-UV-S2y">
                                 <modifierMask key="keyEquivalentModifierMask" command="YES"/>
                             </menuItem>
@@ -904,6 +925,12 @@ DQ
                                             <modifierMask key="keyEquivalentModifierMask"/>
                                             <connections>
                                                 <action selector="terminalStateToggleApplicationKeypad:" target="-1" id="vqM-de-PE3"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Report Modifiers with CSI u" tag="7" identifier="Reprot Modifiers with CSI u" id="NiW-ZC-qkW">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="terminalStateToggleApplicationKeypad:" target="-1" id="dEu-4i-avK"/>
                                             </connections>
                                         </menuItem>
                                         <menuItem isSeparatorItem="YES" id="JGI-zr-cwU"/>
@@ -1321,6 +1348,7 @@ DQ
         <customObject id="201" userLabel="iTermApplicationDelegate" customClass="iTermApplicationDelegate">
             <connections>
                 <outlet property="_buriedSessions" destination="PTu-aD-qbz" id="Fl9-Gn-jv2"/>
+                <outlet property="_composerMenuItem" destination="Bhs-45-5yR" id="Od6-HK-qOR"/>
                 <outlet property="_installPythonRuntime" destination="0D0-tt-wlA" id="nad-Fp-mh8"/>
                 <outlet property="_scriptsMenu" destination="CZD-7u-bch" id="2Q5-aI-74T"/>
                 <outlet property="_showTipOfTheDay" destination="ft3-BP-igZ" id="WZt-qp-iuC"/>

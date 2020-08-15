@@ -12,11 +12,13 @@
 #import "CVector.h"
 #import "DebugLogging.h"
 #import "iTermAdvancedSettingsModel.h"
+#import "iTermAttributedStringProxy.h"
 #import "iTermBackgroundColorRun.h"
 #import "iTermBoxDrawingBezierCurveFactory.h"
 #import "iTermColorMap.h"
 #import "iTermController.h"
 #import "iTermFindCursorView.h"
+#import "iTermGraphicsUtilities.h"
 #import "iTermImageInfo.h"
 #import "iTermIndicatorsHelper.h"
 #import "iTermMutableAttributedStringBuilder.h"
@@ -61,6 +63,12 @@ BOOL CheckFindMatchAtIndex(NSData *findMatches, int index) {
 @interface iTermTextDrawingHelper() <iTermCursorDelegate>
 @end
 
+typedef NS_ENUM(unsigned char, iTermCharacterAttributesUnderline) {
+    iTermCharacterAttributesUnderlineNone,
+    iTermCharacterAttributesUnderlineRegular,  // Single unless isURL, then double.
+    iTermCharacterAttributesUnderlineCurly
+};
+
 // IMPORTANT: If you add a field here also update the comparison function
 // shouldSegmentWithAttributes:imageAttributes:previousAttributes:previousImageAttributes:combinedAttributesChanged:
 typedef struct {
@@ -72,7 +80,7 @@ typedef struct {
     BOOL bold;
     BOOL fakeBold;
     BOOL fakeItalic;
-    BOOL underline;
+    iTermCharacterAttributesUnderline underlineType;
     BOOL strikethrough;
     BOOL isURL;
     NSInteger ligatureLevel;
@@ -157,10 +165,10 @@ typedef struct iTermTextColorContext {
     CGFloat _baselineOffset;
 
     // The cache we're using now.
-    NSMutableDictionary<NSAttributedString *, id> *_lineRefCache;
+    NSMutableDictionary<iTermAttributedStringProxy *, id> *_lineRefCache;
 
     // The cache we'll use next time.
-    NSMutableDictionary<NSAttributedString *, id> *_replacementLineRefCache;
+    NSMutableDictionary<iTermAttributedStringProxy *, id> *_replacementLineRefCache;
 
     BOOL _preferSpeedToFullLigatureSupport;
 }
@@ -419,7 +427,7 @@ typedef struct iTermTextColorContext {
     }
 
     // Now iterate over the lines and paint the characters.
-    CGContextRef ctx = (CGContextRef)[[NSGraphicsContext currentContext] graphicsPort];
+    CGContextRef ctx = (CGContextRef)[[NSGraphicsContext currentContext] CGContext];
     if ([self textAppearanceDependsOnBackgroundColor]) {
         [self drawForegroundForBackgroundRunArrays:backgroundRunArrays
                                                ctx:ctx];
@@ -486,15 +494,22 @@ typedef struct iTermTextColorContext {
                                  yOrigin,
                                  ceil(run->range.length * _cellSize.width),
                                  _cellSize.height * rows);
-        NSColor *color = [self unprocessedColorForBackgroundRun:run];
+        BOOL enableBlending = YES;
+        if (@available(macOS 10.14, *)) {
+            // If subpixel AA is enabled, then we want to draw the default background color directly.
+            // Otherwise, we'll disable blending and make it clear. Then the background color view can
+            // do the job.
+            enableBlending = !iTermTextIsMonochrome();
+        }
+        NSColor *color = [self unprocessedColorForBackgroundRun:run
+                                                 enableBlending:enableBlending];
         // The unprocessed color is needed for minimum contrast computation for text color.
         box.unprocessedBackgroundColor = color;
         color = [_colorMap processedBackgroundColorForBackgroundColor:color];
         box.backgroundColor = color;
 
         [box.backgroundColor set];
-        NSRectFillUsingOperation(rect,
-                                 _hasBackgroundImage ? NSCompositingOperationSourceOver : NSCompositingOperationCopy);
+        NSRectFillUsingOperation(rect, NSCompositingOperationSourceOver);
 
         if (_debug) {
             [[NSColor yellowColor] set];
@@ -506,7 +521,8 @@ typedef struct iTermTextColorContext {
     }
 }
 
-- (NSColor *)unprocessedColorForBackgroundRun:(iTermBackgroundColorRun *)run {
+- (NSColor *)unprocessedColorForBackgroundRun:(iTermBackgroundColorRun *)run
+                               enableBlending:(BOOL)enableBlending {
     NSColor *color;
     CGFloat alpha = _transparencyAlpha;
     if (run->selected) {
@@ -546,8 +562,20 @@ typedef struct iTermTextColorContext {
                                             isBackground:YES];
         }
 
-        if (defaultBackground && _hasBackgroundImage) {
-            alpha = 1 - _blend;
+        if (defaultBackground) {
+            // We can draw the default background color with a solid-color view under some circumstances.
+            if (_hasBackgroundImage) {
+                if (enableBlending) {
+                    // Don't use the solid-color view to draw the default background color.
+                    alpha = 1 - _blend;
+                } else {
+                    // Use the solid-color view to draw the default background color
+                    alpha = 0;
+                }
+            } else if (!_reverseVideo && !enableBlending) {
+                // Use the solid-color view to draw the default background color
+                alpha = 0;
+            }
         }
     }
 
@@ -825,7 +853,7 @@ typedef struct iTermTextColorContext {
 
     [self updateCachedMetrics];
 
-    CGContextRef ctx = (CGContextRef)[[NSGraphicsContext currentContext] graphicsPort];
+    CGContextRef ctx = (CGContextRef)[[NSGraphicsContext currentContext] CGContext];
     if (!self.isRetina) {
         CGContextSetShouldSmoothFonts(ctx, NO);
     }
@@ -1193,39 +1221,7 @@ typedef struct iTermTextColorContext {
        savedFontSmoothingStyle:(int *)savedFontSmoothingStyle
                 useThinStrokes:(BOOL)useThinStrokes
                     antialised:(BOOL)antialiased {
-    if (!antialiased) {
-        // Issue 7394.
-        CGContextSetShouldSmoothFonts(ctx, YES);
-        return -1;
-    }
-    BOOL shouldSmooth = useThinStrokes;
-    int style = -1;
-    if (iTermTextIsMonochrome()) {
-        if (useThinStrokes) {
-            shouldSmooth = NO;
-        } else {
-            shouldSmooth = YES;
-        }
-    } else {
-        // User enabled subpixel AA
-        shouldSmooth = YES;
-    }
-    if (shouldSmooth) {
-        if (useThinStrokes) {
-            style = 16;
-        } else {
-            style = 0;
-        }
-    }
-    CGContextSetShouldSmoothFonts(ctx, shouldSmooth);
-    if (style >= 0) {
-        // This seems to be available at least on 10.8 and later. The only reference to it is in
-        // WebKit. This causes text to render just a little lighter, which looks nicer.
-        // It does not work in Mojave without subpixel AA.
-        *savedFontSmoothingStyle = CGContextGetFontSmoothingStyle(ctx);
-        CGContextSetFontSmoothingStyle(ctx, style);
-    }
-    return style;
+    return iTermSetSmoothing(ctx, savedFontSmoothingStyle, useThinStrokes, antialiased);
 }
 
 // Just like drawTextOnlyAttributedString but 2-3x faster. Uses
@@ -1456,7 +1452,7 @@ typedef struct iTermTextColorContext {
                                                          atPoint:NSMakePoint(-stringPositions[0], 0)
                                                           origin:VT100GridCoordMake(-1, -1)  // only needed by images
                                                        positions:stringPositions
-                                                       inContext:[[NSGraphicsContext currentContext] graphicsPort]
+                                                       inContext:[[NSGraphicsContext currentContext] CGContext]
                                                  backgroundColor:backgroundColor
                                                            smear:YES];
          CFRelease(colorSpace);
@@ -1536,16 +1532,17 @@ typedef struct iTermTextColorContext {
     // rendering available.
 
     CTLineRef lineRef;
-    lineRef = (CTLineRef)_lineRefCache[attributedString];
+    iTermAttributedStringProxy *proxy = [iTermAttributedStringProxy withAttributedString:attributedString];
+    lineRef = (CTLineRef)_lineRefCache[proxy];
     if (lineRef == nil) {
         lineRef = CTLineCreateWithAttributedString((CFAttributedStringRef)attributedString);
-        _lineRefCache[attributedString] = (id)lineRef;
+        _lineRefCache[proxy] = (id)lineRef;
         CFRelease(lineRef);
     }
-    _replacementLineRefCache[attributedString] = (id)lineRef;
+    _replacementLineRefCache[proxy] = (id)lineRef;
 
     CFArrayRef runs = CTLineGetGlyphRuns(lineRef);
-    CGContextRef cgContext = (CGContextRef) [ctx graphicsPort];
+    CGContextRef cgContext = (CGContextRef) [ctx CGContext];
     CGContextSetShouldAntialias(cgContext, antiAlias);
     CGContextSetFillColorWithColor(cgContext, cgColor);
     CGContextSetStrokeColorWithColor(cgContext, cgColor);
@@ -1756,7 +1753,7 @@ typedef struct iTermTextColorContext {
     }
 
     NSGraphicsContext *graphicsContext = [NSGraphicsContext currentContext];
-    CGContextRef cgContext = (CGContextRef)[graphicsContext graphicsPort];
+    CGContextRef cgContext = (CGContextRef)[graphicsContext CGContext];
     [self drawInContext:cgContext
                  inRect:rect
               alphaMask:underlineContext->alphaMask
@@ -1803,12 +1800,12 @@ typedef struct iTermTextColorContext {
     underlineContext->maskGraphicsContext = [self newGrayscaleContextOfSize:size];
     [NSGraphicsContext saveGraphicsState];
 
-    [NSGraphicsContext setCurrentContext:[NSGraphicsContext graphicsContextWithGraphicsPort:underlineContext->maskGraphicsContext
-                                                                                    flipped:NO]];
+    [NSGraphicsContext setCurrentContext:[NSGraphicsContext graphicsContextWithCGContext:underlineContext->maskGraphicsContext
+                                                                                 flipped:NO]];
 
     // Draw the background
     [[NSColor whiteColor] setFill];
-    CGContextRef ctx = [[NSGraphicsContext currentContext] graphicsPort];
+    CGContextRef ctx = [[NSGraphicsContext currentContext] CGContext];
     CGContextFillRect(ctx,
                       NSMakeRect(0, 0, size.width, size.height));
 
@@ -1866,7 +1863,8 @@ NSColor *iTermTextDrawingHelperGetTextColor(iTermTextDrawingHelper *self,
     NSColor *rawColor = nil;
     BOOL isMatch = NO;
     if (c->faint && colorRun && !context->backgroundColor) {
-        context->backgroundColor = [self unprocessedColorForBackgroundRun:colorRun];
+        context->backgroundColor = [self unprocessedColorForBackgroundRun:colorRun
+                                                           enableBlending:YES];
     }
     const BOOL needsProcessing = context->backgroundColor && (context->minimumContrast > 0.001 ||
                                                               context->dimmingAmount > 0.001 ||
@@ -1988,7 +1986,7 @@ static BOOL iTermTextDrawingHelperShouldAntiAlias(screen_char_t *c,
                                           newAttributes->ligatureLevel != previousAttributes->ligatureLevel ||
                                           newAttributes->bold != previousAttributes->bold ||
                                           newAttributes->fakeItalic != previousAttributes->fakeItalic ||
-                                          newAttributes->underline != previousAttributes->underline ||
+                                          newAttributes->underlineType != previousAttributes->underlineType ||
                                           newAttributes->strikethrough != previousAttributes->strikethrough ||
                                           newAttributes->isURL != previousAttributes->isURL ||
                                           newAttributes->drawable != previousAttributes->drawable);
@@ -2074,7 +2072,20 @@ static BOOL iTermTextDrawingHelperShouldAntiAlias(screen_char_t *c,
             }
         }
     }
-    attributes->underline = (c->underline || inUnderlinedRange);
+    if (c->underline) {
+        switch (c->underlineStyle) {
+            case VT100UnderlineStyleSingle:
+                attributes->underlineType = iTermCharacterAttributesUnderlineRegular;
+                break;
+            case VT100UnderlineStyleCurly:
+                attributes->underlineType = iTermCharacterAttributesUnderlineCurly;
+                break;
+        }
+    } else if (inUnderlinedRange) {
+        attributes->underlineType = iTermCharacterAttributesUnderlineRegular;
+    } else {
+        attributes->underlineType = iTermCharacterAttributesUnderlineNone;
+    }
     attributes->strikethrough = c->strikethrough;
     attributes->isURL = (c->urlCode != 0);
     attributes->drawable = drawable;
@@ -2082,14 +2093,22 @@ static BOOL iTermTextDrawingHelperShouldAntiAlias(screen_char_t *c,
 
 - (NSDictionary *)dictionaryForCharacterAttributes:(iTermCharacterAttributes *)attributes {
     NSUnderlineStyle underlineStyle = NSUnderlineStyleNone;
-    if (attributes->underline) {
-        if (attributes->isURL) {
-            underlineStyle = NSUnderlineStyleDouble;
-        } else {
-            underlineStyle = NSUnderlineStyleSingle;
-        }
-    } else if (attributes->isURL) {
-        underlineStyle = NSUnderlinePatternDash;
+    switch (attributes->underlineType) {
+        case iTermCharacterAttributesUnderlineNone:
+            if (attributes->isURL) {
+                underlineStyle = NSUnderlinePatternDash;
+            }
+            break;
+        case iTermCharacterAttributesUnderlineRegular:
+            if (attributes->isURL) {
+                underlineStyle = NSUnderlineStyleDouble;
+            } else {
+                underlineStyle = NSUnderlineStyleSingle;
+            }
+            break;
+        case iTermCharacterAttributesUnderlineCurly:
+            underlineStyle = NSUnderlineStyleThick;  // Curly isn't an option, so repurpose this.
+            break;
     }
     NSUnderlineStyle strikethroughStyle = NSUnderlineStyleNone;
     if (attributes->strikethrough) {
@@ -2202,9 +2221,22 @@ static BOOL iTermTextDrawingHelperShouldAntiAlias(screen_char_t *c,
     BOOL previousDrawable = YES;
     screen_char_t predecessor = { 0 };
 
+    // Only defined if not preferring speed to full ligature support.
+    BOOL lastWasNull = NO;
+    
     for (int i = indexRange.location; i < NSMaxRange(indexRange); i++) {
         iTermPreciseTimerStatsStartTimer(&_stats[TIMER_ATTRS_FOR_CHAR]);
         screen_char_t c = line[i];
+        if (!_preferSpeedToFullLigatureSupport) {
+            if (c.code == 0) {
+                if (!lastWasNull) {
+                    c.code = ' ';
+                }
+                lastWasNull = YES;
+            } else {
+                lastWasNull = NO;
+            }
+        }
         const unichar code = c.code;
         BOOL isComplex = c.complexChar;
 
@@ -2257,7 +2289,7 @@ static BOOL iTermTextDrawingHelperShouldAntiAlias(screen_char_t *c,
             ++segmentLength;
             iTermPreciseTimerStatsMeasureAndAccumulate(&_stats[TIMER_ATTRS_FOR_CHAR]);
             if (drawable ||
-                ((characterAttributes.underline ||
+                ((characterAttributes.underlineType ||
                   characterAttributes.strikethrough ||
                   characterAttributes.isURL) && segmentLength == 1)) {
                 [self updateBuilder:builder
@@ -2297,7 +2329,7 @@ static BOOL iTermTextDrawingHelperShouldAntiAlias(screen_char_t *c,
                      combinedAttributesChanged:&combinedAttributesChanged]) {
             iTermPreciseTimerStatsStartTimer(&_stats[TIMER_STAT_BUILD_MUTABLE_ATTRIBUTED_STRING]);
             id<iTermAttributedString> builtString = builder.attributedString;
-            if (previousCharacterAttributes.underline ||
+            if (previousCharacterAttributes.underlineType ||
                 previousCharacterAttributes.strikethrough ||
                 previousCharacterAttributes.isURL) {
                 [builtString addAttribute:iTermUnderlineLengthAttribute
@@ -2328,7 +2360,7 @@ static BOOL iTermTextDrawingHelperShouldAntiAlias(screen_char_t *c,
         }
         iTermPreciseTimerStatsMeasureAndAccumulate(&_stats[TIMER_COMBINE_ATTRIBUTES]);
 
-        if (drawable || ((characterAttributes.underline ||
+        if (drawable || ((characterAttributes.underlineType ||
                           characterAttributes.strikethrough ||
                           characterAttributes.isURL) && segmentLength == 1)) {
             // Use " " when not drawable to prevent 0-length attributed strings when an underline/strikethrough is
@@ -2344,7 +2376,7 @@ static BOOL iTermTextDrawingHelperShouldAntiAlias(screen_char_t *c,
     if (builder.length) {
         iTermPreciseTimerStatsStartTimer(&_stats[TIMER_STAT_BUILD_MUTABLE_ATTRIBUTED_STRING]);
         id<iTermAttributedString> builtString = builder.attributedString;
-        if (previousCharacterAttributes.underline ||
+        if (previousCharacterAttributes.underlineType ||
             previousCharacterAttributes.strikethrough ||
             previousCharacterAttributes.isURL) {
             [builtString addAttribute:iTermUnderlineLengthAttribute
@@ -2473,19 +2505,46 @@ static BOOL iTermTextDrawingHelperShouldAntiAlias(screen_char_t *c,
             [path stroke];
             break;
 
-        case NSUnderlineStyleDouble: {
-            origin.y -= lineWidth;
+        case NSUnderlineStyleDouble: {  // Single underline with dash beneath
+            origin.y = rect.origin.y + _cellSize.height - 1;
+            origin.y -= self.isRetina ? 0.25 : 0.5;
             [path moveToPoint:origin];
             [path lineToPoint:NSMakePoint(origin.x + rect.size.width, origin.y)];
             [path setLineWidth:lineWidth];
             [path stroke];
 
+            const CGFloat px = self.isRetina ? 0.5 : 1;
             path = [NSBezierPath bezierPath];
-            [path moveToPoint:NSMakePoint(origin.x, origin.y + lineWidth + 1)];
-            [path lineToPoint:NSMakePoint(origin.x + rect.size.width, origin.y + lineWidth + 1)];
+            [path moveToPoint:NSMakePoint(origin.x, origin.y + lineWidth + px)];
+            [path lineToPoint:NSMakePoint(origin.x + rect.size.width, origin.y + lineWidth + px)];
             [path setLineWidth:lineWidth];
             [path setLineDash:dashPattern count:2 phase:phase];
             [path stroke];
+            break;
+        }
+        case NSUnderlineStyleThick: {  // We use this for curly. Cocoa doesn't have curly underlines, so we reprupose thick.
+            const CGFloat offset = 0;
+            origin.y = rect.origin.y + _cellSize.height - 1.5;
+            CGContextRef cgContext = [[NSGraphicsContext currentContext] CGContext];
+            CGContextSaveGState(cgContext);
+            CGContextClipToRect(cgContext, NSMakeRect(origin.x, origin.y - 1, rect.size.width, 3));
+
+            [color set];
+            NSBezierPath *path = [NSBezierPath bezierPath];
+            const CGFloat height = 1;
+            const CGFloat width = 3;
+            const CGFloat lowY = origin.y + offset;
+            const CGFloat highY = origin.y + height + offset;
+            for (CGFloat x = origin.x - fmod(origin.x, width * 2); x < NSMaxX(rect); x += width * 2) {
+                [path moveToPoint:NSMakePoint(x + 0, highY)];
+                [path lineToPoint:NSMakePoint(x + width, highY)];
+
+                [path moveToPoint:NSMakePoint(x + width, lowY)];
+                [path lineToPoint:NSMakePoint(x + width * 2, lowY)];
+            }
+            [path setLineWidth:1];
+            [path stroke];
+            CGContextRestoreGState(cgContext);
             break;
         }
 

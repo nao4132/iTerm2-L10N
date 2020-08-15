@@ -52,6 +52,7 @@ typedef NS_ENUM(NSUInteger, iTermShellIntegrationInstallationState) {
 
 @property (nonatomic) BOOL installUtilities;
 @property (nonatomic) iTermShellIntegrationShell shell;
+@property (nonatomic, copy) NSString *dotdir;
 @property (nonatomic) iTermShellIntegrationInstallationState state;
 @end
 
@@ -265,23 +266,9 @@ typedef NS_ENUM(NSUInteger, iTermShellIntegrationInstallationState) {
 
 #pragma mark - String Builders
 
-- (NSString *)humanReadableDotfileBaseName {
-    switch (self.shell) {
-        case iTermShellIntegrationShellTcsh:
-            return @".login";
-        case iTermShellIntegrationShellZsh:
-            return @".zshrc";
-        case iTermShellIntegrationShellBash:
-            return @".profile or .bash_profile";
-        case iTermShellIntegrationShellFish:
-            return @"config.fish";
-        case iTermShellIntegrationShellUnknown:
-        return @"?";
-    }
-}
-
 - (NSString *)shellIntegrationPath {
-    return [NSString stringWithFormat:@"~/.iterm2_shell_integration.%@", iTermShellIntegrationShellString(self.shell)];
+    return [NSString stringWithFormat:@"%@/.iterm2_shell_integration.%@",
+            self.dotdir, iTermShellIntegrationShellString(self.shell)];
 }
 
 - (NSString *)scriptForCurrentShell {
@@ -306,9 +293,9 @@ typedef NS_ENUM(NSUInteger, iTermShellIntegrationInstallationState) {
             case iTermShellIntegrationShellZsh:
             case iTermShellIntegrationShellBash:
             case iTermShellIntegrationShellFish:
-                return [NSString stringWithFormat:@"alias %@=~/.iterm2/%@", command, command];
+                return [NSString stringWithFormat:@"alias %@=%@/.iterm2/%@", command, self.dotdir, command];
             case iTermShellIntegrationShellTcsh:
-                return [NSString stringWithFormat:@"alias %@ ~/.iterm2/%@", command, command];
+                return [NSString stringWithFormat:@"alias %@ %@/.iterm2/%@", command, self.dotdir, command];
             case iTermShellIntegrationShellUnknown:
                 return nil;
         }
@@ -323,7 +310,6 @@ typedef NS_ENUM(NSUInteger, iTermShellIntegrationInstallationState) {
 }
 
 - (NSString *)dotfileCommandWithBashDotfile:(NSString *)bashDotFile {
-    NSString *home_prefix = @"~";
     NSString *shell_and = @"&&";
     NSString *shell_or = @"||";
     NSString *quote = @"";
@@ -333,14 +319,13 @@ typedef NS_ENUM(NSUInteger, iTermShellIntegrationInstallationState) {
             script = @"~/.login";
             break;
         case iTermShellIntegrationShellZsh:
-            script = @"~/.zshrc";
+            script = [self.dotdir stringByAppendingPathComponent:@".zshrc"];
             break;
         case iTermShellIntegrationShellBash:
             script = bashDotFile;
             break;
         case iTermShellIntegrationShellFish:
             script = @"~/.config/fish/config.fish";
-            home_prefix=@"{$HOME}";
             shell_and=@"; and";
             shell_or=@"; or";
             break;
@@ -348,7 +333,7 @@ typedef NS_ENUM(NSUInteger, iTermShellIntegrationInstallationState) {
             assert(NO);
         }
     NSString *relative_filename = [NSString stringWithFormat:@"%@/.iterm2_shell_integration.%@",
-                                   home_prefix, iTermShellIntegrationShellString(self.shell)];
+                                   self.dotdir, iTermShellIntegrationShellString(self.shell)];
     
     return [NSString stringWithFormat:@"test -e %@%@%@ %@ source %@%@%@ %@ true\n",
             quote, relative_filename, quote, shell_and, quote, relative_filename, quote, shell_or];
@@ -358,21 +343,41 @@ typedef NS_ENUM(NSUInteger, iTermShellIntegrationInstallationState) {
 
 - (void)copyString:(NSString *)string {
     NSPasteboard *generalPasteboard = [NSPasteboard generalPasteboard];
-    [generalPasteboard declareTypes:@[ NSStringPboardType ] owner:nil];
-    [generalPasteboard setString:string forType:NSStringPboardType];
+    [generalPasteboard declareTypes:@[ NSPasteboardTypeString ] owner:nil];
+    [generalPasteboard setString:string forType:NSPasteboardTypeString];
 }
 
 #pragma mark - Text Sending
 
-- (NSString *)discoverShell:(BOOL)reallySend completion:(void (^)(NSString *shell))completion {
+- (NSString *)discoverShell:(BOOL)reallySend completion:(void (^)(NSString *shell, NSString *dotdir))completion {
     iTermExpectation *expectation = nil;
-    NSString *result = [self sendText:@"echo My shell is `basename $SHELL`.\n" reallySend:reallySend];
+    NSString *result = [self sendText:@"echo My shell is $SHELL\n" reallySend:reallySend];
+    if (!reallySend) {
+        result = [result stringByAppendingString:
+                  @"# If the result is zsh, send:\n"
+                  @"echo My dotfiles go in ${ZDOTDIR:-$HOME}"];
+    }
     [self sendText:nil
         reallySend:reallySend
-        afterRegex:@"My shell is ([a-z]+)\\."
+        afterRegex:@"^My shell is (.+)"
        expectation:&expectation
         completion:^(NSArray<NSString *> *captures) {
-        completion(captures[1]);
+        NSString *shell = [captures[1] lastPathComponent];
+        if ([shell isEqualToString:@"zsh"]) {
+            [self sendText:@"echo My dotfiles go in ${ZDOTDIR:-$HOME}\n" reallySend:reallySend];
+            iTermExpectation *expectation = nil;
+            [self sendText:nil
+                reallySend:reallySend
+                afterRegex:@"^My dotfiles go in (.*)"
+               expectation:&expectation
+                completion:^(NSArray<NSString *> *dotdirCaptures) {
+                completion(shell, dotdirCaptures[1]);
+            }];
+        } else if ([shell isEqualToString:@"fish"]) {
+            completion(shell, @"$HOME");
+        } else {
+            completion(shell, @"~");
+        }
     }];
     return result;
 }
@@ -381,32 +386,33 @@ typedef NS_ENUM(NSUInteger, iTermShellIntegrationInstallationState) {
                                completion:(void (^)(void))completion {
     const BOOL reallySend = (completion != nil);
     NSMutableArray<NSString *> *strings = [NSMutableArray array];
+    NSArray<NSString *> *parts = [[[self launchBashString] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] componentsSeparatedByString:@"\n"];
+    parts = [parts mapWithBlock:^id(NSString *anObject) {
+        return [anObject stringByAppendingString:@"\n"];
+    }];
+    [strings addObjectsFromArray:parts];
+
     NSString *script = nil;
     switch (self.shell) {
         case iTermShellIntegrationShellTcsh:
             script = @"~/.login";
             break;
         case iTermShellIntegrationShellZsh:
-            script = @"~/.zshrc";
+            script = [self.dotdir stringByAppendingPathComponent:@".zshrc"];
             break;
         case iTermShellIntegrationShellBash: {
-            NSString *assignment = @"IT2_INSTALLER_DOTFILE=$(test -f \"~/.bash_profile\" && SCRIPT=\"~/.bash_profile\" || SCRIPT=\"~/.profile\")\n";
+            NSString *assignment = @"IT2_INSTALLER_DOTFILE=$(test -f ~/.bash_profile && echo -n ~/.bash_profile || echo -n ~/.profile)\n";
             [strings addObject:assignment];
             script = @"\"$IT2_INSTALLER_DOTFILE\"";
             break;
         }
         case iTermShellIntegrationShellFish:
-            [strings addObject:@"mkdir -p \"~/.config/fish\"\n"];
+            [strings addObject:@"mkdir -p ~/.config/fish\n"];
             script = @"~/.config/fish/config.fish";
             break;
         case iTermShellIntegrationShellUnknown:
             assert(NO);
     }
-    NSArray<NSString *> *parts = [[[self launchBashString] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] componentsSeparatedByString:@"\n"];
-    parts = [parts mapWithBlock:^id(NSString *anObject) {
-        return [anObject stringByAppendingString:@"\n"];
-    }];
-    [strings addObjectsFromArray:parts];
     [self sendText:[strings componentsJoinedByString:@""] reallySend:reallySend];
     NSString *joined = [strings componentsJoinedByString:@""];
     [strings removeAllObjects];
@@ -487,10 +493,14 @@ typedef NS_ENUM(NSUInteger, iTermShellIntegrationInstallationState) {
 
 - (NSString *)catToScript:(BOOL)reallySend
                completion:(void (^)(void))completion {
+    NSString *scriptForShell = [self scriptForCurrentShell];
+    if (!scriptForShell) {
+        return @"# Error: your shell could not be determined or is unsupported.";
+    }
     NSMutableString *result = [NSMutableString string];
     iTermExpectation *expectation = nil;
     [result appendString:[self switchToBash:reallySend expectation:&expectation]];
-    [result appendString:[self catString:[self scriptForCurrentShell]
+    [result appendString:[self catString:scriptForShell
                                       to:[self shellIntegrationPath]
                               reallySend:reallySend
                              expectation:&expectation]];
@@ -521,12 +531,13 @@ typedef NS_ENUM(NSUInteger, iTermShellIntegrationInstallationState) {
                  expectation:(out iTermExpectation **)expectation
                   completion:(void (^)(void))completion {
     NSMutableString *result = [NSMutableString string];
+    NSString *folder = [self.dotdir stringByAppendingPathComponent:@".iterm2"];
     [result appendString:[self switchToBash:reallySend expectation:expectation]];
-    [result appendString:[self sendText:@"mkdir ~/.iterm2; echo ok\n"
+    [result appendString:[self sendText:[NSString stringWithFormat:@"mkdir %@; echo ok\n", folder]
                              reallySend:reallySend
                              afterRegex:@"."
                             expectation:expectation]];
-    [result appendString:[self sendText:@"cd ~/.iterm2; echo ok\n"
+    [result appendString:[self sendText:[NSString stringWithFormat:@"cd %@; echo ok\n", folder]
                              reallySend:reallySend
                              afterRegex:@"^ok$"
                             expectation:expectation]];
@@ -563,17 +574,18 @@ typedef NS_ENUM(NSUInteger, iTermShellIntegrationInstallationState) {
 
 - (NSString *)discoverShell:(BOOL)reallySend {
     __weak __typeof(self) weakSelf = self;
-    return [self discoverShell:reallySend completion:^(NSString *shell) {
-        [weakSelf didDiscoverShell:shell];
+    return [self discoverShell:reallySend completion:^(NSString *shell, NSString *dotdir) {
+        [weakSelf didDiscoverShell:shell dotdir:dotdir];
     }];
 }
 
-- (void)didDiscoverShell:(NSString *)shell {
+- (void)didDiscoverShell:(NSString *)shell dotdir:(NSString *)dotdir {
     NSDictionary<NSString *, NSNumber *> *map = @{ @"tcsh": @(iTermShellIntegrationShellTcsh),
                                                    @"bash": @(iTermShellIntegrationShellBash),
                                                    @"zsh": @(iTermShellIntegrationShellZsh),
                                                    @"fish": @(iTermShellIntegrationShellFish) };
     NSNumber *number = map[shell ?: @""];
+    self.dotdir = dotdir;
     if (number) {
         self.shell = number.integerValue;
     } else {
@@ -635,9 +647,13 @@ typedef NS_ENUM(NSUInteger, iTermShellIntegrationInstallationState) {
     [self.delegate shellIntegrationWindowControllerSendText:[self curlPipeBashCommand]];
     __weak __typeof(self) weakSelf = self;
 
-    [self expectRegularExpression:@"^Done.$"
+    [self expectRegularExpression:@"(^Done.$)|(^Your shell, .*, is not supported yet)"
                        completion:^(NSArray<NSString *> * _Nonnull captureGroups) {
-        [weakSelf next:nil];
+        if ([captureGroups[0] hasPrefix:@"Your shell"]) {
+            [self.downloadAndRunViewController showShellUnsupportedError];
+        } else {
+            [weakSelf next:nil];
+        }
     }];
 }
 

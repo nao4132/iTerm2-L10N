@@ -51,6 +51,7 @@
     IBOutlet NSButton *_powerline;
     IBOutlet BFPCompositeView *_asciiFontPicker;
     IBOutlet BFPCompositeView *_nonASCIIFontPicker;
+    IBOutlet NSTextField *_ligatureWarning;
     BFPSizePickerView *_horizontalSpacingView;
     BFPSizePickerView *_verticalSpacingView;
 
@@ -117,25 +118,30 @@
             relatedView:nil
                    type:kPreferenceInfoTypeCheckbox];
 
+    PreferenceInfo *info =
     [self defineControl:_asciiLigatures
                     key:KEY_ASCII_LIGATURES
             relatedView:nil
                    type:kPreferenceInfoTypeCheckbox];
-
-    [self defineUnsearchableControl:_nonAsciiLigatures
-                                key:KEY_NON_ASCII_LIGATURES
-                               type:kPreferenceInfoTypeCheckbox];
-
-    PreferenceInfo *info = [self defineControl:_ambiguousIsDoubleWidth
-                                           key:KEY_AMBIGUOUS_DOUBLE_WIDTH
-                                   relatedView:nil
-                                          type:kPreferenceInfoTypeCheckbox];
+    info.observer = ^{
+        [weakSelf updateLigatureWarning];
+    };
+    info = [self defineUnsearchableControl:_nonAsciiLigatures
+                                       key:KEY_NON_ASCII_LIGATURES
+                                      type:kPreferenceInfoTypeCheckbox];
+    info.observer = ^{
+        [weakSelf updateLigatureWarning];
+    };
+    info = [self defineControl:_ambiguousIsDoubleWidth
+                           key:KEY_AMBIGUOUS_DOUBLE_WIDTH
+                   relatedView:nil
+                          type:kPreferenceInfoTypeCheckbox];
     info.customSettingChangedHandler = ^(id sender) {
         __strong __typeof(weakSelf) strongSelf = weakSelf;
         if (!strongSelf) {
             return;
         }
-        BOOL isOn = [sender state] == NSOnState;
+        BOOL isOn = [sender state] == NSControlStateValueOn;
         if (isOn) {
             static NSString *const kWarnAboutAmbiguousWidth = @"NoSyncWarnAboutAmbiguousWidth";
             // This is a feature of dubious value inherited from iTerm 0.1. Some users who work in
@@ -178,7 +184,7 @@
              if (!strongSelf) {
                  return;
              }
-             const NSInteger version = (strongSelf->_unicodeVersion9.state == NSOnState) ? 9 : 8;
+             const NSInteger version = (strongSelf->_unicodeVersion9.state == NSControlStateValueOn) ? 9 : 8;
              [strongSelf setInteger:version forKey:KEY_UNICODE_VERSION];
          }
                  update:^BOOL{
@@ -186,7 +192,7 @@
                      if (!strongSelf) {
                          return NO;
                      }
-                     strongSelf->_unicodeVersion9.state = [strongSelf integerForKey:KEY_UNICODE_VERSION] == 9 ? NSOnState : NSOffState;
+                     strongSelf->_unicodeVersion9.state = [strongSelf integerForKey:KEY_UNICODE_VERSION] == 9 ? NSControlStateValueOn : NSControlStateValueOff;
                      return YES;
                  }];
 
@@ -257,6 +263,12 @@
 
     [self updateFontsDescriptionsIncludingSpacing:YES];
     [self updateNonAsciiFontViewVisibility];
+    [self updateLigatureWarning];
+}
+
+- (void)updateLigatureWarning {
+    const BOOL enabled = ([self boolForKey:KEY_ASCII_LIGATURES] || [self boolForKey:KEY_NON_ASCII_LIGATURES]);
+    _ligatureWarning.hidden = !enabled;
 }
 
 - (void)unicodeVersionDidChange {
@@ -307,23 +319,23 @@
     _nonASCIIFontPicker.font = _nonAsciiFont;
 
     if (self.normalFont.it_defaultLigatures) {
-        _asciiLigatures.state = NSOnState;
+        _asciiLigatures.state = NSControlStateValueOn;
         _asciiLigatures.enabled = NO;
     } else if (self.normalFont.it_ligatureLevel == 0) {
-        _asciiLigatures.state = NSOffState;
+        _asciiLigatures.state = NSControlStateValueOff;
         _asciiLigatures.enabled = NO;
     } else {
-        _asciiLigatures.state = [self boolForKey:KEY_ASCII_LIGATURES] ? NSOnState : NSOffState;
+        _asciiLigatures.state = [self boolForKey:KEY_ASCII_LIGATURES] ? NSControlStateValueOn : NSControlStateValueOff;
         _asciiLigatures.enabled = YES;
     }
     if (self.nonAsciiFont.it_defaultLigatures) {
-        _nonAsciiLigatures.state = NSOnState;
+        _nonAsciiLigatures.state = NSControlStateValueOn;
         _nonAsciiLigatures.enabled = NO;
     } else if (self.nonAsciiFont.it_ligatureLevel == 0) {
-        _nonAsciiLigatures.state = NSOffState;
+        _nonAsciiLigatures.state = NSControlStateValueOff;
         _nonAsciiLigatures.enabled = NO;
     } else {
-        _nonAsciiLigatures.state = [self boolForKey:KEY_NON_ASCII_LIGATURES] ? NSOnState : NSOffState;
+        _nonAsciiLigatures.state = [self boolForKey:KEY_NON_ASCII_LIGATURES] ? NSControlStateValueOn : NSControlStateValueOff;
         _nonAsciiLigatures.enabled = YES;
     }
 
@@ -334,9 +346,9 @@
 - (void)updateThinStrokesEnabled {
     if (@available(macOS 10.14, *)) {
         if (iTermTextIsMonochrome()) {
-            _subpixelAA.state = NSOffState;
+            _subpixelAA.state = NSControlStateValueOff;
         } else {
-            _subpixelAA.state = NSOnState;
+            _subpixelAA.state = NSControlStateValueOn;
         }
         _subpixelAA.enabled = YES;
     } else {
@@ -354,7 +366,7 @@
 
 - (IBAction)didToggleSubpixelAntiAliasing:(id)sender {
     NSString *const key = @"CGFontRenderingFontSmoothingDisabled";
-    if (_subpixelAA.state == NSOffState) {
+    if (_subpixelAA.state == NSControlStateValueOff) {
         [[NSUserDefaults standardUserDefaults] removeObjectForKey:key];
     } else {
         [[NSUserDefaults standardUserDefaults] setBool:NO forKey:key];

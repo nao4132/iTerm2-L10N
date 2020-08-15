@@ -32,6 +32,7 @@ NSString *const kLineBlockCLLKey = @"Cumulative Line Lengths";
 NSString *const kLineBlockIsPartialKey = @"Is Partial";
 NSString *const kLineBlockMetadataKey = @"Metadata";
 NSString *const kLineBlockMayHaveDWCKey = @"May Have Double Width Character";
+NSString *const kLineBlockGuid = @"GUID";
 
 static NSInteger LineBlockNextGeneration = -1;
 
@@ -109,9 +110,11 @@ struct iTermNumFullLinesCacheKeyHasher {
     std::unordered_map<iTermNumFullLinesCacheKey, int, iTermNumFullLinesCacheKeyHasher> _numberOfFullLinesCache;
 
     std::vector<void *> _observers;
+    NSString *_guid;
 }
 
 NS_INLINE void iTermLineBlockDidChange(__unsafe_unretained LineBlock *lineBlock) {
+    lineBlock->_generation += 1;
     for (auto &observer : lineBlock->_observers) {
         __unsafe_unretained id<iTermLineBlockObserver> obj = static_cast<id<iTermLineBlockObserver> >(observer);
         [obj lineBlockDidChange:lineBlock];
@@ -150,9 +153,10 @@ NS_INLINE void iTermLineBlockDidChange(__unsafe_unretained LineBlock *lineBlock)
         }
     });
 
+    _guid = [[[NSUUID UUID] UUIDString] retain];
     cached_numlines_width = -1;
     if (cll_capacity > 0) {
-        metadata_ = (LineBlockMetadata *)calloc(sizeof(LineBlockMetadata), cll_capacity);
+        metadata_ = (LineBlockMetadata *)iTermCalloc(sizeof(LineBlockMetadata), cll_capacity);
     }
 }
 
@@ -185,7 +189,10 @@ NS_INLINE void iTermLineBlockDidChange(__unsafe_unretained LineBlock *lineBlock)
         buffer_start = raw_buffer + [dictionary[kLineBlockBufferStartOffsetKey] intValue];
         start_offset = [dictionary[kLineBlockStartOffsetKey] intValue];
         first_entry = [dictionary[kLineBlockFirstEntryKey] intValue];
-
+        if (dictionary[kLineBlockGuid]) {
+            [_guid release];
+            _guid = dictionary[kLineBlockGuid];
+        }
         NSArray *cllArray = dictionary[kLineBlockCLLKey];
         cll_capacity = [cllArray count];
         cumulative_line_lengths = (int*)iTermMalloc(sizeof(int) * cll_capacity);
@@ -233,6 +240,7 @@ NS_INLINE void iTermLineBlockDidChange(__unsafe_unretained LineBlock *lineBlock)
         }
         free(metadata_);
     }
+    [_guid release];
     [super dealloc];
 }
 
@@ -262,7 +270,8 @@ NS_INLINE void iTermLineBlockDidChange(__unsafe_unretained LineBlock *lineBlock)
     theCopy->is_partial = is_partial;
     theCopy->cached_numlines = cached_numlines;
     theCopy->cached_numlines_width = cached_numlines_width;
-
+    theCopy->_generation = _generation;
+    
     return theCopy;
 }
 
@@ -401,7 +410,8 @@ extern "C" int iTermLineBlockNumberOfFullLinesImpl(screen_char_t *buffer,
         }
         return fullLines;
     } else {
-        return (length - 1) / width;
+        // Need to use max(0) because otherwise we get -1 for length=0 width=1.
+        return MAX(0, length - 1) / width;
     }
 }
 
@@ -449,7 +459,7 @@ extern "C" int iTermLineBlockNumberOfFullLinesImpl(screen_char_t *buffer,
     // but that stuff was erased and the EOL_SOFT was left behind.
     if (is_partial && !(!partial && length == 0)) {
         // append to an existing line
-        ITUpgradedNSAssert(cll_entries > 0, @"is_partial but has no entries");
+        ITAssertWithMessage(cll_entries > 0, @"is_partial but has no entries");
         // update the numlines cache with the new number of full lines that the updated line has.
         if (width != cached_numlines_width) {
             cached_numlines_width = -1;
@@ -917,7 +927,7 @@ int OffsetOfWrappedLine(screen_char_t* p, int n, int length, int width, BOOL may
 
 - (int)getRawLineLength:(int)linenum
 {
-    ITUpgradedNSAssert(linenum < cll_entries && linenum >= 0, @"Out of bounds");
+    ITAssertWithMessage(linenum < cll_entries && linenum >= 0, @"Out of bounds");
     int prev;
     if (linenum == 0) {
         prev = 0;
@@ -939,7 +949,7 @@ int OffsetOfWrappedLine(screen_char_t* p, int n, int length, int width, BOOL may
 }
 
 - (void)changeBufferSize:(int)capacity {
-    ITUpgradedNSAssert(capacity >= [self rawSpaceUsed], @"Truncating used space");
+    ITAssertWithMessage(capacity >= [self rawSpaceUsed], @"Truncating used space");
     capacity = MAX(1, capacity);
     raw_buffer = (screen_char_t*) iTermRealloc((void*) raw_buffer, sizeof(screen_char_t), capacity);
     buffer_start = raw_buffer + start_offset;
@@ -955,6 +965,14 @@ int OffsetOfWrappedLine(screen_char_t* p, int n, int length, int width, BOOL may
 - (BOOL)hasPartial
 {
     return is_partial;
+}
+
+- (void)setPartial:(BOOL)partial {
+    if (partial == is_partial) {
+        return;
+    }
+    is_partial = partial;
+    iTermLineBlockDidChange(self);
 }
 
 - (void)shrinkToFit
@@ -1567,7 +1585,8 @@ static int Search(NSString* needle,
               kLineBlockCLLKey: [self cumulativeLineLengthsArray],
               kLineBlockIsPartialKey: @(is_partial),
               kLineBlockMetadataKey: [self metadataArray],
-              kLineBlockMayHaveDWCKey: @(_mayHaveDoubleWidthCharacter) };
+              kLineBlockMayHaveDWCKey: @(_mayHaveDoubleWidthCharacter),
+              kLineBlockGuid: _guid };
 }
 
 - (int)numberOfCharacters {
@@ -1610,6 +1629,12 @@ static int Search(NSString* needle,
     void *voidptr = static_cast<void *>(observer);
     auto it = std::find(_observers.begin(), _observers.end(), voidptr);
     return it != _observers.end();
+}
+
+#pragma mark - iTermUniquelyIdentifiable
+
+- (NSString *)stringUniqueIdentifier {
+    return _guid;
 }
 
 @end

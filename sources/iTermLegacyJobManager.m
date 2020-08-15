@@ -9,6 +9,7 @@
 
 #import "DebugLogging.h"
 #import "iTermProcessCache.h"
+#import "NSArray+iTerm.h"
 #import "PTYTask+MRR.h"
 #import "TaskNotifier.h"
 
@@ -53,17 +54,28 @@
     assert(NO);
 }
 
-- (void)forkAndExecWithTtyState:(iTermTTYState *)ttyStatePtr
-                        argpath:(const char *)argpath
-                           argv:(const char **)argv
-                     initialPwd:(const char *)initialPwd
-                     newEnviron:(const char **)newEnviron
+- (BOOL)closeFileDescriptor {
+    @synchronized (self) {
+        if (self.fd == -1) {
+            return NO;
+        }
+        close(self.fd);
+        self.fd = -1;
+        return YES;
+    }
+}
+
+- (void)forkAndExecWithTtyState:(iTermTTYState)ttyState
+                        argpath:(NSString *)argpath
+                           argv:(NSArray<NSString *> *)argv
+                     initialPwd:(NSString *)initialPwd
+                     newEnviron:(NSArray<NSString *> *)newEnviron
                            task:(id<iTermTask>)task
-                     completion:(void (^)(iTermJobManagerForkAndExecStatus))completion {
+                     completion:(void (^)(iTermJobManagerForkAndExecStatus))completion  {
     __block iTermJobManagerForkAndExecStatus status = iTermJobManagerForkAndExecStatusSuccess;
     dispatch_sync(self.queue, ^{
         status =
-        [self queueForkAndExecWithTtyState:ttyStatePtr
+        [self queueForkAndExecWithTtyState:ttyState
                                    argpath:argpath
                                       argv:argv
                                 initialPwd:initialPwd
@@ -71,6 +83,7 @@
                                       task:task];
     });
     if (status == iTermJobManagerForkAndExecStatusSuccess) {
+        DLog(@"Register task for pid %@", @(self.childPid));
         [[TaskNotifier sharedInstance] registerTask:task];
     }
     if (completion) {
@@ -78,23 +91,28 @@
     }
 }
 
-- (iTermJobManagerForkAndExecStatus)queueForkAndExecWithTtyState:(iTermTTYState *)ttyStatePtr
-                                                         argpath:(const char *)argpath
-                                                            argv:(const char **)argv
-                                                      initialPwd:(const char *)initialPwd
-                                                      newEnviron:(const char **)newEnviron
+- (iTermJobManagerForkAndExecStatus)queueForkAndExecWithTtyState:(iTermTTYState)ttyState
+                                                         argpath:(NSString *)argpath
+                                                            argv:(NSArray<NSString *> *)argv
+                                                      initialPwd:(NSString *)initialPwd
+                                                      newEnviron:(NSArray<NSString *> *)newEnviron
                                                             task:(id<iTermTask>)task {
     iTermForkState forkState = {
         .connectionFd = -1,
         .deadMansPipe = { 0, 0 },
     };
+    const char **cArgv = [argv nullTerminatedCStringArray];
+    const char **cEnviron = [newEnviron nullTerminatedCStringArray];
     self.fd = iTermForkAndExecToRunJobDirectly(&forkState,
-                                               ttyStatePtr,
-                                               argpath,
-                                               argv,
+                                               &ttyState,
+                                               argpath.UTF8String,
+                                               cArgv,
                                                YES,
-                                               initialPwd,
-                                               newEnviron);
+                                               initialPwd.UTF8String,
+                                               cEnviron);
+    iTermFreeeNullTerminatedCStringArray(cArgv);
+    iTermFreeeNullTerminatedCStringArray(cEnviron);
+
     // If you get here you're the parent.
     self.childPid = forkState.pid;
     if (self.childPid > 0) {
@@ -108,15 +126,22 @@
     DLog(@"fcntl");
     fcntl(self.fd, F_SETFD, fcntl(self.fd, F_GETFD) | FD_CLOEXEC);
 
-    self.tty = [NSString stringWithUTF8String:ttyStatePtr->tty];
+    self.tty = [NSString stringWithUTF8String:ttyState.tty];
     fcntl(self.fd, F_SETFL, O_NONBLOCK);
     return iTermJobManagerForkAndExecStatusSuccess;
 }
 
-- (BOOL)attachToServer:(iTermGeneralServerConnection)serverConnection
+- (void)attachToServer:(iTermGeneralServerConnection)serverConnection
          withProcessID:(NSNumber *)thePid
-                  task:(id<iTermTask>)task {
-    return YES;
+                  task:(id<iTermTask>)task
+            completion:(void (^)(iTermJobManagerAttachResults))completion {
+    completion(iTermJobManagerAttachResultsAttached | iTermJobManagerAttachResultsRegistered);
+}
+
+- (iTermJobManagerAttachResults)attachToServer:(iTermGeneralServerConnection)serverConnection
+                                 withProcessID:(NSNumber *)thePid
+                                          task:(id<iTermTask>)task {
+    return iTermJobManagerAttachResultsAttached | iTermJobManagerAttachResultsRegistered;
 }
 
 - (void)sendSignal:(int)signo toProcessGroup:(BOOL)toProcessGroup {
@@ -131,13 +156,17 @@
     }
     [[iTermProcessCache sharedInstance] unregisterTrackedPID:self.childPid];
     if (toProcessGroup) {
+        DLog(@"Kill process group %@ with signal %@", @(self.childPid), @(signo));
         killpg(self.childPid, signo);
     } else {
+        DLog(@"Kill process %@ with signal %@", @(self.childPid), @(signo));
         kill(self.childPid, signo);
     }
+    DLog(@"%@", [NSThread callStackSymbols]);
 }
 
 - (void)killWithMode:(iTermJobManagerKillingMode)mode {
+    DLog(@"%@ killWithMode:%@", self, @(mode));
     switch (mode) {
         case iTermJobManagerKillingModeRegular:
             [self sendSignal:SIGHUP toProcessGroup:NO];
@@ -183,6 +212,10 @@
 
 - (BOOL)ioAllowed {
     return self.fd >= 0;
+}
+
+- (BOOL)isReadOnly {
+    return NO;
 }
 
 @end

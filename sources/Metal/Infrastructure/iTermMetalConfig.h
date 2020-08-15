@@ -20,13 +20,6 @@
 
 #define ENABLE_PER_FRAME_METAL_STATS 0
 
-// When ASCII characters overlap each other, first draw "main" part of characters, tne copy to the
-// intermediate texture, then draw non-main parts using blending to fix it up.
-#define ENABLE_PRETTY_ASCII_OVERLAP 1
-
-// Pretty ASCII overlap requires the use of a temporary texture as a scratchpad.
-#define ENABLE_USE_TEMPORARY_TEXTURE ENABLE_PRETTY_ASCII_OVERLAP
-
 //I've had to disable this feature because it appears to tickle a race condition. It dies saying:
 //"[CAMetalLayerDrawable texture] should not be called after already presenting this drawable. Get a nextDrawable instead"
 //That gets logged when accessing the texture immediately after getting a drawable and before it
@@ -43,3 +36,8 @@
 // https://openradar.appspot.com/radar?id=4996901569036288
 #define ENABLE_TRANSPARENT_METAL_WINDOWS 1
 
+// Sometimes when you ask MKTView for its currentDrawable, you get back a drawable with a texture
+// that you've never seen before. When you go to presentDrawable:, the completion handler is called
+// but it never becomes visible! This flag enables a workaround where we redraw any frame with a
+// never-before-seen texture. I have a question out to developer tech support on this one.
+#define ENABLE_UNFAMILIAR_TEXTURE_WORKAROUND 1

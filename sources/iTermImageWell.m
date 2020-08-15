@@ -16,7 +16,7 @@
     }
 
     NSPasteboard *pasteboard = [draggingInfo draggingPasteboard];
-    NSString *theString = [pasteboard stringForType:NSFilenamesPboardType];
+    NSString *theString = [pasteboard stringForType:NSPasteboardTypeFileURL];
 
     if (theString) {
         NSData *data = [theString dataUsingEncoding:NSUTF8StringEncoding];
@@ -39,7 +39,7 @@
 }
 
 - (void)mouseUp:(NSEvent *)theEvent {
-    if (theEvent.clickCount == 2) {
+    if (theEvent.clickCount == 1) {
         [_delegate imageWellDidClick:self];
     }
 }

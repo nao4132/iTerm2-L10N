@@ -38,6 +38,15 @@ extern NSString *const kTmuxControllerAttachedSessionDidChange;
 extern NSString *const kTmuxControllerSessionWasRenamed;
 // Posted when set-titles option changes. Object is tmux controller.
 extern NSString *const kTmuxControllerDidFetchSetTitlesStringOption;
+// Posted before sending kill-window
+extern NSString *const iTermTmuxControllerWillKillWindow;
+// Posted when one or more windows changes hidden status
+extern NSString *const kTmuxControllerDidChangeHiddenWindows;
+
+@protocol iTermTmuxControllerSession<NSObject>
+- (void)tmuxControllerSessionSetTTL:(NSTimeInterval)ttl redzone:(BOOL)redzone;
+- (void)revealIfTabSelected;
+@end
 
 @interface TmuxController : NSObject
 
@@ -60,6 +69,8 @@ extern NSString *const kTmuxControllerDidFetchSetTitlesStringOption;
 @property(nonatomic, readonly) BOOL serverIsLocal;
 @property(nonatomic, readonly) NSString *defaultTerminal;
 @property(nonatomic) NSRect initialWindowHint;
+@property(nonatomic, readonly) BOOL detached;
+@property(nonatomic, readonly) NSArray<NSNumber *> *windowPaneIDs;
 
 - (instancetype)initWithGateway:(TmuxGateway *)gateway
                      clientName:(NSString *)clientName
@@ -84,9 +95,12 @@ extern NSString *const kTmuxControllerDidFetchSetTitlesStringOption;
 - (void)hideWindow:(int)windowId;
 
 // Modifies a native tab to match the given server layout.
-- (void)setLayoutInTab:(PTYTab *)tab
+// Returns YES if you should call adjustWindowSizeIfNeededForTabs: after all tabs have been updated.
+- (BOOL)setLayoutInTab:(PTYTab *)tab
               toLayout:(NSString *)layout
                 zoomed:(NSNumber *)zoomed;
+- (void)adjustWindowSizeIfNeededForTabs:(NSArray<PTYTab *> *)tabs;
+
 - (void)sessionChangedTo:(NSString *)newSessionName sessionId:(int)sessionid;
 - (void)sessionsChanged;
 - (void)session:(int)sessionId renamedTo:(NSString *)newName;
@@ -94,12 +108,12 @@ extern NSString *const kTmuxControllerDidFetchSetTitlesStringOption;
 - (void)windowWasRenamedWithId:(int)id to:(NSString *)newName;
 
 // Call `block` when a window pane with `wp` is registered. If one is already registered, it will be called asynchronously.
-- (void)whenPaneRegistered:(int)wp call:(void (^)(PTYSession *))block;
+- (void)whenPaneRegistered:(int)wp call:(void (^)(PTYSession<iTermTmuxControllerSession> *))block;
 
-- (PTYSession *)sessionForWindowPane:(int)windowPane;
+- (PTYSession<iTermTmuxControllerSession> *)sessionForWindowPane:(int)windowPane;
 - (PTYTab *)window:(int)window;
-- (NSArray<PTYSession *> *)sessionsInWindow:(int)window;
-- (void)registerSession:(PTYSession *)aSession
+- (NSArray<PTYSession<iTermTmuxControllerSession> *> *)sessionsInWindow:(int)window;
+- (void)registerSession:(PTYSession<iTermTmuxControllerSession> *)aSession
                withPane:(int)windowPane
                inWindow:(int)window;
 - (void)deregisterWindow:(int)window windowPane:(int)windowPane session:(id)session;
@@ -112,6 +126,10 @@ extern NSString *const kTmuxControllerDidFetchSetTitlesStringOption;
 - (void)fitLayoutToWindows;
 - (void)validateOptions;
 - (void)ping;
+- (void)enablePauseModeIfPossible;
+- (void)unpausePanes:(NSArray<NSNumber *> *)wps;
+- (void)pausePanes:(NSArray<NSNumber *> *)wps;
+- (void)didPausePane:(int)wp;
 
 // Issue tmux commands to infer bounds on the version.
 - (void)guessVersion;
@@ -214,7 +232,7 @@ extern NSString *const kTmuxControllerDidFetchSetTitlesStringOption;
 - (BOOL)windowIsHidden:(int)windowId;
 - (void)setLayoutInWindowPane:(int)windowPane toLayoutNamed:(NSString *)name;
 - (void)setLayoutInWindow:(int)window toLayout:(NSString *)layout;
-- (NSArray<PTYSession *> *)clientSessions;
+- (NSArray<PTYSession<iTermTmuxControllerSession> *> *)clientSessions;
 
 - (void)setSize:(NSSize)size window:(int)window;
 
@@ -223,5 +241,7 @@ extern NSString *const kTmuxControllerDidFetchSetTitlesStringOption;
                          value:(NSString *)value
                           pane:(int)paneID;
 - (NSDictionary<NSString *, NSString *> *)userVarsForPane:(int)paneID;
+- (void)activeWindowPaneDidChangeInWindow:(int)windowID toWindowPane:(int)paneID;
+- (void)setCurrentLatency:(NSTimeInterval)latency forPane:(int)wp;
 
 @end

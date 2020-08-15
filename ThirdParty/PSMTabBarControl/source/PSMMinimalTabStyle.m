@@ -162,12 +162,6 @@
         NSRect containingFrame = cell.frame;
         const BOOL isHorizontal = bar.orientation == PSMTabBarHorizontalOrientation;
         if (isHorizontal) {
-            if (bar.cells.lastObject == cell && bar.stretchCellsToFit) {
-                containingFrame = NSMakeRect(NSMinX(cell.frame),
-                                             0,
-                                             bar.frame.size.width - NSMinX(cell.frame),
-                                             bar.height);
-            }
             if (bar.cells.firstObject == cell && self.treatLeftInsetAsPartOfFirstTab) {
                 containingFrame = NSMakeRect(0, 0, NSMaxX(containingFrame), NSHeight(containingFrame));
             }
@@ -180,7 +174,8 @@
         NSColor *outerColor;
         NSColor *innerColor;
         const BOOL keyMainAndActive = self.windowIsMainAndAppIsActive;
-        const CGFloat alpha = keyMainAndActive ? 0.75 : 0.5;
+        CGFloat prominence = [[self.tabBar.delegate tabView:self.tabBar valueOfOption:PSMTabBarControlOptionMinimalSelectedTabUnderlineProminence] doubleValue];
+        const CGFloat alpha = (keyMainAndActive ? 0.75 : 0.5) * prominence;
         const BOOL tabBarColorIsDark = self.backgroundIsDark;
         if (tabColorIsDark != tabBarColorIsDark) {
             outerColor = [NSColor colorWithWhite:1 alpha:alpha];
@@ -284,11 +279,11 @@
 }
 
 - (BOOL)firstTabIsSelected {
-    return self.firstVisibleCell.state == NSOnState;
+    return self.firstVisibleCell.state == NSControlStateValueOn;
 }
 
 - (BOOL)lastTabIsSelected {
-    return self.lastVisibleCell.state == NSOnState;
+    return self.lastVisibleCell.state == NSControlStateValueOn;
 }
 
 - (BOOL)treatLeftInsetAsPartOfFirstTab {
@@ -336,7 +331,7 @@
 - (PSMTabBarCell *)selectedVisibleCell {
     PSMTabBarControl *bar = self.tabBar;
     for (PSMTabBarCell *cell in bar.cells.reverseObjectEnumerator) {
-        if (!cell.isInOverflowMenu && cell.state == NSOnState) {
+        if (!cell.isInOverflowMenu && cell.state == NSControlStateValueOn) {
             return cell;
         }
     }
@@ -401,7 +396,7 @@
 
 - (PSMTabBarCell *)selectedCellInTabBarControl:(PSMTabBarControl *)bar {
     for (PSMTabBarCell *cell in bar.cells) {
-        if (cell.state == NSOnState) {
+        if (cell.state == NSControlStateValueOn) {
             return cell;
         }
     }

@@ -6,7 +6,6 @@
 //
 
 #import "iTermFileDescriptorMultiClient+MRR.h"
-#import "iTermFileDescriptorMultiClient+Protected.h"
 
 #import "DebugLogging.h"
 
@@ -72,10 +71,7 @@ iTermFileDescriptorMultiClientAttachStatus iTermConnectToUnixDomainSocket(const 
             }
             DLog(@"Trying again because connect returned EINTR.");
         } else {
-            // Make socket block again.
             interrupted = 0;
-            DLog(@"Connected. Calling fcntl() 3");
-            fcntl(socketFd, F_SETFL, flags & ~O_NONBLOCK);
         }
     } while (interrupted);
     *fdOut = socketFd;
@@ -111,6 +107,7 @@ int iTermCreateConnectedUnixDomainSocket(const char *path,
     });
 
     // Connect to the server running in a thread.
+    DLog(@"Connect to server running in thread with path %s", path);
     switch (iTermConnectToUnixDomainSocket(path, connectFDOut)) {
         case iTermFileDescriptorMultiClientAttachStatusSuccess:
             break;
@@ -135,11 +132,11 @@ int iTermCreateConnectedUnixDomainSocket(const char *path,
     return YES;
 }
 
-// NOTE: Sets _readFD as client file descriptor as a side-effect
 - (BOOL)createAttachedSocketAtPath:(NSString *)path
                             listen:(int *)listenFDOut  // has called listen() on this one
                           accepted:(int *)acceptedFDOut  // has called accept() on this one
-                         connected:(int *)connectedFDOut {  // has called connect() on this one
+                         connected:(int *)connectedFDOut   // has called connect() on this one
+                            readFD:(int *)readFDOut {
     DLog(@"iTermForkAndExecToRunJobInServer");
     BOOL ok = iTermCreateConnectedUnixDomainSocket(path.UTF8String,
                                                    NO,  /* closeAfterAccept */
@@ -147,14 +144,16 @@ int iTermCreateConnectedUnixDomainSocket(const char *path,
                                                    acceptedFDOut,
                                                    connectedFDOut);
     if (ok) {
-        _readFD = *connectedFDOut;
+        *readFDOut = *connectedFDOut;
     }
     return ok;
 }
 
 // NOTE: Sets _readFD and _writeFD as side-effects when returned forkState.pid >= 0.
 - (iTermForkState)launchWithSocketPath:(NSString *)path
-                            executable:(NSString *)executable {
+                            executable:(NSString *)executable
+                                readFD:(int *)readFDOut
+                               writeFD:(int *)writeFDOut {
     assert([iTermAdvancedSettingsModel runJobsInServers]);
 
     iTermForkState forkState = {
@@ -176,7 +175,11 @@ int iTermCreateConnectedUnixDomainSocket(const char *path,
     int acceptedFd;
     int connectedFd;
 
-    const BOOL ok = [self createAttachedSocketAtPath:path listen:&listenFd accepted:&acceptedFd connected:&connectedFd];
+    const BOOL ok = [self createAttachedSocketAtPath:path
+                                              listen:&listenFd
+                                            accepted:&acceptedFd
+                                           connected:&connectedFd
+                                              readFD:readFDOut];
     if (!ok) {
         return forkState;
     }
@@ -222,7 +225,7 @@ int iTermCreateConnectedUnixDomainSocket(const char *path,
             close(forkState.deadMansPipe[1]);
             Free2DArray(cargv, argv.count);
             close(pipeFds[0]);
-            _writeFD = pipeFds[1];
+            *writeFDOut = pipeFds[1];
             Free2DArray((char **)cenv, 0);
             return forkState;
     }

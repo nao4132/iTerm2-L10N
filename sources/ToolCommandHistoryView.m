@@ -15,6 +15,7 @@
 #import "NSDateFormatterExtras.h"
 #import "NSDate+iTerm.h"
 #import "NSEvent+iTerm.h"
+#import "NSImage+iTerm.h"
 #import "NSTableColumn+iTerm.h"
 #import "NSTextField+iTerm.h"
 #import "PTYSession.h"
@@ -55,9 +56,12 @@ static const CGFloat kHelpMargin = 5;
         [self addSubview:searchField_];
 
         help_ = [[NSButton alloc] initWithFrame:NSMakeRect(0, 0, 0, 0)];
-        [help_ setBezelStyle:NSHelpButtonBezelStyle];
-        [help_ setButtonType:NSMomentaryPushInButton];
+        [help_ setBezelStyle:NSBezelStyleHelpButton];
+        [help_ setButtonType:NSButtonTypeMomentaryPushIn];
         [help_ setBordered:YES];
+        if (@available(macOS 10.16, *)) {
+            help_.controlSize = NSControlSizeSmall;
+        }
         [help_ sizeToFit];
         help_.target = self;
         help_.action = @selector(help:);
@@ -66,12 +70,20 @@ static const CGFloat kHelpMargin = 5;
         [self addSubview:help_];
 
         clear_ = [[NSButton alloc] initWithFrame:NSMakeRect(0, frame.size.height - kButtonHeight, frame.size.width, kButtonHeight)];
-        [clear_ setButtonType:NSMomentaryPushInButton];
-        [clear_ setTitle:@"Clear All"];
+        if (@available(macOS 10.16, *)) {
+            clear_.bezelStyle = NSBezelStyleRegularSquare;
+            clear_.bordered = NO;
+            clear_.image = [NSImage it_imageForSymbolName:@"trash" accessibilityDescription:@"Clear"];
+            clear_.imagePosition = NSImageOnly;
+            clear_.frame = NSMakeRect(0, 0, 22, 22);
+        } else {
+            [clear_ setButtonType:NSButtonTypeMomentaryPushIn];
+            [clear_ setTitle:@"Clear All"];
+            [clear_ setBezelStyle:NSBezelStyleSmallSquare];
+            [clear_ sizeToFit];
+        }
         [clear_ setTarget:self];
         [clear_ setAction:@selector(clear:)];
-        [clear_ setBezelStyle:NSSmallSquareBezelStyle];
-        [clear_ sizeToFit];
         [clear_ setAutoresizingMask:NSViewMinYMargin];
         [self addSubview:clear_];
 
@@ -81,14 +93,22 @@ static const CGFloat kHelpMargin = 5;
                                                                      frame.size.height - kButtonHeight - 2 * kMargin - searchField_.frame.size.height)];
         [scrollView_ setHasVerticalScroller:YES];
         [scrollView_ setHasHorizontalScroller:NO];
-        [scrollView_ setBorderType:NSBezelBorder];
+        if (@available(macOS 10.16, *)) {
+            [scrollView_ setBorderType:NSLineBorder];
+            scrollView_.scrollerStyle = NSScrollerStyleOverlay;
+        } else {
+            [scrollView_ setBorderType:NSBezelBorder];
+        }
         NSSize contentSize = [self contentSize];
         [scrollView_ setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
-        if (@available(macOS 10.14, *)) { } else {
-            scrollView_.drawsBackground = NO;
-        }
-        
+        scrollView_.drawsBackground = NO;
+
         tableView_ = [[NSTableView alloc] initWithFrame:NSMakeRect(0, 0, contentSize.width, contentSize.height)];
+#ifdef MAC_OS_X_VERSION_10_16
+        if (@available(macOS 10.16, *)) {
+            tableView_.style = NSTableViewStyleInset;
+        }
+#endif
         NSTableColumn *col = [[NSTableColumn alloc] initWithIdentifier:@"commands"];
         [col setEditable:NO];
         [tableView_ addTableColumn:col];
@@ -100,6 +120,9 @@ static const CGFloat kHelpMargin = 5;
         tableView_.rowHeight = 15;
         [tableView_ setDoubleAction:@selector(doubleClickOnTableView:)];
         [tableView_ setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+        if (@available(macOS 10.14, *)) {
+            tableView_.backgroundColor = [NSColor clearColor];
+        }
 
         [searchField_ setArrowHandler:tableView_];
 
@@ -137,18 +160,85 @@ static const CGFloat kHelpMargin = 5;
     return size;
 }
 
-- (void)relayout
+- (void)resizeSubviewsWithOldSize:(NSSize)oldSize {
+    [super resizeSubviewsWithOldSize:oldSize];
+    [self relayout];
+}
+
+- (void)relayout {
+    if (@available(macOS 10.16, *)) {
+        [self relayout_bigSur];
+    } else {
+        [self relayout_legacy];
+    }
+}
+
+- (void)relayout_bigSur {
+    NSRect frame = self.frame;
+
+    // Search field
+    NSRect searchFieldFrame = NSMakeRect(0,
+                                         0,
+                                         frame.size.width - help_.frame.size.width - clear_.frame.size.width - 2 * kMargin,
+                                         searchField_.frame.size.height);
+    searchField_.frame = searchFieldFrame;
+
+    // Help button
+    {
+        CGFloat fudgeFactor = 1;
+        if (@available(macOS 10.16, *)) {
+            fudgeFactor = 2;
+        }
+        help_.frame = NSMakeRect(frame.size.width - help_.frame.size.width,
+                                 fudgeFactor,
+                                 help_.frame.size.width,
+                                 help_.frame.size.height);
+    }
+
+    // Clear button
+    {
+        CGFloat fudgeFactor = 1;
+        if (@available(macOS 10.16, *)) {
+            fudgeFactor = 0;
+        }
+        clear_.frame = NSMakeRect(help_.frame.origin.x - clear_.frame.size.width - kMargin,
+                                        fudgeFactor,
+                                  clear_.frame.size.width,
+                                  clear_.frame.size.height);
+    }
+    
+    // Scroll view
+    [scrollView_ setFrame:NSMakeRect(0,
+                                     searchFieldFrame.size.height + kMargin,
+                                     frame.size.width,
+                                     frame.size.height - 2 * kMargin)];
+
+    // Table view
+    NSSize contentSize = [scrollView_ contentSize];
+    NSTableColumn *column = tableView_.tableColumns[0];
+    CGFloat fudgeFactor = 0;
+    if (@available(macOS 10.16, *)) {
+        fudgeFactor = 32;
+    }
+    column.minWidth = contentSize.width - fudgeFactor;
+    column.maxWidth = contentSize.width - fudgeFactor;
+    [tableView_ sizeToFit];
+    [tableView_ reloadData];
+}
+
+
+- (void)relayout_legacy
 {
     NSRect frame = self.frame;
-    help_.frame = NSMakeRect(frame.size.width - help_.frame.size.width,
-                             frame.size.height - help_.frame.size.height - ceil((clear_.frame.size.height - help_.frame.size.height) / 2) + 2,
-                             help_.frame.size.width,
-                             help_.frame.size.height);
     searchField_.frame = NSMakeRect(0, 0, frame.size.width, searchField_.frame.size.height);
     [clear_ setFrame:NSMakeRect(0,
                                 frame.size.height - kButtonHeight,
                                 frame.size.width - help_.frame.size.width - kHelpMargin,
                                 kButtonHeight)];
+    help_.frame = NSMakeRect(NSMaxX(clear_.frame) + kHelpMargin,
+                             NSMinY(clear_.frame) + (NSHeight(clear_.frame) - NSHeight(help_.frame)) / 2.0 + 2,
+                             NSWidth(help_.frame),
+                             NSHeight(help_.frame)) ;
     scrollView_.frame = NSMakeRect(0,
                                    searchField_.frame.size.height + kMargin,
                                    frame.size.width,
@@ -167,6 +257,9 @@ static const CGFloat kHelpMargin = 5;
 }
 
 - (NSTableRowView *)tableView:(NSTableView *)tableView rowViewForRow:(NSInteger)row {
+    if (@available(macOS 10.16, *)) {
+        return [[iTermBigSurTableRowView alloc] initWithFrame:NSZeroRect];
+    }
     return [[iTermCompetentTableRowView alloc] initWithFrame:NSZeroRect];
 }
 
@@ -244,6 +337,13 @@ static const CGFloat kHelpMargin = 5;
                                                             object:nil];
         [wrapper.delegate.delegate toolbeltDidSelectMark:commandUse.mark];
     }
+}
+
+- (id <NSPasteboardWriting>)tableView:(NSTableView *)tableView pasteboardWriterForRow:(NSInteger)row {
+    NSPasteboardItem *pbItem = [[NSPasteboardItem alloc] init];
+    iTermCommandHistoryCommandUseMO *commandUse = filteredEntries_[row];
+    [pbItem setString:commandUse.command forType:(NSString *)kUTTypeUTF8PlainText];
+    return pbItem;
 }
 
 - (void)commandHistoryDidChange:(id)sender {

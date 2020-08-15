@@ -597,7 +597,7 @@
                       lineNumber:lineNumber
                     columnNumber:columnNumber];
     XCTAssert(opened);
-    NSString *expectedScript = @"Prefix\\ X\\ Suffix:1;;Prefix;Suffix;/tmp;User Variable";
+    NSString *expectedScript = @"'Prefix X Suffix:1';;Prefix;Suffix;/tmp;User Variable";
     NSString *actualScript = _semanticHistoryController.scriptArguments[1];
     XCTAssertEqualObjects(expectedScript, actualScript);
 }
@@ -929,6 +929,31 @@
     XCTAssert([kExistingFileAbsolutePathWithLineNumber isEqualToString:_semanticHistoryController.launchedAppArg]);
 }
 
+- (void)testOpenPathOpensTextFileSublimeText4Editor {
+    _semanticHistoryController.prefs =
+        @{ kSemanticHistoryActionKey: kSemanticHistoryEditorAction,
+           kSemanticHistoryEditorKey: kSublimeText4Identifier };
+    NSString *kExistingFileAbsolutePath = @"/file/that/exists";
+    NSString *kExistingFileAbsolutePathWithLineNumber =[kExistingFileAbsolutePath stringByAppendingString:@":12"];
+    [_semanticHistoryController.fakeFileManager.files addObject:kExistingFileAbsolutePath];
+    _semanticHistoryController.defaultAppIsEditor = NO;
+    NSString *lineNumber, *columnNumber;
+    BOOL opened = [self openPath:[_semanticHistoryController cleanedUpPathFromPath:kExistingFileAbsolutePathWithLineNumber
+                                                                            suffix:nil
+                                                                  workingDirectory:@"/"
+                                                               extractedLineNumber:&lineNumber
+                                                                      columnNumber:&columnNumber]
+                   orRawFilename:kExistingFileAbsolutePathWithLineNumber
+                   substitutions:@{ kSemanticHistoryPrefixSubstitutionKey: @"Prefix",
+                                    kSemanticHistorySuffixSubstitutionKey: @"Suffix",
+                                    kSemanticHistoryWorkingDirectorySubstitutionKey: @"/" }
+                      lineNumber:lineNumber
+                    columnNumber:columnNumber];
+    XCTAssert(opened);
+    XCTAssert([kSublimeText4Identifier isEqualToString:_semanticHistoryController.launchedApp]);
+    XCTAssert([kExistingFileAbsolutePathWithLineNumber isEqualToString:_semanticHistoryController.launchedAppArg]);
+}
+
 - (void)testOpenPathOpensTextFileSublimeText3Editor {
     _semanticHistoryController.prefs =
         @{ kSemanticHistoryActionKey: kSemanticHistoryEditorAction,
@@ -980,7 +1005,7 @@
     XCTAssert(opened);
     NSString *urlString =
         [NSString stringWithFormat:@"%@://open?url=file://%@&line=%@",
-            expectedScheme, [kExistingFileAbsolutePath stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet alphanumericCharacterSet]], [kLineNumber substringFromIndex:1]];
+            expectedScheme, [kExistingFileAbsolutePath stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLPathAllowedCharacterSet]], [kLineNumber substringFromIndex:1]];
     NSURL *expectedURL = [NSURL URLWithString:urlString];
     XCTAssertEqualObjects(_semanticHistoryController.openedURL, expectedURL);
     XCTAssert([_semanticHistoryController.openedEditor isEqual:editorId]);

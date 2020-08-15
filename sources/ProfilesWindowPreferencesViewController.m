@@ -55,6 +55,10 @@
     IBOutlet NSTextField *_customWindowTitle;
     IBOutlet NSView *_settingsForNewWindows;
     iTermFunctionCallTextFieldDelegate *_customWindowTitleDelegate;
+
+    IBOutlet NSButton *_useCustomTabTitle;
+    IBOutlet NSTextField *_customTabTitle;
+    iTermFunctionCallTextFieldDelegate *_customTabTitleDelegate;
 }
 
 - (void)dealloc {
@@ -98,7 +102,7 @@
         if (!strongSelf) {
             return;
         }
-        strongSelf->_blurRadius.enabled = (strongSelf->_useBlur.state == NSOnState);
+        strongSelf->_blurRadius.enabled = (strongSelf->_useBlur.state == NSControlStateValueOn);
     };
 
     [self defineControl:_blurRadius
@@ -202,31 +206,60 @@
             relatedView:nil
                    type:kPreferenceInfoTypeCheckbox];
 
-    info = [self defineControl:_useCustomWindowTitle
-                           key:KEY_USE_CUSTOM_WINDOW_TITLE
-                   displayName:@"Enable custom window title for new windows"
-                          type:kPreferenceInfoTypeCheckbox];
-    info.onChange = ^{
-        [weakSelf updateCustomWindowTitleEnabled];
-    };
-    
+    // Custom window title
+    {
+        info = [self defineControl:_useCustomWindowTitle
+                               key:KEY_USE_CUSTOM_WINDOW_TITLE
+                       displayName:@"Enable custom window title for new windows"
+                              type:kPreferenceInfoTypeCheckbox];
+        info.onChange = ^{
+            [weakSelf updateCustomWindowTitleEnabled];
+        };
+
+        _customWindowTitleDelegate = [[iTermFunctionCallTextFieldDelegate alloc] initWithPathSource:[iTermVariableHistory pathSourceForContext:iTermVariablesSuggestionContextWindow]
+                                                                                        passthrough:self
+                                                                                      functionsOnly:NO];
+        _customWindowTitle.delegate = _customWindowTitleDelegate;
+        [self defineControl:_customWindowTitle
+                        key:KEY_CUSTOM_WINDOW_TITLE
+                displayName:@"Custom window title for new windows"
+                       type:kPreferenceInfoTypeStringTextField];
+        [self updateCustomWindowTitleEnabled];
+    }
+
+    // Custom tab title
+    {
+        info = [self defineControl:_useCustomTabTitle
+                               key:KEY_USE_CUSTOM_TAB_TITLE
+                       displayName:@"Enable custom tab title for new tabs"
+                              type:kPreferenceInfoTypeCheckbox];
+        info.onChange = ^{
+            [weakSelf updateCustomTabTitleEnabled];
+        };
+
+        _customTabTitleDelegate = [[iTermFunctionCallTextFieldDelegate alloc] initWithPathSource:[iTermVariableHistory pathSourceForContext:iTermVariablesSuggestionContextTab]
+                                                                                        passthrough:self
+                                                                                      functionsOnly:NO];
+        _customTabTitle.delegate = _customTabTitleDelegate;
+        [self defineControl:_customTabTitle
+                        key:KEY_CUSTOM_TAB_TITLE
+                displayName:@"Custom tab title for new tabs"
+                       type:kPreferenceInfoTypeStringTextField];
+        [self updateCustomTabTitleEnabled];
+    }
+
     [self addViewToSearchIndex:_useBackgroundImage
                    displayName:@"Background image enabled"
                        phrases:@[]
                            key:nil];
-    _customWindowTitleDelegate = [[iTermFunctionCallTextFieldDelegate alloc] initWithPathSource:[iTermVariableHistory pathSourceForContext:iTermVariablesSuggestionContextWindow]
-                                                                                    passthrough:self
-                                                                                  functionsOnly:NO];
-    _customWindowTitle.delegate = _customWindowTitleDelegate;
-    [self defineControl:_customWindowTitle
-                    key:KEY_CUSTOM_WINDOW_TITLE
-            displayName:@"Custom window title for new windows"
-                   type:kPreferenceInfoTypeStringTextField];
-    [self updateCustomWindowTitleEnabled];
 }
 
 - (void)updateCustomWindowTitleEnabled {
     _customWindowTitle.enabled = [self boolForKey:KEY_USE_CUSTOM_WINDOW_TITLE];
+}
+
+- (void)updateCustomTabTitleEnabled {
+    _customTabTitle.enabled = [self boolForKey:KEY_USE_CUSTOM_TAB_TITLE];
 }
 
 - (void)layoutSubviewsForEditCurrentSessionMode {
@@ -249,13 +282,14 @@
     [super reloadProfile];
     [self loadBackgroundImageWithFilename:[self stringForKey:KEY_BACKGROUND_IMAGE_LOCATION]];
     [self updateCustomWindowTitleEnabled];
+    [self updateCustomTabTitleEnabled];
 }
 
 #pragma mark - Actions
 
 // Opens a file picker and updates views and state.
 - (IBAction)useBackgroundImageDidChange:(id)sender {
-    if ([_useBackgroundImage state] == NSOnState) {
+    if ([_useBackgroundImage state] == NSControlStateValueOn) {
         [self openFilePicker];
     } else {
         [self loadBackgroundImageWithFilename:nil];
@@ -271,7 +305,7 @@
     [panel setAllowedFileTypes:[NSImage imageTypes]];
 
     void (^completion)(NSInteger) = ^(NSInteger result) {
-        if (result == NSFileHandlingPanelOKButton) {
+        if (result == NSModalResponseOK) {
             NSURL *url = [[panel URLs] objectAtIndex:0];
             [self loadBackgroundImageWithFilename:[url path]];
             [self setString:self.backgroundImageFilename forKey:KEY_BACKGROUND_IMAGE_LOCATION];
@@ -302,11 +336,11 @@
     NSImage *anImage = filename.length > 0 ? [[NSImage alloc] initWithContentsOfFile:filename] : nil;
     if (anImage) {
         [_backgroundImagePreview setImage:anImage];
-        [_useBackgroundImage setState:NSOnState];
+        [_useBackgroundImage setState:NSControlStateValueOn];
         self.backgroundImageFilename = filename;
     } else {
         [_backgroundImagePreview setImage:nil];
-        [_useBackgroundImage setState:NSOffState];
+        [_useBackgroundImage setState:NSControlStateValueOff];
         self.backgroundImageFilename = nil;
     }
 }

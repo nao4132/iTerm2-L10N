@@ -35,6 +35,7 @@
 #import "iTermAdvancedSettingsModel.h"
 #import "iTermImageInfo.h"
 #import "iTermMalloc.h"
+#import "NSArray+iTerm.h"
 #import "NSCharacterSet+iTerm.h"
 
 static NSString *const kScreenCharComplexCharMapKey = @"Complex Char Map";
@@ -44,13 +45,15 @@ static NSString *const kScreenCharImageMapKey = @"Image Map";
 static NSString *const kScreenCharCCMNextKeyKey = @"Next Key";
 static NSString *const kScreenCharHasWrappedKey = @"Has Wrapped";
 
+static NSInteger gScreenCharGeneration;
+
 // Maps codes to strings
 static NSMutableDictionary* complexCharMap;
 static NSMutableSet<NSNumber *> *spacingCombiningMarkCodeNumbers;
 // Maps strings to codes.
 static NSMutableDictionary* inverseComplexCharMap;
 // Image info. Maps a NSNumber with the image's code to an ImageInfo object.
-static NSMutableDictionary* gImages;
+static NSMutableDictionary<NSNumber *, iTermImageInfo *> *gImages;
 static NSMutableDictionary* gEncodableImageMap;
 // Next available code.
 static int ccmNextKey = 1;
@@ -171,6 +174,7 @@ static void CreateComplexCharMapIfNeeded() {
         complexCharMap = [[NSMutableDictionary alloc] initWithCapacity:1000];
         spacingCombiningMarkCodeNumbers = [[NSMutableSet alloc] initWithCapacity:1000];
         inverseComplexCharMap = [[NSMutableDictionary alloc] initWithCapacity:1000];
+        gScreenCharGeneration++;
     }
 }
 
@@ -241,6 +245,7 @@ static void AllocateImageMapsIfNeeded(void) {
     if (!gImages) {
         gImages = [[NSMutableDictionary alloc] init];
         gEncodableImageMap = [[NSMutableDictionary alloc] init];
+        gScreenCharGeneration++;
     }
 }
 
@@ -266,6 +271,7 @@ screen_char_t ImageCharForNewImage(NSString *name,
     imageInfo.size = NSMakeSize(width, height);
     imageInfo.inset = inset;
     gImages[@(c.code)] = imageInfo;
+    gScreenCharGeneration++;
     DLog(@"Assign %@ to image code %@", imageInfo, @(c.code));
 
     return c;
@@ -281,6 +287,10 @@ void SetDecodedImage(unichar code, iTermImage *image, NSData *data) {
     iTermImageInfo *imageInfo = gImages[@(code)];
     [imageInfo setImageFromImage:image data:data];
     gEncodableImageMap[@(code)] = [imageInfo dictionary];
+    gScreenCharGeneration++;
+    if ([iTermAdvancedSettingsModel restoreWindowContents]) {
+        [NSApp invalidateRestorableState];
+    }
     DLog(@"set decoded image in %@", imageInfo);
 }
 
@@ -288,6 +298,7 @@ void ReleaseImage(unichar code) {
     DLog(@"ReleaseImage(%@)", @(code));
     [gImages removeObjectForKey:@(code)];
     [gEncodableImageMap removeObjectForKey:@(code)];
+    gScreenCharGeneration++;
 }
 
 iTermImageInfo *GetImageInfo(unichar code) {
@@ -307,6 +318,7 @@ int GetOrSetComplexChar(NSString *str,
         return [number intValue];
     }
 
+    gScreenCharGeneration++;
     int newKey;
     do {
         newKey = ccmNextKey++;
@@ -539,7 +551,7 @@ NSString* ScreenCharArrayToStringDebug(screen_char_t* screenChars,
     for (int i = 0; i < lineLength; ++i) {
         unichar c = screenChars[i].code;
         if (c != 0 && c != DWC_RIGHT) {
-            [result appendString:ScreenCharToStr(&screenChars[i])];
+            [result appendString:ScreenCharToStr(&screenChars[i]) ?: @"😮"];
         }
     }
     return result;
@@ -556,12 +568,12 @@ int EffectiveLineLength(screen_char_t* theLine, int totalLength) {
 
 NSString *DebugStringForScreenChar(screen_char_t c) {
     NSArray *modes = @[ @"default", @"selected", @"altsem", @"altsem-reversed" ];
-    return [NSString stringWithFormat:@"<screen_char_t: code=%@ complex=%@ image=%@ url=%@ foregroundColor=%@ fgGreen=%@ fgBlue=%@ backgroundColor=%@ bgGreen=%@ bgBlue=%@ fgMode=%@ bgMode=%@ bold=%@ faint=%@ italic=%@ blink=%@ underline=%@ strikethrough=%@ unused=%@>",
+    return [NSString stringWithFormat:@"<screen_char_t: code=%@ complex=%@ image=%@ url=%@ foregroundColor=%@ fgGreen=%@ fgBlue=%@ backgroundColor=%@ bgGreen=%@ bgBlue=%@ fgMode=%@ bgMode=%@ bold=%@ faint=%@ italic=%@ blink=%@ underline=%@ strikethrough=%@ underlinestyle=%@ unused=%@>",
             @(c.code), @(c.complexChar), @(c.image), @(c.urlCode),
             @(c.foregroundColor), @(c.fgGreen), @(c.fgBlue),
             @(c.backgroundColor), @(c.bgGreen), @(c.bgBlue), modes[c.foregroundColorMode],
             modes[c.backgroundColorMode], @(c.bold), @(c.faint), @(c.italic), @(c.blink),
-            @(c.underline), @(c.strikethrough), @(c.unused)];
+            @(c.underline), @(c.strikethrough), @(c.underlineStyle), @(c.unused)];
 }
 
 // Convert a string into an array of screen characters, dealing with surrogate
@@ -685,6 +697,7 @@ void InitializeScreenChar(screen_char_t *s, screen_char_t fg, screen_char_t bg) 
     s->blink = fg.blink;
     s->underline = fg.underline;
     s->strikethrough = fg.strikethrough;
+    s->underlineStyle = fg.underlineStyle;
     s->image = NO;
     s->urlCode = fg.urlCode;
     s->unused = 0;
@@ -701,6 +714,10 @@ void ConvertCharsToGraphicsCharset(screen_char_t *s, int len)
     }
 }
 
+NSInteger ScreenCharGeneration(void) {
+    return gScreenCharGeneration;
+}
+
 NSDictionary *ScreenCharEncodedRestorableState(void) {
     return @{ kScreenCharComplexCharMapKey: complexCharMap ?: @{},
               kScreenCharSpacingCombiningMarksKey: spacingCombiningMarkCodeNumbers.allObjects ?: @[],
@@ -708,6 +725,19 @@ NSDictionary *ScreenCharEncodedRestorableState(void) {
               kScreenCharImageMapKey: gEncodableImageMap ?: @{},
               kScreenCharCCMNextKeyKey: @(ccmNextKey),
               kScreenCharHasWrappedKey: @(hasWrapped) };
+}
+
+void ScreenCharGarbageCollectImages(void) {
+    NSArray<NSNumber *> *provisionalKeys = [gImages.allKeys filteredArrayUsingBlock:^BOOL(NSNumber *key) {
+        return gImages[key].provisional;
+    }];
+    DLog(@"Garbage collect: %@", provisionalKeys);
+    [gImages removeObjectsForKeys:provisionalKeys];
+}
+
+void ScreenCharClearProvisionalFlagForImageWithCode(int code) {
+    DLog(@"Clear provisional for %@", @(code));
+    gImages[@(code)].provisional = NO;
 }
 
 void ScreenCharDecodeRestorableState(NSDictionary *state) {
@@ -735,6 +765,7 @@ void ScreenCharDecodeRestorableState(NSDictionary *state) {
         gEncodableImageMap[key] = imageMap[key];
         iTermImageInfo *info = [[[iTermImageInfo alloc] initWithDictionary:imageMap[key]] autorelease];
         if (info) {
+            info.provisional = YES;
             gImages[key] = info;
             DLog(@"Decoded restorable state for image %@: %@", key, info);
         }
@@ -808,7 +839,14 @@ NSString *ScreenCharDescription(screen_char_t c) {
         [attrs addObject:@"Blink"];
     }
     if (c.underline) {
-        [attrs addObject:@"Underline"];
+        switch (c.underlineStyle) {
+            case VT100UnderlineStyleSingle:
+                [attrs addObject:@"Underline"];
+                break;
+            case VT100UnderlineStyleCurly:
+                [attrs addObject:@"Curly-Underline"];
+                break;
+        }
     }
     if (c.strikethrough) {
         [attrs addObject:@"Strike"];

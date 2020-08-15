@@ -10,9 +10,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 @implementation THE_CLASS
 {
-    int blurFilter;
     double blurRadius_;
-
+    // Hack for a 10.16 issue. Once you set blur from >0 to 0 then it is broken and will never work again.
+    int _minBlur;
+    
     // If set, then windowWillShowInitial is not invoked.
     BOOL _layoutDone;
 
@@ -29,10 +30,12 @@ NS_ASSUME_NONNULL_BEGIN
 
     NSTimeInterval _timeOfLastWindowTitleChange;
     BOOL _needsInvalidateShadow;
+    BOOL _it_restorableStateInvalid;
 }
 
 @synthesize it_openingSheet;
 @synthesize it_becomingKey;
+@synthesize it_accessibilityResizing;
 
 - (instancetype)initWithContentRect:(NSRect)contentRect
                           styleMask:(NSWindowStyleMask)aStyle
@@ -93,6 +96,12 @@ ITERM_WEAKLY_REFERENCEABLE
     }
 }
 
+- (void)performWindowDragWithEvent:(NSEvent *)event {
+    if ([self.ptyDelegate ptyWindowIsDraggable:self]) {
+        [super performWindowDragWithEvent:event];
+    }
+}
+
 - (void)performMiniaturize:(nullable id)sender {
     if ([self.ptyDelegate anyFullScreen]) {
         if (@available(macOS 10.13, *)) {
@@ -127,7 +136,26 @@ ITERM_WEAKLY_REFERENCEABLE
     return [NSString stringWithFormat:@"window-%ld", (long)_uniqueNumber];
 }
 
+- (void)setIt_restorableStateInvalid:(BOOL)it_restorableStateInvalid {
+    _it_restorableStateInvalid = NO;
+}
+
+- (BOOL)it_restorableStateInvalid {
+    return _it_restorableStateInvalid;
+}
+
+- (void)invalidateRestorableState {
+    self.it_restorableStateInvalid = YES;
+    [super invalidateRestorableState];
+}
+
+- (void)encodeRestorableStateWithCoder:(NSCoder *)coder backgroundQueue:(NSOperationQueue *)queue {
+    self.it_restorableStateInvalid = NO;
+    [super encodeRestorableStateWithCoder:coder backgroundQueue:queue];
+}
+
 - (void)encodeRestorableStateWithCoder:(NSCoder *)coder {
+    self.it_restorableStateInvalid = NO;
     [super encodeRestorableStateWithCoder:coder];
     [coder encodeObject:restoreState_ forKey:kTerminalWindowStateRestorationWindowArrangementKey];
 }
@@ -138,18 +166,18 @@ ITERM_WEAKLY_REFERENCEABLE
 }
 
 - (void)enableBlur:(double)radius {
-    const double kEpsilon = 0.001;
-    if (blurFilter && fabs(blurRadius_ - radius) < kEpsilon) {
-        return;
-    }
-
-    CGSConnectionID con = CGSMainConnectionID();
+    CGSConnectionID con = CGSDefaultConnectionForThread();
     if (!con) {
         return;
     }
     CGSSetWindowBackgroundBlurRadiusFunction* function = GetCGSSetWindowBackgroundBlurRadiusFunction();
     if (function) {
-        function(con, [self windowNumber], (int)radius);
+        if (@available(macOS 10.16, *)) {
+            if (radius >= 1) {
+                _minBlur = 1;
+            }
+        }
+        function(con, [self windowNumber], (int)MAX(_minBlur, radius));
     } else {
         NSLog(@"Couldn't get blur function");
     }
@@ -157,18 +185,14 @@ ITERM_WEAKLY_REFERENCEABLE
 }
 
 - (void)disableBlur {
-    CGSConnectionID con = CGSMainConnectionID();
+    CGSConnectionID con = CGSDefaultConnectionForThread();
     if (!con) {
         return;
     }
 
     CGSSetWindowBackgroundBlurRadiusFunction* function = GetCGSSetWindowBackgroundBlurRadiusFunction();
     if (function) {
-        function(con, [self windowNumber], 0);
-    } else if (blurFilter) {
-        CGSRemoveWindowFilter(con, (CGSWindowID)[self windowNumber], blurFilter);
-        CGSReleaseCIFilter(CGSMainConnectionID(), blurFilter);
-        blurFilter = 0;
+        function(con, [self windowNumber], MAX(_minBlur, 0));
     }
 }
 
@@ -442,10 +466,16 @@ ITERM_WEAKLY_REFERENCEABLE
 }
 
 - (void)setFrame:(NSRect)frameRect display:(BOOL)flag {
-    DLog(@"setFrame:%@ display:%@ from\n%@",
-         NSStringFromRect(frameRect), @(flag),
+    DLog(@"setFrame:%@ display:%@ maxy=%@ from\n%@",
+         NSStringFromRect(frameRect), @(flag), @(NSMaxY(frameRect)),
          [NSThread callStackSymbols]);
     [super setFrame:frameRect display:flag];
+}
+
+- (void)setFrameOrigin:(NSPoint)point {
+    DLog(@"Set frame origin to %@", NSStringFromPoint(point));
+    [super setFrameOrigin:point];
+    DLog(@"Frame maxy=%@ now", @(NSMaxY(self.frame)));
 }
 
 #if ENABLE_COMPACT_WINDOW_HACK
@@ -471,6 +501,12 @@ ITERM_WEAKLY_REFERENCEABLE
     return NO;
 }
 #endif
+
+- (void)accessibilitySetSizeAttribute:(id)arg1 {
+    self.it_accessibilityResizing += 1;
+    [super accessibilitySetSizeAttribute:arg1];
+    self.it_accessibilityResizing -= 1;
+}
 
 - (NSColor *)it_terminalWindowDecorationBackgroundColor {
     return [self.ptyDelegate terminalWindowDecorationBackgroundColor];

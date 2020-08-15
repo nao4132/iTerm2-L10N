@@ -9,6 +9,7 @@
 
 @implementation iTermCompetentTableRowView
 
+
 - (BOOL)it_dark {
     return [self.window.appearance.name isEqual:NSAppearanceNameVibrantDark];
 }
@@ -24,4 +25,7 @@
     [super drawSelectionInRect:dirtyRect];
 }
 
+@end
+
+@implementation iTermBigSurTableRowView
 @end

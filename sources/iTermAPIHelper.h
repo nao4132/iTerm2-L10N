@@ -14,6 +14,7 @@ extern NSString *const iTermAPIRegisteredFunctionsDidChangeNotification;
 extern NSString *const iTermAPIDidRegisterSessionTitleFunctionNotification;
 extern NSString *const iTermAPIDidRegisterStatusBarComponentNotification;  // object is the unique id of the status bar component
 extern NSString *const iTermAPIHelperDidStopNotification;
+extern NSString *const iTermAPIHelperDidDetectChangeOfPythonAuthMethodNotification;
 extern NSString *const iTermAPIHelperErrorDomain;
 
 extern NSString *const iTermAPIHelperFunctionCallErrorUserInfoKeyConnection;
@@ -21,6 +22,7 @@ extern NSString *const iTermAPIHelperFunctionCallErrorUserInfoKeyConnection;
 @class iTermParsedExpression;
 @class iTermScriptHistoryEntry;
 @class iTermVariableScope;
+@class NSWindow;
 
 typedef NS_ENUM(NSUInteger, iTermAPIHelperErrorCode) {
     iTermAPIHelperErrorCodeRegistrationFailed,
@@ -55,6 +57,10 @@ typedef void (^iTermServerOriginatedRPCCompletionBlock)(id, NSError *);
 + (instancetype)sharedInstance;
 + (instancetype)sharedInstanceFromExplicitUserAction;
 + (instancetype)sharedInstanceIfEnabled;
+
++ (BOOL)requireApplescriptAuth;
++ (void)setRequireApplescriptAuth:(BOOL)requireApplescriptAuth
+                           window:(NSWindow *)window;
 
 + (NSString *)invocationWithFullyQualifiedName:(NSString *)fqname
                                       defaults:(NSArray<ITMRPCRegistrationRequest_RPCArgument*> *)defaultsArray;

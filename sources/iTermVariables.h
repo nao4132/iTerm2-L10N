@@ -62,6 +62,9 @@ extern NSString *const iTermVariableKeySessionTmuxStatusRight;  // String. Only 
 extern NSString *const iTermVariableKeySessionMouseReportingMode;  // NSNumber (MouseMode)
 extern NSString *const iTermVariableKeySessionBadge;  // NSString. Evaluated badge swifty string.
 extern NSString *const iTermVariableKeySessionTab;  // NString. Containing tab.
+extern NSString *const iTermVariableKeySessionSelection;  // NSString. Containing selected text.
+extern NSString *const iTermVariableKeySessionSelectionLength;  // NSNumber. Contains length of selected text.
+extern NSString *const iTermVariableKeySessionParent;  // Session that was active when this one was created, if any.
 
 extern NSString *const iTermVariableKeyWindowTitleOverrideFormat;
 extern NSString *const iTermVariableKeyWindowCurrentTab;
@@ -99,6 +102,7 @@ extern NSString *const iTermVariableKeyWindowNumber;
 
 @property (nonatomic, readonly, weak) id<iTermObject> owner;
 @property (nonatomic, readonly) NSDictionary *dictionaryValue;
+@property (nonatomic, readonly) NSDictionary *encodableDictionaryValue;
 @property (nonatomic, readonly) NSDictionary<NSString *,NSString *> *stringValuedDictionary;
 @property (nonatomic, readonly) NSArray<NSString *> *allNames;
 @property (nonatomic, readonly) NSString *debugInfo;

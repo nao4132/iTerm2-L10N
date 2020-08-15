@@ -105,6 +105,7 @@
                           @(VT100CSI_CUU):                    @"VT100CSI_CUU",
                           @(VT100CSI_DA):                     @"VT100CSI_DA",
                           @(VT100CSI_DA2):                    @"VT100CSI_DA2",
+                          @(VT100CSI_XDA):                    @"VT100CSI_XDA",
                           @(VT100CSI_DECALN):                 @"VT100CSI_DECALN",
                           @(VT100CSI_DECDHL):                 @"VT100CSI_DECDHL",
                           @(VT100CSI_DECDWL):                 @"VT100CSI_DECDWL",
@@ -200,7 +201,8 @@
                           @(DCS_TMUX_CODE_WRAP):              @"DCS_TMUX_CODE_WRAP",
                           @(VT100CSI_DECSLRM_OR_ANSICSI_SCP): @"VT100CSI_DECSLRM_OR_ANSICSI_SCP",
                           @(DCS_REQUEST_TERMCAP_TERMINFO):    @"DCS_REQUEST_TERMCAP_TERMINFO",
-                          @(DCS_SIXEL):                       @"DCS_SIXEL" };
+                          @(DCS_SIXEL):                       @"DCS_SIXEL",
+                          @(DCS_DECRQSS):                     @"DCS_DECRQSS" };
     NSString *name = map[@(type)];
     if (name) {
         return name;
@@ -232,7 +234,7 @@
 
 - (CSIParam *)csi {
     if (!_csi) {
-        _csi = calloc(sizeof(*_csi), 1);
+        _csi = iTermCalloc(sizeof(*_csi), 1);
     }
     return _csi;
 }
@@ -276,7 +278,7 @@
 - (void)preInitializeScreenChars {
     // TODO: Expand this beyond just ascii characters.
     if (_asciiData.length > kStaticScreenCharsCount) {
-        _screenChars.buffer = calloc(_asciiData.length, sizeof(screen_char_t));
+        _screenChars.buffer = iTermCalloc(_asciiData.length, sizeof(screen_char_t));
     } else {
         _screenChars.buffer = _screenChars.staticBuffer;
         memset(_screenChars.buffer, 0, _asciiData.length * sizeof(screen_char_t));
@@ -297,7 +299,8 @@
             }
             break;
         case VT100CSI_DECSET:
-        case VT100CSI_DECRST: [self translateDECSETFromScreenTerminal];
+        case VT100CSI_DECRST:
+            [self translateDECSETFromScreenTerminal];
             break;
         default:
             break;

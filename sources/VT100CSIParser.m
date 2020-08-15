@@ -241,7 +241,7 @@ static BOOL ParseCSIParameters(iTermParserContext *context,
                 }
                 // reset the parameter flag
                 readNumericParameter = NO;
-
+                isSub = NO;
                 if (!AdvanceAndEatControlChars(context, support8BitControlCharacters, incidentals)) {
                     return NO;
                 }
@@ -541,6 +541,11 @@ static void SetCSITypeAndDefaultParameters(CSIParam *param, VT100Token *result) 
 
         case PACKED_CSI_COMMAND(0, ' ', 'q'):
             result->type = VT100CSI_DECSCUSR;
+            iTermParserSetCSIParameterIfDefault(param, 0, 0);
+            break;
+
+        case PACKED_CSI_COMMAND('>', 0, 'q'):
+            result->type = VT100CSI_XDA;
             iTermParserSetCSIParameterIfDefault(param, 0, 0);
             break;
 

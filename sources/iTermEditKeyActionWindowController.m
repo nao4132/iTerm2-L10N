@@ -8,13 +8,14 @@
 
 #import "iTermEditKeyActionWindowController.h"
 
+#import "DebugLogging.h"
 #import "iTermActionsModel.h"
 #import "iTermFunctionCallTextFieldDelegate.h"
+#import "iTermKeystrokeFormatter.h"
 #import "iTermPasteSpecialViewController.h"
 #import "iTermPreferences.h"
 #import "iTermShortcutInputView.h"
 #import "iTermVariableScope.h"
-#import "iTermKeyBindingMgr.h"
 #import "NSPopUpButton+iTerm.h"
 #import "RegexKitLite.h"
 
@@ -44,7 +45,7 @@
     IBOutlet NSPopUpButton *_colorPresetsPopup;
     IBOutlet NSView *_pasteSpecialViewContainer;
     IBOutlet NSButton *_okButton;
-    
+
     iTermPasteSpecialViewController *_pasteSpecialViewController;
     iTermFunctionCallTextFieldDelegate *_functionCallDelegate;
     iTermFunctionCallTextFieldDelegate *_labelDelegate;
@@ -132,7 +133,7 @@
 
         [[iTermSearchableComboViewGroup alloc] initWithLabel:@"Resize Pane" items:@[
             [[iTermSearchableComboViewItem alloc] initWithLabel:@"Decrease Height" tag:KEY_ACTION_DECREASE_HEIGHT],
-            [[iTermSearchableComboViewItem alloc] initWithLabel:@"Increase Height" tag:KEY_ACTION_DECREASE_HEIGHT],
+            [[iTermSearchableComboViewItem alloc] initWithLabel:@"Increase Height" tag:KEY_ACTION_INCREASE_HEIGHT],
             [[iTermSearchableComboViewItem alloc] initWithLabel:@"Decrease Width" tag:KEY_ACTION_DECREASE_WIDTH],
             [[iTermSearchableComboViewItem alloc] initWithLabel:@"Increase Width" tag:KEY_ACTION_INCREASE_WIDTH],
         ]],
@@ -160,7 +161,7 @@
             [[iTermSearchableComboViewItem alloc] initWithLabel:@"Send Escape Sequence" tag:KEY_ACTION_ESCAPE_SEQUENCE],
             [[iTermSearchableComboViewItem alloc] initWithLabel:@"Send Hex Code" tag:KEY_ACTION_HEX_CODE],
             [[iTermSearchableComboViewItem alloc] initWithLabel:@"Send Text" tag:KEY_ACTION_TEXT],
-            [[iTermSearchableComboViewItem alloc] initWithLabel:@"Send Text with &quot;vim&quot; Special Chars" tag:KEY_ACTION_VIM_TEXT],
+            [[iTermSearchableComboViewItem alloc] initWithLabel:@"Send Text with “vim” Special Chars" tag:KEY_ACTION_VIM_TEXT],
         ]],
 
         [[iTermSearchableComboViewGroup alloc] initWithLabel:@"Search" items:@[
@@ -211,12 +212,12 @@
     // For some reason, the first item is checked by default. Make sure every
     // item is unchecked before making a selection.
     NSString *formattedString = @"";
-    if (self.currentKeyCombination) {
-        formattedString = [iTermKeyBindingMgr formatKeyCombination:self.currentKeyCombination];
+    if (self.currentKeystroke) {
+        formattedString = [iTermKeystrokeFormatter stringForKeystroke:self.currentKeystroke];
     }
-    _okButton.enabled = [self shouldEnableOK];
     _shortcutField.stringValue = formattedString;
     _touchBarLabel.stringValue = self.label ?: @"";
+    _okButton.enabled = [self shouldEnableOK];
     (void)[_comboView selectItemWithTag:self.action];
     _parameter.stringValue = self.parameterValue ?: @"";
     if (self.action == KEY_ACTION_SELECT_MENU_ITEM) {
@@ -285,12 +286,12 @@
                                      parameter:self.parameterValue];
 }
 
-- (NSString *)identifier {
+- (iTermKeystrokeOrTouchbarItem *)keystrokeOrTouchbarItem {
     switch (_mode) {
         case iTermEditKeyActionWindowControllerModeKeyboardShortcut:
-            return self.currentKeyCombination;
+            return [iTermOr first:self.currentKeystroke];
         case iTermEditKeyActionWindowControllerModeTouchBarItem:
-            return self.touchBarItemID;
+            return [iTermOr second:[[iTermTouchbarItem alloc] initWithIdentifier:self.touchBarItemID]];
         case iTermEditKeyActionWindowControllerModeUnbound:
             return nil;
     }
@@ -301,7 +302,7 @@
 // Note: This is called directly by iTermHotKeyController when the action requires key remapping
 // to be disabled so the shortcut can be input properly. In this case, |view| will be nil.
 - (void)shortcutInputView:(iTermShortcutInputView *)view didReceiveKeyPressEvent:(NSEvent *)event {
-    self.currentKeyCombination = view.shortcut.identifier;
+    self.currentKeystroke = view.shortcut.keystroke;
     _okButton.enabled = [self shouldEnableOK];
 }
 
@@ -323,12 +324,15 @@
                                                                                       functionsOnly:NO];
                 }
                 _touchBarLabel.delegate = _labelDelegate;
+            } else {
+                _touchBarLabel.delegate = nil;
             }
             _touchBarLabel.hidden = NO;
             _shortcutField.hidden = YES;
             break;
         case iTermEditKeyActionWindowControllerModeTouchBarItem:
             _keyboardShortcutLabel.stringValue = @"Touch Bar Label";
+            _touchBarLabel.delegate = nil;
             _touchBarLabel.hidden = NO;
             _shortcutField.hidden = YES;
             break;
@@ -529,7 +533,7 @@
         NSMenuItem *theItem = [[button menu] itemWithTitle:selectedValue];
         if (theItem) {
             [button setTitle:selectedValue];
-            [theItem setState:NSOnState];
+            [theItem setState:NSControlStateValueOn];
         }
     }
 }
@@ -603,7 +607,7 @@
             }
             break;
         case iTermEditKeyActionWindowControllerModeKeyboardShortcut:
-            if (!self.currentKeyCombination) {
+            if (!self.currentKeystroke) {
                 return NO;
             }
             break;
@@ -620,13 +624,15 @@
             break;
         case iTermEditKeyActionWindowControllerModeTouchBarItem:
             if (!_touchBarLabel.stringValue.length) {
+                DLog(@"Beep: empty touch bar label");
                 NSBeep();
                 return;
             }
             self.label = _touchBarLabel.stringValue;
             break;
         case iTermEditKeyActionWindowControllerModeKeyboardShortcut:
-            if (!self.currentKeyCombination) {
+            if (!self.currentKeystroke) {
+                DLog(@"Beep: no key combo");
                 NSBeep();
                 return;
             }
@@ -643,7 +649,6 @@
                 self.parameterValue = [[_menuToSelectPopup selectedItem] title];
             }
             break;
-
 
         case KEY_ACTION_SPLIT_HORIZONTALLY_WITH_PROFILE:
         case KEY_ACTION_SPLIT_VERTICALLY_WITH_PROFILE:

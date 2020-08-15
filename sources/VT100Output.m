@@ -1,4 +1,8 @@
 #import "VT100Output.h"
+
+#import "DebugLogging.h"
+#import "iTermAdvancedSettingsModel.h"
+
 #include <term.h>
 
 // Indexes into _keyStrings.
@@ -123,6 +127,7 @@ typedef enum {
 }
 
 - (void)setTermTypeIsValid:(BOOL)termTypeIsValid {
+    DLog(@"setTermTypeIsValid:%@ cur_term=%p", @(termTypeIsValid), cur_term);
     if (termTypeIsValid && cur_term) {
         char *key_names[] = {
             key_left, key_right, key_up, key_down,
@@ -146,6 +151,7 @@ typedef enum {
                 free(_keyStrings[i]);
             }
             _keyStrings[i] = key_names[i] ? strdup(key_names[i]) : NULL;
+            DLog(@"Set key string %d (%s) to %s", i, key_names[i], _keyStrings[i]);
         }
     } else {
         for (int i = 0; i < TERMINFO_KEYS; i ++) {
@@ -289,8 +295,8 @@ typedef enum {
 
 // Reference: http://www.utexas.edu/cc/faqs/unix/VT200-function-keys.html
 // http://www.cs.utk.edu/~shuford/terminal/misc_old_terminals_news.txt
-- (NSData *)keyFunction:(int)no
-{
+- (NSData *)keyFunction:(int)no {
+    DLog(@"keyFunction:%@", @(no));
     char str[256];
     int len;
 
@@ -568,21 +574,38 @@ typedef enum {
     }
 }
 
-- (NSData *)reportSecondaryDeviceAttribute
-{
+- (NSData *)reportSecondaryDeviceAttribute {
     return [NSData dataWithBytes:REPORT_SDA
                           length:STATIC_STRLEN(REPORT_SDA)];
 }
 
+- (NSData *)reportExtendedDeviceAttribute {
+    NSString *versionString = [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleShortVersionString"];
+    NSString *reportString = [NSString stringWithFormat:@"%cP>|iTerm2 %@%c\\", ESC, versionString, ESC];
+    return [reportString dataUsingEncoding:NSUTF8StringEncoding];
+}
+
 - (NSData *)reportColor:(NSColor *)color atIndex:(int)index prefix:(NSString *)prefix {
-    NSString *string = [NSString stringWithFormat:@"%c]%@%d;rgb:%02x/%02x/%02x%c",
-                        ESC,
-                        prefix,
-                        index,
-                        (int) ([color redComponent] * 255.0),
-                        (int) ([color greenComponent] * 255.0),
-                        (int) ([color blueComponent] * 255.0),
-                        7];
+    NSString *string = nil;
+    if ([iTermAdvancedSettingsModel oscColorReport16Bits]) {
+        string = [NSString stringWithFormat:@"%c]%@%d;rgb:%04x/%04x/%04x%c",
+                  ESC,
+                  prefix,
+                  index,
+                  (int) ([color redComponent] * 65535.0),
+                  (int) ([color greenComponent] * 65535.0),
+                  (int) ([color blueComponent] * 65535.0),
+                  7];
+    } else {
+        string = [NSString stringWithFormat:@"%c]%@%d;rgb:%02x/%02x/%02x%c",
+                  ESC,
+                  prefix,
+                  index,
+                  (int) ([color redComponent] * 255.0),
+                  (int) ([color greenComponent] * 255.0),
+                  (int) ([color blueComponent] * 255.0),
+                  7];
+    }
     return [string dataUsingEncoding:NSUTF8StringEncoding];
 }
 

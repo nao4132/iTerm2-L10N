@@ -11,13 +11,14 @@
 @interface iTermProcessInfo : NSObject
 
 @property(nonatomic, readonly, strong) NSString *name;
-@property(nonatomic, readonly, strong) NSString *commandLine;  // only set for foreground jobs
+@property(nonatomic, readonly, strong) NSString *commandLine;  // only set for foreground jobs and the child of login
 @property(nonatomic, readonly) pid_t processID;
 @property(nonatomic, readonly) pid_t parentProcessID;
 @property(nonatomic, readonly) NSMutableArray<iTermProcessInfo *> *children;
 @property(nonatomic, weak, readonly) iTermProcessInfo *parent;
 @property(nonatomic, readonly) BOOL isForegroundJob;
 @property(nonatomic, readonly) NSArray<iTermProcessInfo *> *sortedChildren;
+@property(nonatomic, readonly) NSDate *startTime;
 
 @property(nonatomic, weak, readonly) iTermProcessInfo *deepestForegroundJob;
 @property(nonatomic, readonly) NSArray<iTermProcessInfo *> *flattenedTree;

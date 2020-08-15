@@ -5,14 +5,17 @@
 #import "iTermApplication.h"
 #import "iTermApplicationDelegate.h"
 #import "iTermDragHandleView.h"
+#import "iTermHamburgerButton.h"
 #import "iTermPreferences.h"
 #import "iTermSystemVersion.h"
 #import "iTermToolActions.h"
+#import "iTermToolSnippets.h"
 #import "iTermToolWrapper.h"
 #import "iTermToolbeltSplitView.h"
 #import "iTermTuple.h"
 #import "NSAppearance+iTerm.h"
 #import "NSArray+iTerm.h"
+#import "NSImage+iTerm.h"
 #import "NSObject+iTerm.h"
 #import "ToolCapturedOutputView.h"
 #import "ToolCommandHistoryView.h"
@@ -22,6 +25,7 @@
 #import "ToolPasteHistory.h"
 #import "ToolProfiles.h"
 #import "ToolWebView.h"
+#import <QuartzCore/QuartzCore.h>
 
 NSString *const kActionsToolName = @"Actions";
 NSString *const kCapturedOutputToolName = @"Captured Output";
@@ -31,6 +35,7 @@ NSString *const kJobsToolName = @"Jobs";
 NSString *const kNotesToolName = @"Notes";
 NSString *const kPasteHistoryToolName = @"Paste History";
 NSString *const kProfilesToolName = @"Profiles";
+NSString *const kSnippetsToolName = @"Snippets";
 
 NSString *const kToolbeltShouldHide = @"kToolbeltShouldHide";
 
@@ -39,7 +44,14 @@ NSString *const iTermToolbeltDidRegisterDynamicToolNotification = @"iTermToolbel
 
 static NSString *const iTermToolbeltProportionsUserDefaultsKey = @"NoSyncToolbeltProportions";
 
-@interface iTermToolbeltView () <iTermDragHandleViewDelegate>
+NS_CLASS_AVAILABLE_MAC(10_14)
+@interface iTermToolbeltVibrantVisualEffectView : NSVisualEffectView
+@end
+
+@implementation iTermToolbeltVibrantVisualEffectView
+@end
+
+@interface iTermToolbeltView () <CALayerDelegate, iTermDragHandleViewDelegate>
 @end
 
 @implementation iTermToolbeltView {
@@ -48,9 +60,11 @@ static NSString *const iTermToolbeltProportionsUserDefaultsKey = @"NoSyncToolbel
     // Tool name to wrapper
     NSMutableDictionary<NSString *, iTermToolWrapper *> *_tools;
     NSDictionary *_proportions;
+    iTermToolbeltVibrantVisualEffectView *_vev NS_AVAILABLE_MAC(10_14);
+    iTermHamburgerButton *_menuButton;
 }
 
-static NSMutableDictionary *gRegisteredTools;
+static NSMutableDictionary<NSString *, Class> *gRegisteredTools;
 static NSString *kToolbeltPrefKey = @"ToolbeltTools";
 static NSString *const kDynamicToolsKey = @"NoSyncDynamicTools";
 static NSString *const kDynamicToolName = @"name";
@@ -68,6 +82,7 @@ static NSString *const kDynamicToolURL = @"URL";
     [iTermToolbeltView registerToolWithName:kNotesToolName withClass:[ToolNotes class]];
     [iTermToolbeltView registerToolWithName:kPasteHistoryToolName withClass:[ToolPasteHistory class]];
     [iTermToolbeltView registerToolWithName:kProfilesToolName withClass:[ToolProfiles class]];
+    [iTermToolbeltView registerToolWithName:kSnippetsToolName withClass:[iTermToolSnippets class]];
 
     NSDictionary<NSString *, NSDictionary *> *dynamicTools = [[NSUserDefaults standardUserDefaults] objectForKey:kDynamicToolsKey];
     [dynamicTools enumerateKeysAndObjectsUsingBlock:^(NSString * _Nonnull identifier, NSDictionary * _Nonnull dict, BOOL * _Nonnull stop) {
@@ -124,7 +139,7 @@ static NSString *const kDynamicToolURL = @"URL";
     [[NSNotificationCenter defaultCenter] postNotificationName:kDynamicToolsDidChange object:nil];
 }
 
-+ (NSArray *)allTools {
++ (NSArray<NSString *> *)allTools {
     return [gRegisteredTools allKeys];
 }
 
@@ -153,12 +168,16 @@ static NSString *const kDynamicToolURL = @"URL";
             }
         }
     }
+    [self addToolsToMenu:menu];
+}
+
++ (void)addToolsToMenu:(NSMenu *)menu {
     NSArray *names = [[iTermToolbeltView allTools] sortedArrayUsingSelector:@selector(compare:)];
     for (NSString *theName in names) {
         NSMenuItem *i = [[[NSMenuItem alloc] initWithTitle:theName
                                                     action:@selector(toggleToolbeltTool:)
                                              keyEquivalent:@""] autorelease];
-        [i setState:[iTermToolbeltView shouldShowTool:theName] ? NSOnState : NSOffState];
+        [i setState:[iTermToolbeltView shouldShowTool:theName] ? NSControlStateValueOn : NSControlStateValueOff];
         [menu addItem:i];
     }
 }
@@ -217,7 +236,21 @@ static NSString *const kDynamicToolURL = @"URL";
     self = [super initWithFrame:frame];
     if (self) {
         _delegate = delegate;
+        if (@available(macOS 10.14, *)) {
+            _vev = [[[iTermToolbeltVibrantVisualEffectView alloc] init] autorelease];
+            _vev.blendingMode = NSVisualEffectBlendingModeBehindWindow;
+            _vev.material = NSVisualEffectMaterialSidebar;
+            _vev.state = NSVisualEffectStateActive;
+            _vev.frame = self.bounds;
+            _vev.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+            [self addSubview:_vev];
 
+            self.wantsLayer = YES;
+            self.layer = [[[CALayer alloc] init] autorelease];
+            self.layer.delegate = self;
+            self.layer.backgroundColor = [[self backgroundColor] CGColor];
+        }
+        
         NSArray *items = [iTermToolbeltView configuredTools];
         if (!items) {
             items = [iTermToolbeltView defaultTools];
@@ -247,6 +280,16 @@ static NSString *const kDynamicToolURL = @"URL";
         _dragHandle.delegate = self;
         _dragHandle.autoresizingMask = (NSViewHeightSizable | NSViewMaxXMargin);
         [self addSubview:_dragHandle];
+
+        _menuButton = [[[iTermHamburgerButton alloc] initWithMenuProvider:^NSMenu * _Nonnull {
+            NSMenu *menu = [[[NSMenu alloc] initWithTitle:@"Contextual Menu"] autorelease];
+            [iTermToolbeltView addToolsToMenu:menu];
+            return menu;
+        }] autorelease];
+        [_menuButton setButtonType:NSButtonTypeMomentaryPushIn];
+
+        _menuButton.frame = self.menuButtonFrame;
+        [self addSubview:_menuButton];
     }
     return self;
 }
@@ -260,19 +303,54 @@ static NSString *const kDynamicToolURL = @"URL";
 
 #pragma mark - NSView
 
+- (void)resizeWithOldSuperviewSize:(NSSize)oldSize {
+    [super resizeWithOldSuperviewSize:oldSize];
+    _menuButton.frame = self.menuButtonFrame;
+}
+
+- (NSRect)menuButtonFrame {
+    NSImage *hamburger = _menuButton.image;
+    return NSMakeRect(self.bounds.size.width - hamburger.size.width - 4,
+                      4.5,
+                      hamburger.size.width,
+                      hamburger.size.height);
+}
+
+- (void)viewDidChangeEffectiveAppearance {
+    if (@available(macOS 10.14, *)) {
+        [self updateColors];
+    }
+}
+
+- (void)updateColors NS_AVAILABLE_MAC(10_14) {
+    if (@available(macOS 10.16, *)) {
+        _vev.blendingMode = NSVisualEffectBlendingModeBehindWindow;
+    } else {
+        if (self.effectiveAppearance.it_isDark) {
+            _vev.blendingMode = NSVisualEffectBlendingModeBehindWindow;
+        } else {
+            // The chartjunk in table views looks horrible when there is a dark
+            // window behind us, so switch to within window blending in light mode.
+            _vev.blendingMode = NSVisualEffectBlendingModeWithinWindow;
+        }
+    }
+    self.layer.backgroundColor = [[self backgroundColor] CGColor];
+}
+
+- (void)viewDidMoveToWindow {
+    [super viewDidMoveToWindow];
+    if (@available(macOS 10.14, *)) {
+        [self updateColors];
+    }
+}
+
 - (NSColor *)backgroundColor {
     if (@available(macOS 10.14, *)) {
-        switch ((iTermPreferencesTabStyle)[iTermPreferences intForKey:kPreferenceKeyTabStyle]) {
-            case TAB_STYLE_AUTOMATIC:
-            case TAB_STYLE_COMPACT:
-            case TAB_STYLE_MINIMAL:
-                return [NSColor controlBackgroundColor];
-
-            case TAB_STYLE_LIGHT:
-            case TAB_STYLE_LIGHT_HIGH_CONTRAST:
-            case TAB_STYLE_DARK:
-            case TAB_STYLE_DARK_HIGH_CONTRAST:
-                break;
+        if (self.effectiveAppearance.it_isDark) {
+            return [NSColor clearColor];
+        } else {
+            // See comment in updateColors
+            return [NSColor whiteColor];
         }
     }
 
@@ -304,6 +382,9 @@ static NSString *const kDynamicToolURL = @"URL";
 }
 
 - (void)drawRect:(NSRect)dirtyRect {
+    if (@available(macOS 10.14, *)) {
+        return;
+    }
     [[self backgroundColor] set];
     NSRectFill(dirtyRect);
     [super drawRect:dirtyRect];
@@ -697,11 +778,21 @@ draggingDidEndOfSplit:(int)clickedOnSplitterIndex
 #pragma mark - iTermDragHandleViewDelegate
 
 - (CGFloat)dragHandleView:(iTermDragHandleView *)dragHandle didMoveBy:(CGFloat)delta {
-    return -[_delegate growToolbeltBy:-delta];
+    const CGFloat amount = -[_delegate growToolbeltBy:-delta];
+    _menuButton.frame = self.menuButtonFrame;
+    return amount;
+    
 }
 
 - (void)dragHandleViewDidFinishMoving:(iTermDragHandleView *)dragHandle {
     [_delegate toolbeltDidFinishGrowing];
+}
+
+#pragma mark - CALayerDelegate
+
+// Dunno why but unless you do this the whole view fades in when unhidden.
+- (id<CAAction>)actionForLayer:(CALayer *)layer forKey:(NSString *)key {
+    return [NSNull null];
 }
 
 @end

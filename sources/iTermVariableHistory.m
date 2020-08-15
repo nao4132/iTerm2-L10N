@@ -71,7 +71,9 @@
                                     iTermVariableKeySessionMouseReportingMode,
                                     iTermVariableKeySessionBadge,
                                     iTermVariableKeySessionTmuxStatusLeft,
-                                    iTermVariableKeySessionTmuxStatusRight ];
+                                    iTermVariableKeySessionTmuxStatusRight,
+                                    iTermVariableKeySessionSelection,
+                                    iTermVariableKeySessionSelectionLength];
     [names enumerateObjectsUsingBlock:^(NSString * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
         [self recordUseOfVariableNamed:obj inContext:iTermVariablesSuggestionContextSession];
     }];
@@ -81,6 +83,9 @@
     [self recordUseOfNonterminalVariableNamed:iTermVariableKeySessionTab
                                     inContext:iTermVariablesSuggestionContextSession
                              leadingToContext:iTermVariablesSuggestionContextTab];
+    [self recordUseOfNonterminalVariableNamed:iTermVariableKeySessionParent
+                                    inContext:iTermVariablesSuggestionContextSession
+                             leadingToContext:iTermVariablesSuggestionContextSession];
 
     // Tab context
     [self recordUseOfVariableNamed:iTermVariableKeyTabTitleOverride inContext:iTermVariablesSuggestionContextTab];

@@ -34,8 +34,12 @@
 #import "SplitSelectionView.h"
 
 @class iTermAnnouncementViewController;
+@class iTermBackgroundColorView;
 @class iTermFindDriver;
+@class iTermIncrementalMinimapView;
 @class iTermMetalDriver;
+@protocol iTermSearchResultsMinimapViewDelegate;
+@class iTermSearchResultsMinimapView;
 @class PTYSession;
 @class SplitSelectionView;
 @class SessionTitleView;
@@ -158,6 +162,8 @@ typedef NS_ENUM(NSUInteger, iTermSessionViewFindDriver) {
 @property(nonatomic, assign) int ordinal;
 @property(nonatomic, readonly) iTermAnnouncementViewController *currentAnnouncement;
 @property(nonatomic, weak) id<iTermSessionViewDelegate> delegate;
+@property(nonatomic, readonly) iTermSearchResultsMinimapView *searchResultsMinimap NS_AVAILABLE_MAC(10_14);
+@property(nonatomic, readonly) iTermIncrementalMinimapView *marksMinimap NS_AVAILABLE_MAC(10_14);
 @property(nonatomic, readonly) PTYScrollView *scrollview;
 @property(nonatomic, readonly) PTYScroller *verticalScroller;
 @property(nonatomic, readonly) iTermMetalDriver *driver NS_AVAILABLE_MAC(10_11);
@@ -171,10 +177,29 @@ typedef NS_ENUM(NSUInteger, iTermSessionViewFindDriver) {
 @property(nonatomic, readonly) iTermFindDriver *findDriver;
 @property(nonatomic, readonly) NSSize internalDecorationSize;
 @property(nonatomic, readonly) iTermSessionViewFindDriver findDriverType;
+@property(nonatomic, weak) id<iTermSearchResultsMinimapViewDelegate> searchResultsMinimapViewDelegate NS_AVAILABLE_MAC(10_14);
+@property(nonatomic, strong) NSImage *image;
+@property(nonatomic) iTermBackgroundImageMode imageMode;
+
+// For macOS 10.14+ when subpixel AA is OFF, this draws the default background color. When there's
+// a background image it will be translucent to effect blending. When subpixel AA is ON or the OS
+// is 10.13 or earlier then this is hidden. It can't be used with subpixel AA because macOS isn't
+// able to take the color it's drawing over into account when choosing the subpixel colors and it
+// looks horrible.
+@property(nonatomic, strong) iTermBackgroundColorView *backgroundColorView NS_AVAILABLE_MAC(10_14);
+
+// How far the metal view extends beyond the visible part of the viewport, such as under the title
+// bar or bottom per-pane status bar.
+@property(nonatomic, readonly) NSEdgeInsets extraMargins;
+
+- (void)setTerminalBackgroundColor:(NSColor *)color;
 
 - (void)showFindUI;
 - (void)findViewDidHide;
 - (void)setUseMetal:(BOOL)useMetal dataSource:(id<iTermMetalDriverDataSource>)dataSource NS_AVAILABLE_MAC(10_11);;
+- (void)didChangeMetalViewAlpha;
+- (void)setTransparencyAlpha:(CGFloat)transparencyAlpha
+                       blend:(CGFloat)blend;
 
 + (double)titleHeight;
 + (NSDate*)lastResizeDate;
@@ -214,6 +239,7 @@ typedef NS_ENUM(NSUInteger, iTermSessionViewFindDriver) {
 
 // Layout subviews if automatic updates are allowed by the delegate.
 - (void)updateLayout;
+- (void)updateAnnouncementFrame;
 
 // The frame excluding the per-pane titlebar.
 - (NSRect)contentRect;
@@ -240,5 +266,6 @@ typedef NS_ENUM(NSUInteger, iTermSessionViewFindDriver) {
 
 - (void)tabColorDidChange;
 - (void)didBecomeVisible;
+- (void)showUnobtrusiveMessage:(NSString *)message;
 
 @end

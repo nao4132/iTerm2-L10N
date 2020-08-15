@@ -8,15 +8,15 @@
 
 #import "GeneralPreferencesViewController.h"
 
-#import "iTermAPIAuthorizationController.h"
 #import "iTermAPIHelper.h"
-#import "iTermAPIPermissionsWindowController.h"
 #import "iTermAdvancedGPUSettingsViewController.h"
 #import "iTermApplicationDelegate.h"
 #import "iTermNotificationCenter.h"
+#import "iTermPreferenceDidChangeNotification.h"
 #import "iTermRemotePreferences.h"
 #import "iTermShellHistoryController.h"
 #import "iTermWarning.h"
+#import "NSTextField+iTerm.h"
 #import "PasteboardHistory.h"
 #import "RegexKitLite.h"
 #import "WindowArrangements.h"
@@ -62,7 +62,7 @@ enum {
     iTermAdvancedGPUSettingsWindowController *_advancedGPUWindowController;
 
     IBOutlet NSButton *_enableAPI;
-    IBOutlet NSButton *_resetAPIPermissions;
+    IBOutlet NSPopUpButton *_apiPermission;
 
     // Enable bonjour
     IBOutlet NSButton *_enableBonjour;
@@ -124,9 +124,13 @@ enum {
     IBOutlet NSButton *_useTmuxProfile;
     IBOutlet NSButton *_useTmuxStatusBar;
 
+    IBOutlet NSTextField *_tmuxPauseModeAgeLimit;
+    IBOutlet NSButton *_unpauseTmuxAutomatically;
+    IBOutlet NSButton *_tmuxWarnBeforePausing;
+
     IBOutlet NSTabView *_tabView;
 
-    iTermAPIPermissionsWindowController *_apiPermissionsWindowController;
+    IBOutlet NSButton *_enterCopyModeAutomatically;
 }
 
 - (instancetype)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil {
@@ -135,6 +139,10 @@ enum {
         [[NSNotificationCenter defaultCenter] addObserver:self
                                                  selector:@selector(savedArrangementChanged:)
                                                      name:kSavedArrangementDidChangeNotification
+                                                   object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(didRevertPythonAuthenticationMethod:)
+                                                     name:iTermAPIHelperDidDetectChangeOfPythonAuthMethodNotification
                                                    object:nil];
 
     }
@@ -238,7 +246,7 @@ enum {
         };
     } else {
         _gpuRendering.enabled = NO;
-        _gpuRendering.state = NSOffState;
+        _gpuRendering.state = NSControlStateValueOff;
         [self updateAdvancedGPUEnabled];
     }
 
@@ -254,13 +262,28 @@ enum {
                                                   if ([notification.key isEqualToString:kPreferenceKeyEnableAPIServer]) {
                                                       __typeof(self) strongSelf = weakSelf;
                                                       if (strongSelf) {
-                                                          strongSelf->_enableAPI.state = NSOnState;
-                                                          [strongSelf updateAPIEnabled];
+                                                          strongSelf->_enableAPI.state = NSControlStateValueOn;
                                                       }
                                                   }
                                               }];
-    [self updateAPIEnabled];
 
+    info = [self defineControl:_apiPermission
+                           key:kPreferenceKeyAPIAuthentication
+                   displayName:@"Authentication method for Python API"
+                          type:kPreferenceInfoTypePopup];
+    info.syntheticGetter = ^id{
+        return @([iTermAPIHelper requireApplescriptAuth] ? 0 : 1);
+    };
+    info.syntheticSetter = ^(NSNumber *newValue) {
+        const BOOL useApplescript = (newValue.intValue == 0);
+        [iTermAPIHelper setRequireApplescriptAuth:useApplescript
+                                           window:self.view.window];
+        [weakSelf updateAPIEnabledState];
+    };
+    info.shouldBeEnabled = ^BOOL{
+        return [weakSelf boolForKey:kPreferenceKeyEnableAPIServer];
+    };
+    
     _advancedGPUWindowController = [[iTermAdvancedGPUSettingsWindowController alloc] initWithWindowNibName:@"iTermAdvancedGPUSettingsWindowController"];
     [_advancedGPUWindowController window];
     _advancedGPUWindowController.viewController.disableWhenDisconnected.target = self;
@@ -341,7 +364,7 @@ enum {
         }
         [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"NoSyncNeverRemindPrefsChangesLostForFile"];
         NSNumber *value;
-        if ([strongSelf->_autoSaveOnQuit state] == NSOnState) {
+        if ([strongSelf->_autoSaveOnQuit state] == NSControlStateValueOn) {
             value = @0;
         } else {
             value = @1;
@@ -358,12 +381,12 @@ enum {
             return NO;
         }
         NSUserDefaults *userDefaults = [NSUserDefaults standardUserDefaults];
-        NSCellStateValue state;
+        NSControlStateValue state;
         if ([userDefaults boolForKey:@"NoSyncNeverRemindPrefsChangesLostForFile"] &&
             [userDefaults integerForKey:@"NoSyncNeverRemindPrefsChangesLostForFile_selection"] == 0) {
-            state = NSOnState;
+            state = NSControlStateValueOn;
         } else {
-            state = NSOffState;
+            state = NSControlStateValueOff;
         }
         strongSelf->_autoSaveOnQuit.state = state;
         return YES;
@@ -408,8 +431,20 @@ enum {
                     key:kPreferenceKeyTripleClickSelectsFullWrappedLines
             relatedView:nil
                    type:kPreferenceInfoTypeCheckbox];
-    [self defineControl:_doubleClickPerformsSmartSelection
-                    key:kPreferenceKeyDoubleClickPerformsSmartSelection
+    info = [self defineControl:_doubleClickPerformsSmartSelection
+                           key:kPreferenceKeyDoubleClickPerformsSmartSelection
+                   relatedView:nil
+                          type:kPreferenceInfoTypeCheckbox];
+    info.observer = ^{
+        __strong __typeof(self) strongSelf = weakSelf;
+        if (!strongSelf) {
+            return;
+        }
+        strongSelf->_wordChars.enabled = ![strongSelf boolForKey:kPreferenceKeyDoubleClickPerformsSmartSelection];
+        strongSelf->_wordCharsLabel.labelEnabled = ![strongSelf boolForKey:kPreferenceKeyDoubleClickPerformsSmartSelection];
+    };
+    [self defineControl:_enterCopyModeAutomatically
+                    key:kPreferenceKeyEnterCopyModeAutomatically
             relatedView:nil
                    type:kPreferenceInfoTypeCheckbox];
 
@@ -457,11 +492,33 @@ enum {
                     key:kPreferenceKeyUseTmuxStatusBar
             relatedView:nil
                    type:kPreferenceInfoTypeCheckbox];
+
+    [self defineControl:_tmuxPauseModeAgeLimit
+                    key:kPreferenceKeyTmuxPauseModeAgeLimit
+            displayName:@"Pause a tmux pane if it would take more than this many seconds to catch up."
+                   type:kPreferenceInfoTypeUnsignedIntegerTextField];
+    [self defineControl:_unpauseTmuxAutomatically
+                    key:kPreferenceKeyTmuxUnpauseAutomatically
+            displayName:nil
+                   type:kPreferenceInfoTypeCheckbox];
+    [self defineControl:_tmuxWarnBeforePausing
+                    key:kPreferenceKeyTmuxWarnBeforePausing
+            displayName:nil
+                   type:kPreferenceInfoTypeCheckbox];
+    
+    [self updateEnabledState];
+    [self commitControls];
+}
+
+- (void)updateAPIEnabledState {
+    _enableAPI.state = [self boolForKey:kPreferenceKeyEnableAPIServer];
+    [_apiPermission selectItemWithTag:[iTermAPIHelper requireApplescriptAuth] ? 0 : 1];
     [self updateEnabledState];
 }
 
 - (void)updateEnabledState {
     [super updateEnabledState];
+    [_apiPermission selectItemWithTag:[iTermAPIHelper requireApplescriptAuth] ? 0 : 1];
     _evenIfThereAreNoWindows.enabled = [self boolForKey:kPreferenceKeyPromptOnQuit];
 }
 
@@ -474,7 +531,13 @@ enum {
 }
 
 - (BOOL)enableAPISettingDidChange {
-    const BOOL enabled = _enableAPI.state == NSOnState;
+    const BOOL result = [self reallyEnableAPISettingDidChange];
+    [self updateEnabledState];
+    return result;
+}
+
+- (BOOL)reallyEnableAPISettingDidChange {
+    const BOOL enabled = _enableAPI.state == NSControlStateValueOn;
     if (enabled) {
         // Prompt the user. If they agree, or have permanently agreed, set the user default to YES.
         if ([iTermAPIHelper confirmShouldStartServerAndUpdateUserDefaultsForced:YES]) {
@@ -485,25 +548,14 @@ enum {
     } else {
         [iTermAPIHelper setEnabled:NO];
     }
-    [self updateAPIEnabled];
     if (enabled && ![iTermAPIHelper isEnabled]) {
-        _enableAPI.state = NSOffState;
+        _enableAPI.state = NSControlStateValueOff;
         return NO;
     }
     return YES;
 }
 
-- (void)updateAPIEnabled {
-    _resetAPIPermissions.enabled = [iTermAPIHelper isEnabled];
-}
-
 #pragma mark - Actions
-
-- (IBAction)editAPIPermissions:(id)sender {
-    _apiPermissionsWindowController = [[iTermAPIPermissionsWindowController alloc] initWithWindowNibName:@"iTermAPIPermissionsWindowController"];
-    [self.view.window beginSheet:_apiPermissionsWindowController.window
-               completionHandler:^(NSModalResponse returnCode) {}];
-}
 
 - (IBAction)browseCustomFolder:(id)sender {
     [self choosePrefsCustomFolder];
@@ -518,12 +570,21 @@ enum {
     }];
 }
 
+- (IBAction)pythonAPIAuthHelp:(id)sender {
+    [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://iterm2.com/python-api-auth.html"]];
+}
+
 #pragma mark - Notifications
 
 - (void)savedArrangementChanged:(id)sender {
     PreferenceInfo *info = [self infoForControl:_openWindowsAtStartup];
     [self updateValueForInfo:info];
     [_openDefaultWindowArrangementItem setEnabled:[WindowArrangements count] > 0];
+}
+
+// The API helper just noticed that the file's contents changed.
+- (void)didRevertPythonAuthenticationMethod:(NSNotification *)notification {
+    [self updateAPIEnabledState];
 }
 
 #pragma mark - Remote Prefs

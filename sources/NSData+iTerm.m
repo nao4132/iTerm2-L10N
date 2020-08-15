@@ -12,9 +12,14 @@
 #import "NSArray+iTerm.h"
 #import "NSStringITerm.h"
 #import "RegexKitLite.h"
-#import <apr-1/apr_base64.h>
-#import <CommonCrypto/CommonDigest.h>
 #import "zlib.h"
+
+#import <apr-1/apr_base64.h>
+#import <CommonCrypto/CommonCryptor.h>
+#import <CommonCrypto/CommonDigest.h>
+
+#include <sys/types.h>
+#include <sys/stat.h>
 
 @implementation NSData (iTerm)
 
@@ -193,27 +198,56 @@
 }
 
 + (NSData *)it_dataWithArchivedObject:(id<NSCoding>)object {
-    NSMutableData *data = [NSMutableData data];
-    NSKeyedArchiver *archiver = [[NSKeyedArchiver alloc] initForWritingWithMutableData:data];
-    archiver.requiresSecureCoding = YES;
+    NSKeyedArchiver *archiver = [[NSKeyedArchiver alloc] initRequiringSecureCoding:NO];
+    archiver.requiresSecureCoding = NO;
     [archiver encodeObject:object forKey:@"object"];
     [archiver finishEncoding];
-    [archiver release];
-    return data;
+    [archiver autorelease];
+    return archiver.encodedData;
 }
 
 - (id)it_unarchivedObjectOfClasses:(NSArray<Class> *)allowedClasses {
-    NSKeyedUnarchiver *unarchiver = [[NSKeyedUnarchiver alloc] initForReadingWithData:self];
-    id object = nil;
-    @try {
-        unarchiver.requiresSecureCoding = YES;
-        object = [unarchiver decodeObjectOfClasses:[NSSet setWithArray:allowedClasses] forKey:@"object"];
-    }
-    @catch (NSException *exception) {
+    NSError *error = nil;
+    NSKeyedUnarchiver *unarchiver = [[[NSKeyedUnarchiver alloc] initForReadingFromData:self error:&error] autorelease];
+    if (error) {
         return nil;
     }
-    [unarchiver finishDecoding];
-    return object;
+    unarchiver.requiresSecureCoding = NO;
+    return [unarchiver decodeObjectOfClasses:[NSSet setWithArray:allowedClasses] forKey:@"object"];
+}
+
++ (NSData *)it_dataWithSecurelyArchivedObject:(id<NSCoding>)object error:(NSError **)error {
+    NSError *innerError = nil;
+    NSData *data = [NSKeyedArchiver archivedDataWithRootObject:object requiringSecureCoding:YES error:&innerError];
+    if (innerError) {
+        XLog(@"Error %@ encoding\n%@", innerError, object);
+    }
+    if (error) {
+        *error = innerError;
+    }
+    return data;
+}
+
+- (id)it_unarchivedObjectOfBasicClassesWithError:(NSError **)error {
+    NSArray<Class> *classes = @[ [NSDictionary class],
+                                 [NSNumber class],
+                                 [NSString class],
+                                 [NSDate class],
+                                 [NSData class],
+                                 [NSArray class],
+                                 [NSNull class],
+                                 [NSValue class] ];
+    NSError *innerError = nil;
+    id obj = [NSKeyedUnarchiver unarchivedObjectOfClasses:[NSSet setWithArray:classes]
+                                                 fromData:self
+                                                    error:&innerError];
+    if (innerError) {
+        XLog(@"Error %@ decoding %@", innerError, self);
+    }
+    if (error) {
+        *error = innerError;
+    }
+    return obj;
 }
 
 - (BOOL)isEqualToByte:(unsigned char)byte {
@@ -304,6 +338,139 @@
 
     compressedData.length = stream.total_out;
     return compressedData;
+}
+
+
+- (NSData *)aesCBCEncryptedDataWithPCKS7PaddingAndKey:(NSData *)key
+                                                   iv:(NSData *)iv {
+    assert(iv.length == 16);
+    assert(key.length == 16);
+    
+    NSMutableData *ciphertext = [NSMutableData dataWithLength:self.length + kCCBlockSizeAES128];
+    
+    size_t length;
+    const CCCryptorStatus result = CCCrypt(kCCEncrypt,
+                                           kCCAlgorithmAES,
+                                           kCCOptionPKCS7Padding,
+                                           key.bytes,
+                                           key.length,
+                                           iv.bytes,
+                                           self.bytes,
+                                           self.length,
+                                           ciphertext.mutableBytes,
+                                           ciphertext.length,
+                                           &length);
+    
+    if (result == kCCSuccess) {
+        ciphertext.length = length;
+    } else {
+        return nil;
+    }
+    
+    return ciphertext;
+}
+
+- (NSData *)decryptedAESCBCDataWithPCKS7PaddingAndKey:(NSData *)key
+                                                   iv:(NSData *)iv {
+    assert(iv.length == 16);
+    assert(key.length == 16);
+    
+    NSMutableData *plaintext = [NSMutableData dataWithLength:self.length];
+    
+    size_t length;
+    const CCCryptorStatus result = CCCrypt(kCCDecrypt,
+                                           kCCAlgorithmAES,
+                                           kCCOptionPKCS7Padding,
+                                           key.bytes,
+                                           key.length,
+                                           iv.bytes,
+                                           self.bytes,
+                                           self.length,
+                                           plaintext.mutableBytes,
+                                           plaintext.length,
+                                           &length);
+    
+    if (result == kCCSuccess) {
+        plaintext.length = length;
+    } else {
+        return nil;
+    }
+    
+    return plaintext;
+
+}
+
++ (NSData *)randomAESKey {
+    const NSUInteger length = 16;
+    NSMutableData *data = [NSMutableData dataWithLength:length];
+    
+    const int result = SecRandomCopyBytes(kSecRandomDefault,
+                                          length,
+                                          data.mutableBytes);
+    assert(result == 0);
+    
+    return data;
+}
+
+- (void)writeReadOnlyToURL:(NSURL *)url {
+    // Use POSIX APIs to ensure that permissions are set before writing to the file.
+
+    // Unlink file if it already exists.
+    unlink(url.path.UTF8String);
+    
+    // Create it exclusively. If another instance of iTerm2 is trying to create it, back off.
+    int fd = -1;
+    do {
+        fd = open(url.path.UTF8String, O_CREAT | O_WRONLY | O_TRUNC | O_CLOEXEC | O_EXCL);
+    } while (fd == -1 && errno == EINTR);
+    if (fd == -1) {
+        return;
+    }
+    
+    // Set the permissions before continuing.
+    int rc = -1;
+    do {
+        rc = fchmod(fd, 0600);
+    } while (rc == -1 && errno == EINTR);
+    if (rc == -1) {
+        close(fd);
+        return;
+    }
+    
+    // Append the data.
+    NSUInteger written = 0;
+    while (written < self.length) {
+        ssize_t result = 0;
+        do {
+            result = write(fd, self.bytes + written, self.length - written);
+        } while (result == -1 && errno == EINTR);
+        if (result <= 0) {
+            ftruncate(fd, 0);
+            close(fd);
+            unlink(url.path.UTF8String);
+            return;
+        }
+        written += result;
+    }
+
+    close(fd);
+}
+
+- (NSData *)subdataFromOffset:(NSInteger)offset {
+    if (offset <= 0) {
+        return self;
+    }
+    if (offset >= self.length) {
+        return [NSData data];
+    }
+    return [self subdataWithRange:NSMakeRange(offset, self.length - offset)];
+}
+
+- (NSString *)tastefulDescription {
+    if (self.length < 10) {
+        return [self description];
+    }
+    return [[self subdataWithRange:NSMakeRange(0, 10)] description];
 }
 
 @end

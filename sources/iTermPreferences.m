@@ -13,6 +13,7 @@
 // and the view controller may customize how its control's appearance changes dynamically.
 
 #import "iTermNotificationCenter.h"
+#import "iTermPreferenceDidChangeNotification.h"
 #import "iTermPreferences.h"
 #import "iTermRemotePreferences.h"
 #import "iTermUserDefaultsObserver.h"
@@ -61,12 +62,16 @@ NSString *const kPreferenceKeyTmuxDashboardLimit = @"TmuxDashboardLimit";
 NSString *const kPreferenceKeyAutoHideTmuxClientSession = @"AutoHideTmuxClientSession";
 NSString *const kPreferenceKeyUseTmuxProfile = @"TmuxUsesDedicatedProfile";
 NSString *const kPreferenceKeyUseTmuxStatusBar = @"UseTmuxStatusBar";
+NSString *const kPreferenceKeyTmuxPauseModeAgeLimit = @"TmuxPauseModeAgeLimit";
+NSString *const kPreferenceKeyTmuxUnpauseAutomatically = @"TmuxUnpauseAutomatically";
+NSString *const kPreferenceKeyTmuxWarnBeforePausing = @"TmuxWarnBeforePausing";
 
 NSString *const kPreferenceKeyUseMetal = @"UseMetal";
 NSString *const kPreferenceKeyDisableMetalWhenUnplugged = @"disableMetalWhenUnplugged";
 NSString *const kPreferenceKeyPreferIntegratedGPU = @"preferIntegratedGPU";
 NSString *const kPreferenceKeyMetalMaximizeThroughput = @"metalMaximizeThroughput";
 NSString *const kPreferenceKeyEnableAPIServer = @"EnableAPIServer";
+NSString *const kPreferenceKeyAPIAuthentication = @"API Authentication Method";
 
 NSString *const kPreferenceKeyTabStyle_Deprecated = @"TabStyle";  // Pre-10.14
 NSString *const kPreferenceKeyTabStyle = @"TabStyleWithAutomaticOption";  // Pre-10.14
@@ -84,6 +89,7 @@ NSString *const kPreferenceKeyPerPaneBackgroundImage = @"PerPaneBackgroundImage"
 NSString *const kPreferenceKeyStretchTabsToFillBar = @"StretchTabsToFillBar";
 NSString *const kPreferenceKeyHideMenuBarInFullscreen = @"HideMenuBarInFullscreen";
 NSString *const kPreferenceKeyUIElement = @"HideFromDockAndAppSwitcher";
+NSString *const kPreferenceKeyUIElementRequiresHotkeys = @"UIElementRequiresHotkeys";
 NSString *const kPreferenceKeyFlashTabBarInFullscreen = @"FlashTabBarInFullscreen";
 NSString *const kPreferenceKeyShowWindowNumber = @"WindowNumber";
 NSString *const kPreferenceKeyShowJobName_Deprecated = @"JobName";
@@ -128,10 +134,13 @@ NSString *const kPreferenceKeyThreeFingerEmulatesMiddle = @"ThreeFingerEmulates"
 NSString *const kPreferenceKeyFocusFollowsMouse = @"FocusFollowsMouse";
 NSString *const kPreferenceKeyTripleClickSelectsFullWrappedLines = @"TripleClickSelectsFullWrappedLines";
 NSString *const kPreferenceKeyDoubleClickPerformsSmartSelection = @"DoubleClickPerformsSmartSelection";
+NSString *const kPreferenceKeyEnterCopyModeAutomatically = @"EnterCopyModeAutomatically";
+NSString *const kPreferenceKeyFocusOnRightOrMiddleClick = @"FocusOnRightOrMiddleClick";
 
 NSString *const kPreferenceKeyAppVersion = @"iTerm Version";  // Excluded from syncing
 NSString *const kPreferenceKeyAllAppVersions = @"NoSyncAllAppVersions";  // Array of known iTerm2 versions this user has used on this machine.
 NSString *const kPreferenceAutoCommandHistory = @"AutoCommandHistory";
+NSString *const kPreferenceKeyOSVersion = @"NoSyncLastOSVersion";
 
 NSString *const kPreferenceKeyPasteSpecialChunkSize = @"PasteSpecialChunkSize";
 NSString *const kPreferenceKeyPasteSpecialChunkDelay = @"PasteSpecialChunkDelay";
@@ -183,6 +192,9 @@ static NSString *sPreviousVersion;
     [self appVersionBeforeThisLaunch];
     // Then overwrite it with the current version
     [[NSUserDefaults standardUserDefaults] setObject:thisVersion forKey:kPreferenceKeyAppVersion];
+    NSProcessInfo *processInfo = [NSProcessInfo processInfo];
+    [[NSUserDefaults standardUserDefaults] setObject:processInfo.operatingSystemVersionString
+                                              forKey:kPreferenceKeyOSVersion];
 }
 
 + (void)initializeAllAppVersionsUsedOnThisMachine:(NSString *)thisVersion {
@@ -245,7 +257,24 @@ static NSString *sPreviousVersion;
         // and it seems to work.
         //
         // See issue 3244 for details.
-        @"NSScrollViewShouldScrollUnderTitlebar": @NO
+        @"NSScrollViewShouldScrollUnderTitlebar": @NO,
+
+        // macOS does an insane thing and looks for views that might possibly be trying to do something
+        // clever with scrollers and then if it finds them changes to legacy scrollers. Quothe the
+        // mailing list https://lists.apple.com/archives/cocoa-dev/2012/Mar/msg00939.html
+        //  NSScrollView does various checks to see if the App is trying to put placards in the
+        //  scroller area. If NSScrollView thinks there are placards, then it reverts back to legacy
+        //  scrollers for compatibility. Some apps have been known to do this via a sibling view
+        //  instead of a subview. This is why it intermittently happens during your animation as
+        //  your sibling views momentarily overlap
+        //
+        // In addition to being a bad idea, it is poorly implemented and the scrollers randomly
+        // have the wrong light/dark appearance, in addition to other visual glitches that words
+        // can't describe.
+        //
+        // Well, I am trying to do something clever and I damn well want it to work. With a bit of
+        // the old disassembler, I found this user default which seems to turn off the stupid.
+        @"NSOverlayScrollersFallBackForAccessoryViews": @NO,
     };
 }
 
@@ -299,11 +328,15 @@ static NSString *sPreviousVersion;
                   kPreferenceKeyAutoHideTmuxClientSession: @NO,
                   kPreferenceKeyUseTmuxProfile: @YES,
                   kPreferenceKeyUseTmuxStatusBar: @YES,
+                  kPreferenceKeyTmuxPauseModeAgeLimit: @120,
+                  kPreferenceKeyTmuxUnpauseAutomatically: @NO,
+                  kPreferenceKeyTmuxWarnBeforePausing: @YES,
                   kPreferenceKeyUseMetal: @YES,
                   kPreferenceKeyDisableMetalWhenUnplugged: @YES,
                   kPreferenceKeyPreferIntegratedGPU: @YES,
                   kPreferenceKeyMetalMaximizeThroughput: @YES,
                   kPreferenceKeyEnableAPIServer: @NO,
+                  kPreferenceKeyAPIAuthentication: @0,  // ignored — synthetic value
 
                   kPreferenceKeyTabStyle_Deprecated: @(TAB_STYLE_LIGHT),
                   kPreferenceKeyTabStyle: @(TAB_STYLE_LIGHT),
@@ -323,6 +356,7 @@ static NSString *sPreviousVersion;
                   kPreferenceKeyPerPaneBackgroundImage: @YES,
                   kPreferenceKeyHideMenuBarInFullscreen:@YES,
                   kPreferenceKeyUIElement: @NO,
+                  kPreferenceKeyUIElementRequiresHotkeys: @NO,
                   kPreferenceKeyFlashTabBarInFullscreen:@NO,
                   kPreferenceKeyShowWindowNumber: @YES,
                   kPreferenceKeyShowJobName_Deprecated: @YES,
@@ -363,8 +397,10 @@ static NSString *sPreviousVersion;
                   kPreferenceKeyOptionClickMovesCursor: @YES,
                   kPreferenceKeyThreeFingerEmulatesMiddle: @NO,
                   kPreferenceKeyFocusFollowsMouse: @NO,
+                  kPreferenceKeyFocusOnRightOrMiddleClick: @NO,
                   kPreferenceKeyTripleClickSelectsFullWrappedLines: @YES,
                   kPreferenceKeyDoubleClickPerformsSmartSelection: @NO,
+                  kPreferenceKeyEnterCopyModeAutomatically: @YES,
 
                   kPreferenceAutoCommandHistory: @NO,
 
@@ -584,6 +620,9 @@ static NSString *sPreviousVersion;
 
 + (NSUInteger)maskForModifierTag:(iTermPreferencesModifierTag)tag {
     switch (tag) {
+        case kPreferencesModifierTagControl:
+            return NSEventModifierFlagControl;
+
         case kPreferencesModifierTagEitherCommand:
             return NSEventModifierFlagCommand;
 

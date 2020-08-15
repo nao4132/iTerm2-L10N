@@ -31,6 +31,7 @@
 #import "RegexKitLite.h"
 #import "SearchResult.h"
 #import "TmuxStateParser.h"
+#import "VT100InlineImageHelper.h"
 #import "VT100RemoteHost.h"
 #import "VT100ScreenMark.h"
 #import "VT100WorkingDirectory.h"
@@ -73,7 +74,11 @@ NSString * const kHighlightBackgroundColor = @"kHighlightBackgroundColor";
 
 const NSInteger VT100ScreenBigFileDownloadThreshold = 1024 * 1024 * 1024;
 
-@interface VT100Screen () <iTermTemporaryDoubleBufferedGridControllerDelegate, iTermMarkDelegate>
+@interface VT100Screen () <
+    iTermTemporaryDoubleBufferedGridControllerDelegate,
+    iTermLineBufferDelegate,
+    iTermMarkDelegate,
+    VT100InlineImageHelperDelegate>
 @property(nonatomic, retain) VT100ScreenMark *lastCommandMark;
 @property(nonatomic, retain) iTermTemporaryDoubleBufferedGridController *temporaryDoubleBuffer;
 @end
@@ -149,7 +154,7 @@ const NSInteger VT100ScreenBigFileDownloadThreshold = 1024 * 1024 * 1024;
 
     BOOL _shellIntegrationInstalled;
 
-    NSDictionary *inlineFileInfo_;  // Keys are kInlineFileXXX
+    VT100InlineImageHelper *_inlineImageHelper;
     NSTimeInterval lastBell_;
     BOOL _cursorVisible;
     // Line numbers containing animated GIFs that need to be redrawn for the next frame.
@@ -157,10 +162,6 @@ const NSInteger VT100ScreenBigFileDownloadThreshold = 1024 * 1024 * 1024;
 
     // base64 value to copy to pasteboard, being built up bit by bit.
     NSMutableString *_copyString;
-
-    // Valid while at the command prompt only. GIves the range of the current prompt. Meaningful
-    // only if the end is not equal to the start.
-    VT100GridAbsCoordRange _currentPromptRange;
 
     // For REP
     screen_char_t _lastCharacter;
@@ -172,16 +173,6 @@ const NSInteger VT100ScreenBigFileDownloadThreshold = 1024 * 1024 * 1024;
     iTermOrderEnforcer *_setWorkingDirectoryOrderEnforcer;
     iTermOrderEnforcer *_currentDirectoryDidChangeOrderEnforcer;
 }
-
-static NSString *const kInlineFileName = @"name";  // NSString
-static NSString *const kInlineFileWidth = @"width";  // NSNumber
-static NSString *const kInlineFileWidthUnits = @"width units";  // NSNumber of VT100TerminalUnits
-static NSString *const kInlineFileHeight = @"height";  // NSNumber
-static NSString *const kInlineFileHeightUnits = @"height units"; // NSNumber of VT100TerminalUnits
-static NSString *const kInlineFilePreserveAspectRatio = @"preserve aspect ratio";  // NSNumber bool
-static NSString *const kInlineFileBase64String = @"base64 string";  // NSMutableString
-static NSString *const kInlineFileInset = @"inset";  // NSValue of NSEdgeInsets
-static NSString *const kInlineFilePreconfirmed = @"preconfirmed";  // NSNumber
 
 @synthesize terminal = terminal_;
 @synthesize audibleBell = audibleBell_;
@@ -251,7 +242,7 @@ static NSString *const kInlineFilePreconfirmed = @"preconfirmed";  // NSNumber
     [savedIntervalTree_ release];
     [intervalTree_ release];
     [markCache_ release];
-    [inlineFileInfo_ release];
+    [_inlineImageHelper release];
     [_lastCommandMark release];
     _temporaryDoubleBuffer.delegate = nil;
     [_temporaryDoubleBuffer reset];
@@ -823,7 +814,8 @@ static NSString *const kInlineFilePreconfirmed = @"preconfirmed";  // NSNumber
 - (void)didResizeToSize:(VT100GridSize)newSize
               selection:(iTermSelection *)selection
      couldHaveSelection:(BOOL)couldHaveSelection
-          subSelections:(NSArray *)newSubSelections {
+          subSelections:(NSArray *)newSubSelections
+                 newTop:(int)newTop {
     [terminal_ clampSavedCursorToScreenSize:VT100GridSizeMake(newSize.width, newSize.height)];
 
     [primaryGrid_ resetScrollRegions];
@@ -838,7 +830,7 @@ static NSString *const kInlineFilePreconfirmed = @"preconfirmed";  // NSNumber
         [self incrementOverflowBy:linesDropped];
     }
     int lines __attribute__((unused)) = [linebuffer_ numLinesWithWidth:currentGrid_.size.width];
-    ITUpgradedNSAssert(lines >= 0, @"Negative lines");
+    ITAssertWithMessage(lines >= 0, @"Negative lines");
 
     [selection clearSelection];
     // An immediate refresh is needed so that the size of textview can be
@@ -860,7 +852,7 @@ static NSString *const kInlineFilePreconfirmed = @"preconfirmed";  // NSNumber
     }
 
     [self reloadMarkCache];
-    [delegate_ screenSizeDidChange];
+    [delegate_ screenSizeDidChangeWithNewTopLineAt:newTop];
 }
 
 - (LineBuffer *)prepareToResizeInAlternateScreenMode:(NSArray **)altScreenSubSelectionTuplesPtr
@@ -939,7 +931,15 @@ static NSString *const kInlineFilePreconfirmed = @"preconfirmed";  // NSNumber
 }
 
 - (void)reallySetSize:(VT100GridSize)newSize {
+    DLog(@"------------ reallySetSize");
     DLog(@"Set size to %@", VT100GridSizeDescription(newSize));
+
+    const VT100GridRange previouslyVisibleLineRange = [self.delegate screenRangeOfVisibleLines];
+    const VT100GridCoordRange previouslyVisibleLines =
+        VT100GridCoordRangeMake(0,
+                                previouslyVisibleLineRange.location,
+                                0,
+                                previouslyVisibleLineRange.location + 1);
 
     [self sanityCheckIntervalsFrom:currentGrid_.size note:@"pre-hoc"];
     [self.temporaryDoubleBuffer resetExplicitly];
@@ -987,6 +987,13 @@ static NSString *const kInlineFilePreconfirmed = @"preconfirmed";  // NSNumber
              newHeight:newSize.height];
     DLog(@"History after appending screen to scrollback:\n%@", [linebuffer_ debugString]);
 
+    VT100GridCoordRange convertedRangeOfVisibleLines;
+    const BOOL rangeOfVisibleLinesConvertedCorrectly = [self convertRange:previouslyVisibleLines
+                                                                  toWidth:newSize.width
+                                                                       to:&convertedRangeOfVisibleLines
+                                                             inLineBuffer:linebuffer_
+                                                            tolerateEmpty:YES];
+
     // Contains iTermSubSelection*s updated for the new screen size. Used
     // regardless of whether we were in the alt screen, as it's simply the set
     // of new sub-selections.
@@ -1032,10 +1039,13 @@ static NSString *const kInlineFilePreconfirmed = @"preconfirmed";  // NSNumber
         [self updateAlternateScreenIntervalTreeForNewSize:newSize];
     }
 
+    const int newTop = rangeOfVisibleLinesConvertedCorrectly ? convertedRangeOfVisibleLines.start.y : -1;
+
     [self didResizeToSize:newSize
                 selection:selection
        couldHaveSelection:couldHaveSelection
-            subSelections:newSubSelections];
+            subSelections:newSubSelections
+                   newTop:newTop];
     [altScreenLineBuffer endResizing];
     [self sanityCheckIntervalsFrom:oldSize note:@"post-hoc"];
     DLog(@"After:\n%@", [currentGrid_ compactLineDumpWithContinuationMarks]);
@@ -1064,6 +1074,7 @@ static NSString *const kInlineFilePreconfirmed = @"preconfirmed";  // NSNumber
             markCache_[@(totalScrollbackOverflow + range.end.y)] = mark;
         }
     }
+    [self.intervalTreeObserver intervalTreeDidReset];
 }
 
 - (BOOL)allCharacterSetPropertiesHaveDefaultValues {
@@ -1157,8 +1168,7 @@ static NSString *const kInlineFilePreconfirmed = @"preconfirmed";  // NSNumber
     return 1 + cursorMarkOffset;
 }
 
-- (void)clearScrollbackBuffer
-{
+- (void)clearScrollbackBuffer {
     [linebuffer_ release];
     linebuffer_ = [[LineBuffer alloc] init];
     [linebuffer_ setMaxLines:maxScrollbackLines_];
@@ -1175,6 +1185,51 @@ static NSString *const kInlineFilePreconfirmed = @"preconfirmed";  // NSNumber
     [self reloadMarkCache];
     self.lastCommandMark = nil;
     [delegate_ screenDidClearScrollbackBuffer:self];
+    [delegate_ screenRefreshFindOnPageView];
+}
+
+- (void)appendLinesMatchingQuery:(NSString *)query
+                            from:(VT100Screen *)source
+                            mode:(iTermFindMode)mode {
+    const int numPushed = [source.currentGrid appendLines:[source.currentGrid numberOfLinesUsed]
+                                             toLineBuffer:source->linebuffer_];
+
+    LineBufferPosition *startPos = source->linebuffer_.firstPosition;
+    FindContext *context = [[FindContext alloc] init];
+    [source->linebuffer_ prepareToSearchFor:query
+                                 startingAt:startPos
+                                    options:FindMultipleResults
+                                       mode:mode
+                                withContext:context];
+    LineBufferPosition *stopAt = source->linebuffer_.lastPosition;
+    int lastY = -1;
+    while (context.status == Searching || context.status == Matched) {
+        [source->linebuffer_ findSubstring:context stopAt:stopAt];
+        switch (context.status) {
+            case Matched: {
+                NSArray *positions = [source->linebuffer_ convertPositions:context.results withWidth:self.width];
+                for (XYRange *xyrange in positions) {
+                    for (int y = MAX(lastY + 1, xyrange->yStart); y <= xyrange->yEnd; y++) {
+                        if (y == lastY) {
+                            continue;
+                        }
+                        lastY = y;
+                        screen_char_t *line = [source getLineAtIndex:y];
+                        [self appendScreenChars:line length:self.width continuation:line[self.width]];
+                    }
+                }
+                [context.results removeAllObjects];
+                break;
+                
+            case Searching:
+                break;
+
+            case NotFound:
+                break;
+            }
+        }
+    }
+    [source popScrollbackLines:numPushed];
 }
 
 - (void)appendScreenChars:(screen_char_t *)line
@@ -1255,8 +1310,8 @@ static NSString *const kInlineFilePreconfirmed = @"preconfirmed";  // NSNumber
     string = StringByNormalizingString(string, _normalization);
     len = [string length];
     if (3 * len >= kStaticBufferElements) {
-        buffer = dynamicBuffer = (screen_char_t *) calloc(3 * len,
-                                                          sizeof(screen_char_t));
+        buffer = dynamicBuffer = (screen_char_t *) iTermCalloc(3 * len,
+                                                               sizeof(screen_char_t));
         assert(buffer);
         if (!buffer) {
             NSLog(@"%s: Out of memory", __PRETTY_FUNCTION__);
@@ -1429,6 +1484,7 @@ static NSString *const kInlineFilePreconfirmed = @"preconfirmed";  // NSNumber
     }
     if (![self shouldQuellBell]) {
         if (audibleBell_) {
+            DLog(@"Beep: ring audible bell");
             NSBeep();
         }
         if (showBellIndicator_) {
@@ -1441,8 +1497,7 @@ static NSString *const kInlineFilePreconfirmed = @"preconfirmed";  // NSNumber
     [delegate_ screenIncrementBadge];
 }
 
-- (void)setHistory:(NSArray *)history
-{
+- (void)setHistory:(NSArray *)history {
     // This is way more complicated than it should be to work around something dumb in tmux.
     // It pads lines in its history with trailing spaces, which we'd like to trim. More importantly,
     // we need to trim empty lines at the end of the history because that breaks how we move the
@@ -1684,6 +1739,10 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
     [self popScrollbackLines:linesPushed];
 }
 
+- (VT100GridAbsCoord)commandStartCoord {
+    return VT100GridAbsCoordMake(commandStartX_, commandStartY_);
+}
+
 #pragma mark - PTYTextViewDataSource
 
 // This is a wee hack until PTYTextView breaks its direct dependence on PTYSession
@@ -1842,9 +1901,8 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
     return [self numberOfLines] - [self height] + currentGrid_.cursorY;
 }
 
-- (BOOL)continueFindAllResults:(NSMutableArray*)results
-                     inContext:(FindContext*)context
-{
+- (BOOL)continueFindAllResults:(NSMutableArray *)results
+                     inContext:(FindContext*)context {
     context.hasWrapped = YES;
     NSDate* start = [NSDate date];
     BOOL keepSearching;
@@ -1853,7 +1911,9 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
                                                    toArray:results];
     } while (keepSearching &&
              [[NSDate date] timeIntervalSinceDate:start] < context.maxTime);
-
+    if (results.count > 0) {
+        [self.delegate screenRefreshFindOnPageView];
+    }
     return keepSearching;
 }
 
@@ -1962,6 +2022,10 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
     }
     [string appendString:[currentGrid_ compactLineDumpWithContinuationMarks]];
     return string;
+}
+
+- (NSString *)compactLineDumpWithContinuationMarks {
+    return [currentGrid_ compactLineDumpWithContinuationMarks];
 }
 
 - (NSString *)compactLineDumpWithHistoryAndContinuationMarksAndLineNumbers {
@@ -2328,6 +2392,29 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
     [currentGrid_ markAllCharsDirty:YES];
     note.delegate = self;
     [delegate_ screenDidAddNote:note];
+    [self.intervalTreeObserver intervalTreeDidAddObjectOfType:iTermIntervalTreeObjectTypeAnnotation
+                                                       onLine:range.start.y + self.totalScrollbackOverflow];
+}
+
+- (iTermIntervalTreeObjectType)intervalTreeObserverTypeForObject:(id<IntervalTreeObject>)object {
+    if ([object isKindOfClass:[VT100ScreenMark class]]) {
+        VT100ScreenMark *mark = (VT100ScreenMark *)object;
+        if (!mark.hasCode) {
+            return iTermIntervalTreeObjectTypeManualMark;
+        }
+        if (mark.code == 0) {
+            return iTermIntervalTreeObjectTypeSuccessMark;
+        }
+        if (mark.code >= 128 && mark.code <= 128 + 32) {
+            return iTermIntervalTreeObjectTypeOtherMark;
+        }
+        return iTermIntervalTreeObjectTypeErrorMark;
+    }
+
+    if ([object isKindOfClass:[PTYNoteViewController class]]) {
+        return iTermIntervalTreeObjectTypeAnnotation;
+    }
+    return iTermIntervalTreeObjectTypeUnknown;
 }
 
 - (void)removeInaccessibleNotes {
@@ -2344,6 +2431,12 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
                     self.lastCommandMark = nil;
                 }
                 [intervalTree_ removeObject:obj];
+                iTermIntervalTreeObjectType type = [self intervalTreeObserverTypeForObject:obj];
+                if (type != iTermIntervalTreeObjectTypeUnknown) {
+                    VT100GridCoordRange range = [self coordRangeForInterval:obj.entry.interval];
+                    [_intervalTreeObserver intervalTreeDidRemoveObjectOfType:type
+                                                                      onLine:range.start.y + self.totalScrollbackOverflow];
+                }
             }
         }
     }
@@ -2363,7 +2456,7 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
         screenMark.sessionGuid = [delegate_ screenSessionGuid];
     }
     long long totalOverflow = [self totalScrollbackOverflow];
-    if (line < totalOverflow || line >= totalOverflow + self.numberOfLines) {
+    if (line < totalOverflow || line > totalOverflow + self.numberOfLines) {
         return nil;
     }
     int nonAbsoluteLine = line - totalOverflow;
@@ -2385,6 +2478,8 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
         markCache_[@([self totalScrollbackOverflow] + range.end.y)] = mark;
     }
     [intervalTree_ addObject:mark withInterval:[self intervalForGridCoordRange:range]];
+    [_intervalTreeObserver intervalTreeDidAddObjectOfType:[self intervalTreeObserverTypeForObject:mark]
+                                                   onLine:range.start.y + self.totalScrollbackOverflow];
     [delegate_ screenNeedsRedraw];
     return mark;
 }
@@ -2434,6 +2529,71 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
 
 - (VT100ScreenMark *)lastPromptMark {
     return [self lastMarkMustBePrompt:YES class:[VT100ScreenMark class]];
+}
+
+- (VT100ScreenMark *)promptMarkWithGUID:(NSString *)guid {
+    NSEnumerator *enumerator = [intervalTree_ reverseLimitEnumerator];
+    NSArray *objects = [enumerator nextObject];
+    while (objects) {
+        for (id obj in objects) {
+            VT100ScreenMark *screenMark = [VT100ScreenMark castFrom:obj];
+            if (!screenMark) {
+                continue;
+            }
+            if (!screenMark.isPrompt) {
+                continue;
+            }
+            if ([screenMark.guid isEqualToString:guid]) {
+                return screenMark;
+            }
+        }
+        objects = [enumerator nextObject];
+    }
+    return nil;
+}
+
+- (void)enumerateObservableMarks:(void (^ NS_NOESCAPE)(iTermIntervalTreeObjectType, NSInteger))block {
+    const NSInteger overflow = [self totalScrollbackOverflow];
+    for (NSArray *objects in intervalTree_.forwardLimitEnumerator) {
+        for (id<IntervalTreeObject> obj in objects) {
+            const iTermIntervalTreeObjectType type = [self intervalTreeObserverTypeForObject:obj];
+            if (type == iTermIntervalTreeObjectTypeUnknown) {
+                continue;
+            }
+            NSInteger line = [self coordRangeForInterval:obj.entry.interval].start.y + overflow;
+            block(type, line);
+        }
+    }
+}
+
+- (void)enumeratePromptsFrom:(NSString *)maybeFirst
+                          to:(NSString *)maybeLast
+                       block:(void (^ NS_NOESCAPE)(VT100ScreenMark *mark))block {
+    NSEnumerator *enumerator = [intervalTree_ forwardLimitEnumerator];
+    NSArray *objects = [enumerator nextObject];
+    BOOL foundFirst = (maybeFirst == nil);
+    while (objects) {
+        for (id obj in objects) {
+            VT100ScreenMark *screenMark = [VT100ScreenMark castFrom:obj];
+            if (!screenMark) {
+                continue;
+            }
+            if (!screenMark.isPrompt) {
+                continue;
+            }
+            if (!foundFirst) {
+                if (![screenMark.guid isEqualToString:maybeFirst]) {
+                    continue;
+                }
+                foundFirst = YES;
+            }
+            block(screenMark);
+            if (maybeLast && [screenMark.guid isEqualToString:maybeLast]) {
+                return;
+            }
+        }
+        objects = [enumerator nextObject];
+    }
 }
 
 - (VT100ScreenMark *)lastMark {
@@ -2985,8 +3145,7 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
     return [delegate_ screenShouldSendReportForVariable:variable];
 }
 
-- (void)terminalSendReport:(NSData *)report
-{
+- (void)terminalSendReport:(NSData *)report {
     if ([delegate_ screenShouldSendReport] && report) {
         [delegate_ screenWriteDataToTask:report];
     }
@@ -3051,8 +3210,25 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
     }
 }
 
-- (void)terminalEraseInDisplayBeforeCursor:(BOOL)before afterCursor:(BOOL)after
-{
+
+// Remove soft eol on previous line, provided the cursor is on the first column. This is useful
+// because zsh likes to ED 0 after wrapping around before drawing the prompt. See issue 8938.
+// For consistency, EL uses it, too.
+- (void)removeSoftEOLBeforeCursor {
+    if (currentGrid_.cursor.x != 0) {
+        return;
+    }
+    if (currentGrid_.haveScrollRegion) {
+        return;
+    }
+    if (currentGrid_.cursor.y > 0) {
+        [currentGrid_ setContinuationMarkOnLine:currentGrid_.cursor.y - 1 to:EOL_HARD];
+    } else {
+        [linebuffer_ setPartial:NO];
+    }
+}
+
+- (void)terminalEraseInDisplayBeforeCursor:(BOOL)before afterCursor:(BOOL)after {
     int x1, yStart, x2, y2;
 
     if (before && after) {
@@ -3072,16 +3248,19 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
         yStart = currentGrid_.cursor.y;
         x2 = currentGrid_.size.width - 1;
         y2 = currentGrid_.size.height - 1;
-        if (x1 == 0 && yStart == 0) {
+        if (x1 == 0 && yStart == 0 && [iTermAdvancedSettingsModel saveScrollBufferWhenClearing] && self.terminal.softAlternateScreenMode) {
             // Save the whole screen. This helps the "screen" terminal, where CSI H CSI J is used to
             // clear the screen.
+            // Only do it in alternate screen mode to avoid doing this for zsh (issue 8822)
             [delegate_ screenRemoveSelection];
             [self scrollScreenIntoHistory];
         }
     } else {
         return;
     }
-
+    if (after) {
+        [self removeSoftEOLBeforeCursor];
+    }
     VT100GridRun theRun = VT100GridRunFromCoords(VT100GridCoordMake(x1, yStart),
                                                  VT100GridCoordMake(x2, y2),
                                                  currentGrid_.size.width);
@@ -3106,6 +3285,9 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
         x2 = currentGrid_.size.width - 1;
     } else {
         return;
+    }
+    if (after) {
+        [self removeSoftEOLBeforeCursor];
     }
 
     VT100GridRun theRun = VT100GridRunFromCoords(VT100GridCoordMake(x1, currentGrid_.cursor.y),
@@ -3175,6 +3357,15 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
 
 - (void)terminalSetCursorBlinking:(BOOL)blinking {
     [delegate_ screenSetCursorBlinking:blinking];
+}
+
+- (void)terminalGetCursorType:(ITermCursorType *)cursorTypeOut
+                     blinking:(BOOL *)blinking {
+    [delegate_ screenGetCursorType:cursorTypeOut blinking:blinking];
+}
+
+- (void)terminalResetCursorTypeAndBlink {
+    [delegate_ screenResetCursorTypeAndBlink];
 }
 
 - (void)terminalSetLeftMargin:(int)scrollLeft rightMargin:(int)scrollRight {
@@ -3285,6 +3476,8 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
 }
 
 - (void)terminalSetWindowTitle:(NSString *)title {
+    DLog(@"terminalSetWindowTitle:%@", title);
+    
     if ([delegate_ screenAllowTitleSetting]) {
         [delegate_ screenSetWindowTitle:title];
     }
@@ -3313,16 +3506,16 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
 }
 
 - (void)terminalPasteString:(NSString *)string {
+    [delegate_ screenTerminalAttemptedPasteboardAccess];
     // check the configuration
     if (![iTermPreferences boolForKey:kPreferenceKeyAllowClipboardAccessFromTerminal]) {
-        [delegate_ screenTerminalAttemptedPasteboardAccess];
         return;
     }
 
     // set the result to paste board.
     NSPasteboard* thePasteboard = [NSPasteboard generalPasteboard];
-    [thePasteboard declareTypes:[NSArray arrayWithObject:NSStringPboardType] owner:nil];
-    [thePasteboard setString:string forType:NSStringPboardType];
+    [thePasteboard declareTypes:[NSArray arrayWithObject:NSPasteboardTypeString] owner:nil];
+    [thePasteboard setString:string forType:NSPasteboardTypeString];
 }
 
 - (void)terminalInsertEmptyCharsAtCursor:(int)n {
@@ -3752,6 +3945,8 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
 }
 
 - (void)terminalSetWorkingDirectoryURL:(NSString *)URLString {
+    DLog(@"terminalSetWorkingDirectoryURL:%@", URLString);
+    
     if (![iTermAdvancedSettingsModel acceptOSC7]) {
         return;
     }
@@ -3809,7 +4004,7 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
 }
 
 - (void)terminalClearScrollbackBuffer {
-    if (![iTermAdvancedSettingsModel preventEscapeSequenceFromClearingHistory]) {
+    if ([self.delegate screenShouldClearScrollbackBuffer]) {
         [self clearScrollbackBuffer];
     }
 }
@@ -3902,13 +4097,23 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
     [delegate_ screenSetPasteboard:value];
 }
 
-- (BOOL)preconfirmDownloadOfSize:(NSInteger)size name:(NSString *)name promptIfBig:(BOOL *)promptIfBig {
-    return [self.delegate screenConfirmDownloadAllowed:name size:size promptIfBig:promptIfBig];
+- (BOOL)preconfirmDownloadOfSize:(NSInteger)size
+                            name:(NSString *)name
+                   displayInline:(BOOL)displayInline
+                     promptIfBig:(BOOL *)promptIfBig {
+    return [self.delegate screenConfirmDownloadAllowed:name
+                                                  size:size
+                                         displayInline:displayInline
+                                           promptIfBig:promptIfBig];
 }
 
-- (BOOL)terminalWillReceiveFileNamed:(NSString *)name ofSize:(NSInteger)size {
+- (BOOL)terminalWillReceiveFileNamed:(NSString *)name
+                              ofSize:(NSInteger)size {
     BOOL promptIfBig = YES;
-    if (![self preconfirmDownloadOfSize:size name:name promptIfBig:&promptIfBig]) {
+    if (![self preconfirmDownloadOfSize:size
+                                   name:name
+                          displayInline:NO
+                            promptIfBig:&promptIfBig]) {
         return NO;
     }
     [delegate_ screenWillReceiveFileNamed:name ofSize:size preconfirmed:!promptIfBig];
@@ -3924,220 +4129,29 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
                        preserveAspectRatio:(BOOL)preserveAspectRatio
                                      inset:(NSEdgeInsets)inset {
     BOOL promptIfBig = YES;
-    if (![self preconfirmDownloadOfSize:size name:name promptIfBig:&promptIfBig]) {
+    if (![self preconfirmDownloadOfSize:size name:name displayInline:YES promptIfBig:&promptIfBig]) {
         return NO;
     }
-    [inlineFileInfo_ release];
-    inlineFileInfo_ = [@{ kInlineFileName: name,
-                          kInlineFileWidth: @(width),
-                          kInlineFileWidthUnits: @(widthUnits),
-                          kInlineFileHeight: @(height),
-                          kInlineFileHeightUnits: @(heightUnits),
-                          kInlineFilePreserveAspectRatio: @(preserveAspectRatio),
-                          kInlineFileBase64String: [NSMutableString string],
-                          kInlineFileInset: [NSValue futureValueWithEdgeInsets:inset],
-                          kInlineFilePreconfirmed: @(!promptIfBig) } retain];
+    [_inlineImageHelper release];
+    _inlineImageHelper = [[VT100InlineImageHelper alloc] initWithName:name
+                                                                width:width
+                                                           widthUnits:widthUnits
+                                                               height:height
+                                                          heightUnits:heightUnits
+                                                          scaleFactor:[delegate_ screenBackingScaleFactor]
+                                                  preserveAspectRatio:preserveAspectRatio
+                                                                inset:inset
+                                                         preconfirmed:!promptIfBig];
+    _inlineImageHelper.delegate = self;
     return YES;
 }
 
-- (void)appendImageAtCursorWithName:(NSString *)name
-                              width:(int)requestedWidth
-                              units:(VT100TerminalUnits)widthUnits
-                             height:(int)requestedHeight
-                              units:(VT100TerminalUnits)heightUnits
-                preserveAspectRatio:(BOOL)preserveAspectRatio
-                            roundUp:(BOOL)roundUp
-                              inset:(NSEdgeInsets)requestedInset
-                              image:(NSImage *)nativeImage
-                               data:(NSData *)data
-                            isSixel:(BOOL)isSixel {
-    iTermImage *image;
-    if (nativeImage) {
-        image = [iTermImage imageWithNativeImage:nativeImage];
-        DLog(@"Image is native");
-    } else if (isSixel) {
-        image = [iTermImage imageWithSixelData:data];
-    } else {
-        image = [iTermImage imageWithCompressedData:data];
-    }
-    const BOOL isBroken = !image;
-    if (isBroken) {
-        DLog(@"Image is broken");
-        image = [iTermImage imageWithNativeImage:[NSImage it_imageNamed:@"broken_image" forClass:self.class]];
-        assert(image);
-    }
-
-    NSSize scaledSize = image.size;
-    CGFloat scale;
-    if ([iTermAdvancedSettingsModel retinaInlineImages]) {
-        scale = MAX(1, [delegate_ screenBackingScaleFactor]);
-    } else {
-        scale = 1;
-    }
-    scaledSize.width /= scale;
-    scaledSize.height /= scale;
-
-    BOOL needsWidth = NO;
-    NSSize cellSize = [delegate_ screenCellSize];
-    CGFloat requestedWidthInPoints = 0;
-    int width = requestedWidth;
-    switch (widthUnits) {
-        case kVT100TerminalUnitsPixels:
-            width = ceil((double)requestedWidth / cellSize.width);
-            requestedWidthInPoints = requestedWidth;
-            break;
-
-        case kVT100TerminalUnitsPercentage: {
-            const double fraction = (double)MAX(MIN(100, requestedWidth), 0) / 100.0;
-            width = ceil((double)[self width] * fraction);
-            requestedWidthInPoints = self.width * cellSize.width * fraction;
-            break;
-        }
-
-        case kVT100TerminalUnitsCells:
-            width = requestedWidth;
-            requestedWidthInPoints = width * cellSize.width;
-            break;
-
-        case kVT100TerminalUnitsAuto:
-            if (heightUnits == kVT100TerminalUnitsAuto) {
-                width = ceil((double)scaledSize.width / cellSize.width);
-                requestedWidthInPoints = width * cellSize.width;
-            } else {
-                needsWidth = YES;
-            }
-            break;
-    }
-
-    int height = requestedHeight;
-    CGFloat requestedHeightInPoints = 0;
-    switch (heightUnits) {
-        case kVT100TerminalUnitsPixels:
-            height = ceil((double)requestedHeight / cellSize.height);
-            requestedHeightInPoints = requestedHeight;
-            break;
-
-        case kVT100TerminalUnitsPercentage: {
-            const double fraction = (double)MAX(MIN(100, requestedHeight), 0) / 100.0;
-            height = ceil((double)[self height] * fraction);
-            requestedHeightInPoints = self.height * cellSize.height * fraction;
-            break;
-        }
-        case kVT100TerminalUnitsCells:
-            height = requestedHeight;
-            requestedHeightInPoints = requestedHeight * cellSize.height;
-            break;
-
-        case kVT100TerminalUnitsAuto:
-            if (widthUnits == kVT100TerminalUnitsAuto) {
-                height = ceil((double)scaledSize.height / cellSize.height);
-            } else {
-                double aspectRatio = scaledSize.width / scaledSize.height;
-                height = ((double)(width * cellSize.width) / aspectRatio) / cellSize.height;
-            }
-            requestedHeightInPoints = height * cellSize.height;
-            break;
-    }
-
-    if (needsWidth) {
-        double aspectRatio = scaledSize.width / scaledSize.height;
-        width = ((double)(height * cellSize.height) * aspectRatio) / cellSize.width;
-        requestedWidthInPoints = width * cellSize.width;
-    }
-
-    BOOL fullAuto = (widthUnits == kVT100TerminalUnitsAuto &&
-                     heightUnits == kVT100TerminalUnitsAuto &&
-                     width >= 1 &&
-                     height >= 1);
-
-    width = MAX(1, width);
-    height = MAX(1, height);
-
-    double maxWidth = self.width - currentGrid_.cursorX;
-    // If the requested size is too large, scale it down to fit.
-    if (width > maxWidth) {
-        double scale = maxWidth / (double)width;
-        width = self.width;
-        height *= scale;
-        height = MAX(1, height);
-        fullAuto = NO;
-        requestedWidthInPoints = width * cellSize.width;
-        requestedHeightInPoints = height * cellSize.height;
-    }
-
-    // Height is capped at 255 because only 8 bits are used to represent the line number of a cell
-    // within the image.
-    double maxHeight = 255;
-    if (height > maxHeight) {
-        double scale = (double)height / maxHeight;
-        height = maxHeight;
-        width *= scale;
-        width = MAX(1, width);
-        fullAuto = NO;
-        requestedWidthInPoints = width * cellSize.width;
-        requestedHeightInPoints = height * cellSize.height;
-    }
-
-    // Allocate cells for the image.
-    // TODO: Support scroll regions.
-
-    NSEdgeInsets inset = requestedInset;
-    {
-        // Tweak the insets to get the exact size the user requested.
-        if (requestedWidthInPoints < width * cellSize.width) {
-            inset.right += (width * cellSize.width - requestedWidthInPoints);
-        }
-        if (requestedHeightInPoints < height * cellSize.height) {
-            inset.bottom += (height * cellSize.height - requestedHeightInPoints);
-        }
-    }
-    NSEdgeInsets fractionalInset = {
-        .left = MAX(inset.left / cellSize.width, 0),
-        .top = MAX(inset.top / cellSize.height, 0),
-        .right = MAX(inset.right / cellSize.width, 0),
-        .bottom = MAX(inset.bottom / cellSize.height, 0)
-    };
-    if (!roundUp && fullAuto) {
-        // Pick an inset that preserves the exact dimensions of the original image.
-        fractionalInset = [iTermImageInfo fractionalInsetsForPreservedAspectRatioWithDesiredSize:scaledSize
-                                                                                    forImageSize:image.size
-                                                                                        cellSize:cellSize
-                                                                                   numberOfCells:NSMakeSize(width, height)];
-    }
-    screen_char_t c = ImageCharForNewImage(name,
-                                           width,
-                                           height,
-                                           preserveAspectRatio,
-                                           fractionalInset);
-    iTermImageInfo *imageInfo = GetImageInfo(c.code);
-    imageInfo.broken = isBroken;
-    DLog(@"Append %d rows of image characters with %d columns. The value of c.image is %@", height, width, @(c.image));
-    const int xOffset = self.cursorX - 1;
-    const int screenWidth = currentGrid_.size.width;
-    for (int y = 0; y < height; y++) {
-        if (y > 0) {
-            [self linefeed];
-        }
-        for (int x = xOffset; x < xOffset + width && x < screenWidth; x++) {
-            SetPositionInImageChar(&c, x - xOffset, y);
-            // DLog(@"Set character at %@,%@: %@", @(x), @(currentGrid_.cursorY), DebugStringForScreenChar(c));
-            [currentGrid_ setCharsFrom:VT100GridCoordMake(x, currentGrid_.cursorY)
-                                    to:VT100GridCoordMake(x, currentGrid_.cursorY)
-                                toChar:c];
-        }
-    }
-    currentGrid_.cursorX = currentGrid_.cursorX + width;
-
-    // Add a mark after the image. When the mark gets freed, it will release the image's memory.
-    SetDecodedImage(c.code, image, data);
-    long long absLine = (self.totalScrollbackOverflow +
-                         [self numberOfScrollbackLines] +
-                         currentGrid_.cursor.y + 1);
-    iTermImageMark *mark = [self addMarkStartingAtAbsoluteLine:absLine
-                                                       oneLine:YES
-                                                       ofClass:[iTermImageMark class]];
-    mark.imageCode = @(c.code);
-    [delegate_ screenNeedsRedraw];
+- (void)appendNativeImageAtCursorWithName:(NSString *)name width:(int)width {
+    VT100InlineImageHelper *helper = [[[VT100InlineImageHelper alloc] initWithNativeImageNamed:name
+                                                                                 spanningWidth:width
+                                                                                   scaleFactor:[delegate_ screenBackingScaleFactor]] autorelease];
+    helper.delegate = self;
+    [helper writeToGrid:currentGrid_];
 }
 
 - (void)addURLMarkAtLineAfterCursorWithCode:(unsigned short)code {
@@ -4159,37 +4173,22 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
 }
 
 - (void)terminalAppendSixelData:(NSData *)data {
-    [self appendImageAtCursorWithName:@"Sixel Image"
-                                width:0
-                                units:kVT100TerminalUnitsAuto
-                               height:0
-                                units:kVT100TerminalUnitsAuto
-                  preserveAspectRatio:YES
-                              roundUp:NO
-                                inset:NSEdgeInsetsZero
-                                image:nil
-                                 data:data
-                              isSixel:YES];
+    VT100InlineImageHelper *helper = [[[VT100InlineImageHelper alloc] initWithSixelData:data
+                                                                            scaleFactor:[delegate_ screenBackingScaleFactor]] autorelease];
+    helper.delegate = self;
+    [helper writeToGrid:currentGrid_];
+}
+
+- (void)terminalDidChangeSendModifiers {
+    [delegate_ screenSetUseCSIu:terminal_.sendModifiers[4].intValue];
 }
 
 - (void)terminalDidFinishReceivingFile {
-    if (inlineFileInfo_) {
-        DLog(@"Inline file received");
+    if (_inlineImageHelper) {
+        [_inlineImageHelper writeToGrid:currentGrid_];
+        [_inlineImageHelper release];
+        _inlineImageHelper = nil;
         // TODO: Handle objects other than images.
-        NSData *data = [NSData dataWithBase64EncodedString:inlineFileInfo_[kInlineFileBase64String]];
-        [self appendImageAtCursorWithName:inlineFileInfo_[kInlineFileName]
-                                    width:[inlineFileInfo_[kInlineFileWidth] intValue]
-                                    units:(VT100TerminalUnits)[inlineFileInfo_[kInlineFileWidthUnits] intValue]
-                                   height:[inlineFileInfo_[kInlineFileHeight] intValue]
-                                    units:(VT100TerminalUnits)[inlineFileInfo_[kInlineFileHeightUnits] intValue]
-                      preserveAspectRatio:[inlineFileInfo_[kInlineFilePreserveAspectRatio] boolValue]
-                                  roundUp:YES
-                                    inset:[inlineFileInfo_[kInlineFileInset] futureEdgeInsetsValue]
-                                    image:nil
-                                     data:data
-                                  isSixel:NO];
-        [inlineFileInfo_ release];
-        inlineFileInfo_ = nil;
         [delegate_ screenDidFinishReceivingInlineFile];
     } else {
         DLog(@"Download finished");
@@ -4202,6 +4201,7 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
                                     name:(NSString *)name {
     if (sizeBefore < VT100ScreenBigFileDownloadThreshold && afterSize > VT100ScreenBigFileDownloadThreshold) {
         if (![self.delegate screenConfirmDownloadNamed:name canExceedSize:VT100ScreenBigFileDownloadThreshold]) {
+            DLog(@"Aborting big download");
             [terminal_ stopReceivingFile];
             [self terminalFileReceiptEndedUnexpectedly];
             return NO;
@@ -4211,22 +4211,16 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
 }
 
 - (void)terminalDidReceiveBase64FileData:(NSString *)data {
-    if (inlineFileInfo_) {
-        const NSInteger lengthBefore = [inlineFileInfo_[kInlineFileBase64String] length];
-        [inlineFileInfo_[kInlineFileBase64String] appendString:data];
-        const NSInteger lengthAfter = [inlineFileInfo_[kInlineFileBase64String] length];
-
-        if (![inlineFileInfo_[kInlineFilePreconfirmed] boolValue]) {
-            [self confirmBigDownloadWithBeforeSize:lengthBefore afterSize:lengthAfter name:inlineFileInfo_[kInlineFileName] ?: @"Unnamed file"];
-        }
+    if (_inlineImageHelper) {
+        [_inlineImageHelper appendBase64EncodedData:data];
     } else {
         [delegate_ screenDidReceiveBase64FileData:data];
     }
 }
 
 - (void)terminalFileReceiptEndedUnexpectedly {
-    [inlineFileInfo_ release];
-    inlineFileInfo_ = nil;
+    [_inlineImageHelper release];
+    _inlineImageHelper = nil;
     [delegate_ screenFileReceiptEndedUnexpectedly];
 }
 
@@ -4235,11 +4229,10 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
 }
 
 - (void)terminalBeginCopyToPasteboard {
+    [delegate_ screenTerminalAttemptedPasteboardAccess];
     if ([iTermPreferences boolForKey:kPreferenceKeyAllowClipboardAccessFromTerminal]) {
         [_copyString release];
         _copyString = [[NSMutableString alloc] init];
-    } else {
-        [delegate_ screenTerminalAttemptedPasteboardAccess];
     }
 }
 
@@ -4261,8 +4254,8 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
             if (string) {
                 NSPasteboard *pboard = [NSPasteboard generalPasteboard];
                 [pboard clearContents];
-                [pboard declareTypes:@[ NSStringPboardType ] owner:self];
-                [pboard setString:string forType:NSStringPboardType];
+                [pboard declareTypes:@[ NSPasteboardTypeString ] owner:self];
+                [pboard setString:string forType:NSPasteboardTypeString];
             }
         }
     }
@@ -4505,6 +4498,8 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
     VT100ScreenMark *screenMark = [self lastCommandMark];
     if (screenMark) {
         DLog(@"Removing last command mark %@", screenMark);
+        [_intervalTreeObserver intervalTreeDidRemoveObjectOfType:[self intervalTreeObserverTypeForObject:screenMark]
+                                                          onLine:[self coordRangeForInterval:screenMark.entry.interval].start.y + self.totalScrollbackOverflow];
         [intervalTree_ removeObject:screenMark];
     }
 
@@ -4559,10 +4554,15 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
 
 - (void)terminalReturnCodeOfLastCommandWas:(int)returnCode {
     DLog(@"FinalTerm: terminalReturnCodeOfLastCommandWas:%d", returnCode);
-    VT100ScreenMark *mark = self.lastCommandMark;
+    VT100ScreenMark *mark = [[self.lastCommandMark retain] autorelease];
     if (mark) {
         DLog(@"FinalTerm: setting code on mark %@", mark);
+        const NSInteger line = [self coordRangeForInterval:mark.entry.interval].start.y + self.totalScrollbackOverflow;
+        [_intervalTreeObserver intervalTreeDidRemoveObjectOfType:[self intervalTreeObserverTypeForObject:mark]
+                                                          onLine:line];
         mark.code = returnCode;
+        [_intervalTreeObserver intervalTreeDidAddObjectOfType:[self intervalTreeObserverTypeForObject:mark]
+                                                       onLine:line];
         VT100RemoteHost *remoteHost = [self remoteHostOnLine:[self numberOfLines]];
         [[iTermShellHistoryController sharedInstance] setStatusOfCommandAtMark:mark
                                                                         onHost:remoteHost
@@ -4571,7 +4571,7 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
     } else {
         DLog(@"No last command mark found.");
     }
-    [delegate_ screenCommandDidExitWithCode:returnCode];
+    [delegate_ screenCommandDidExitWithCode:returnCode mark:mark];
 }
 
 - (void)terminalFinalTermCommand:(NSArray *)argv {
@@ -4672,104 +4672,7 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
 }
 
 - (NSSet<NSString *> *)sgrCodesForChar:(screen_char_t)c {
-    NSMutableSet<NSString *> *result = [NSMutableSet set];
-    switch (c.foregroundColorMode) {
-        case ColorModeNormal:
-            if (c.foregroundColor < 8) {
-                [result addObject:[NSString stringWithFormat:@"%@", @(c.foregroundColor + 30)]];
-            } else if (c.foregroundColor < 16) {
-                [result addObject:[NSString stringWithFormat:@"%@", @(c.foregroundColor + 90)]];
-            } else {
-                [result addObject:[NSString stringWithFormat:@"38:5:%@", @(c.foregroundColor)]];
-            }
-            break;
-
-        case ColorModeAlternate:
-            switch (c.foregroundColor) {
-                case ALTSEM_DEFAULT:
-                case ALTSEM_REVERSED_DEFAULT:  // Not sure quite how to handle this, going with the simplest approach for now.
-                    [result addObject:@"39"];
-                    break;
-
-                case ALTSEM_SYSTEM_MESSAGE:
-                    // There is no SGR code for this case.
-                    break;
-
-                case ALTSEM_SELECTED:
-                case ALTSEM_CURSOR:
-                    // This isn't used as far as I can tell.
-                    break;
-
-            }
-            break;
-
-        case ColorMode24bit:
-            [result addObject:[NSString stringWithFormat:@"38:2:1:%@:%@:%@",
-              @(c.foregroundColor), @(c.fgGreen), @(c.fgBlue)]];
-            break;
-
-        case ColorModeInvalid:
-            break;
-    }
-
-    switch (c.backgroundColorMode) {
-        case ColorModeNormal:
-            if (c.backgroundColor < 8) {
-                [result addObject:[NSString stringWithFormat:@"%@", @(c.backgroundColor + 40)]];
-            } else if (c.backgroundColor < 16) {
-                [result addObject:[NSString stringWithFormat:@"%@", @(c.backgroundColor + 100)]];
-            } else {
-                [result addObject:[NSString stringWithFormat:@"48:5:%@", @(c.backgroundColor)]];
-            }
-            break;
-
-        case ColorModeAlternate:
-            switch (c.backgroundColor) {
-                case ALTSEM_DEFAULT:
-                case ALTSEM_REVERSED_DEFAULT:  // Not sure quite how to handle this, going with the simplest approach for now.
-                    [result addObject:@"49"];
-                    break;
-
-                case ALTSEM_SYSTEM_MESSAGE:
-                    // There is no SGR code for this case.
-                    break;
-
-                case ALTSEM_SELECTED:
-                case ALTSEM_CURSOR:
-                    // This isn't used as far as I can tell.
-                    break;
-
-            }
-            break;
-
-        case ColorMode24bit:
-            [result addObject:[NSString stringWithFormat:@"48:2:1:%@:%@:%@",
-              @(c.backgroundColor), @(c.bgGreen), @(c.bgBlue)]];
-            break;
-
-        case ColorModeInvalid:
-            break;
-    }
-
-    if (c.bold) {
-        [result addObject:@"1"];
-    }
-    if (c.faint) {
-        [result addObject:@"2"];
-    }
-    if (c.italic) {
-        [result addObject:@"3"];
-    }
-    if (c.underline) {
-        [result addObject:@"4"];
-    }
-    if (c.blink) {
-        [result addObject:@"5"];
-    }
-    if (c.strikethrough) {
-        [result addObject:@"9"];
-    }
-    return result;
+    return [terminal_ sgrCodesForCharacter:c];
 }
 
 - (NSArray<NSString *> *)terminalSGRCodesInRectangle:(VT100GridRect)rect {
@@ -4963,6 +4866,10 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
 
 - (void)terminalReportFocusWillChangeTo:(BOOL)reportFocus {
     [self.delegate screenReportFocusWillChangeTo:reportFocus];
+}
+
+- (void)terminalPasteBracketingWillChangeTo:(BOOL)bracket {
+    [self.delegate screenReportPasteBracketingWillChangeTo:bracket];
 }
 
 - (void)terminalSoftAlternateScreenModeDidChange {
@@ -5327,6 +5234,7 @@ static void SwapInt(int *a, int *b) {
 - (void)incrementOverflowBy:(int)overflowCount {
     scrollbackOverflow_ += overflowCount;
     cumulativeScrollbackOverflow_ += overflowCount;
+    [_intervalTreeObserver intervalTreeVisibleRangeDidChange];
 }
 
 // sets scrollback lines.
@@ -5412,7 +5320,7 @@ static void SwapInt(int *a, int *b) {
 {
     // Undo the appending of the screen to scrollback
     int i;
-    screen_char_t* dummy = calloc(currentGrid_.size.width, sizeof(screen_char_t));
+    screen_char_t* dummy = iTermCalloc(currentGrid_.size.width, sizeof(screen_char_t));
     for (i = 0; i < linesPushed; ++i) {
         int cont;
         BOOL isOk __attribute__((unused)) =
@@ -5421,7 +5329,7 @@ static void SwapInt(int *a, int *b) {
                               includesEndOfLine:&cont
                                       timestamp:NULL
                                    continuation:NULL];
-        ITUpgradedNSAssert(isOk, @"Pop shouldn't fail");
+        ITAssertWithMessage(isOk, @"Pop shouldn't fail");
     }
     free(dummy);
 }
@@ -5581,7 +5489,10 @@ static void SwapInt(int *a, int *b) {
 - (void)noteDidRequestRemoval:(PTYNoteViewController *)note {
     if ([intervalTree_ containsObject:note]) {
         self.lastCommandMark = nil;
+        [[note retain] autorelease];
         [intervalTree_ removeObject:note];
+        [_intervalTreeObserver intervalTreeDidRemoveObjectOfType:[self intervalTreeObserverTypeForObject:note]
+                                                          onLine:[self coordRangeForInterval:note.entry.interval].start.y + self.totalScrollbackOverflow];
     } else if ([savedIntervalTree_ containsObject:note]) {
         self.lastCommandMark = nil;
         [savedIntervalTree_ removeObject:note];
@@ -5625,7 +5536,8 @@ static void SwapInt(int *a, int *b) {
     }
 }
 
-- (NSDictionary *)contentsDictionary {
+- (BOOL)encodeContents:(id<iTermEncoderAdapter>)encoder
+          linesDropped:(int *)linesDroppedOut {
     // We want 10k lines of history at 80 cols, and fewer for small widths, to keep the size
     // reasonable.
     int maxArea = 10000 * 80;
@@ -5659,8 +5571,11 @@ static void SwapInt(int *a, int *b) {
         }
     }
 
-    NSMutableDictionary *dict = [[[temp dictionary] mutableCopy] autorelease];
-    dict[kScreenStateKey] =
+    [temp encode:encoder];
+    [encoder encodeDictionaryWithKey:kScreenStateKey
+                          generation:iTermGenerationAlwaysEncode
+                               block:^BOOL(id<iTermEncoderAdapter>  _Nonnull encoder) {
+        NSDictionary *dict =
         [@{ kScreenStateTabStopsKey: [tabStops_ allObjects] ?: @[],
             kScreenStateTerminalKey: [terminal_ stateDictionary] ?: @{},
             kScreenStateLineDrawingModeKey: @[ @(charsetUsesLineDrawingMode_[0]),
@@ -5683,8 +5598,14 @@ static void SwapInt(int *a, int *b) {
             kScreenStateAlternateGridStateKey: altGrid_.dictionaryValue ?: [NSNull null],
             kScreenStateNumberOfLinesDroppedKey: @(linesDroppedForBrevity),
             kScreenStateCursorCoord: VT100GridCoordToDictionary(primaryGrid_.cursor),
-            } dictionaryByRemovingNullValues];
-    return dict;
+        } dictionaryByRemovingNullValues];
+        [encoder mergeDictionary:dict];
+        return YES;
+    }];
+    if (linesDroppedOut) {
+        *linesDroppedOut = linesDroppedForBrevity;
+    }
+    return YES;
 }
 
 - (NSDictionary *)contentsOfNonCurrentGrid {
@@ -5699,7 +5620,9 @@ static void SwapInt(int *a, int *b) {
         return @{};
     }
     [grid appendLines:grid.size.height toLineBuffer:temp];
-    return [temp dictionary];
+    iTermMutableDictionaryEncoderAdapter *encoder = [[iTermMutableDictionaryEncoderAdapter alloc] init];
+    [temp encode:encoder];
+    return encoder.mutableDictionary;
 }
 
 - (void)appendSessionRestoredBanner {
@@ -5937,6 +5860,9 @@ static void SwapInt(int *a, int *b) {
                 if (visible) {
                     [delegate_ screenDidAddNote:note];
                 }
+            } else if ([object isKindOfClass:[iTermImageMark class]]) {
+                iTermImageMark *imageMark = (iTermImageMark *)object;
+                ScreenCharClearProvisionalFlagForImageWithCode(imageMark.imageCode.intValue);
             }
         }
     }
@@ -5977,6 +5903,44 @@ static void SwapInt(int *a, int *b) {
     // I think the update timer was hitting a worst case scenario which made the lag visible.
     // See issue 3537.
     [delegate_ screenUpdateDisplay:YES];
+}
+
+#pragma mark - iTermLineBufferDelegate
+
+- (void)lineBufferDidDropLines:(LineBuffer *)lineBuffer {
+    if (lineBuffer == linebuffer_) {
+        [delegate_ screenRefreshFindOnPageView];
+    }
+}
+
+#pragma mark - VT100InlineImageHelperDelegate
+
+- (void)inlineImageConfirmBigDownloadWithBeforeSize:(NSInteger)lengthBefore
+                                          afterSize:(NSInteger)lengthAfter
+                                               name:(NSString *)name {
+    [self confirmBigDownloadWithBeforeSize:lengthBefore
+                                 afterSize:lengthAfter
+                                      name:name];
+}
+
+- (NSSize)inlineImageCellSize {
+    return [delegate_ screenCellSize];
+}
+
+- (void)inlineImageAppendLinefeed {
+    [self linefeed];
+}
+
+- (void)inlineImageSetMarkOnScreenLine:(NSInteger)line
+                                  code:(unichar)code {
+    long long absLine = (self.totalScrollbackOverflow +
+                         [self numberOfScrollbackLines] +
+                         line);
+    iTermImageMark *mark = [self addMarkStartingAtAbsoluteLine:absLine
+                                                       oneLine:YES
+                                                       ofClass:[iTermImageMark class]];
+    mark.imageCode = @(code);
+    [delegate_ screenNeedsRedraw];
 }
 
 @end

@@ -2,6 +2,7 @@
 
 #import "DebugLogging.h"
 #import "iTermAdvancedSettingsModel.h"
+#import "iTermMalloc.h"
 #import "iTermMetalBufferPool.h"
 #import "iTermMetalDebugInfo.h"
 #import "iTermShaderTypes.h"
@@ -67,12 +68,14 @@ const NSInteger iTermMetalDriverMaximumNumberOfFramesInFlight = 3;
 
 - (instancetype)initWithViewportSize:(vector_uint2)viewportSize
                                scale:(CGFloat)scale
-                  hasBackgroundImage:(BOOL)hasBackgroundImage {
+                  hasBackgroundImage:(BOOL)hasBackgroundImage
+                        extraMargins:(NSEdgeInsets)extraMargins {
     self = [super init];
     if (self) {
         _viewportSize = viewportSize;
         _scale = scale;
         _hasBackgroundImage = hasBackgroundImage;
+        _extraMargins = extraMargins;
     }
     return self;
 }
@@ -408,7 +411,7 @@ const NSInteger iTermMetalDriverMaximumNumberOfFramesInFlight = 3;
     }
 
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    uint8_t *rawData = (uint8_t *)calloc(height * width * 4, sizeof(uint8_t));
+    uint8_t *rawData = (uint8_t *)iTermCalloc(height * width * 4, sizeof(uint8_t));
     NSUInteger bytesPerPixel = 4;
     NSUInteger bytesPerRow = bytesPerPixel * width;
     NSUInteger bitsPerComponent = 8;

@@ -77,7 +77,7 @@
                              eventModifiers:(NSEventModifierFlags)eventModifiers {
     const int csiModifiers = [self csiModifiersForEventModifiers:eventModifiers];
     if (csiModifiers == 1) {
-        return [NSString stringWithFormat:@"%c[%@", 27, code];
+        return [NSString stringWithFormat:@"%cO%@", 27, code];
     } else {
         return [NSString stringWithFormat:@"%c[1;%d%@", 27, csiModifiers, code];
     }
@@ -418,55 +418,10 @@
 }
 
 // Only control pressed
-- (NSString *)modifiedUnicodeStringForControlCharacter:(unichar)codePoint
-                                          shiftPressed:(BOOL)shiftPressed {
+- (NSString *)modifiedUnicodeStringForControlCharacter:(unichar)codePoint {
     switch (codePoint) {
-        case 'i':
-        case 'm':
-            return nil;
-
-        case '[':
-            // Intentional deviation from the CSI u spec because of the stupid touch bar.
-            if (shiftPressed) {
-                return nil;
-            }
-            return [self stringWithCharacter:27];
-
         case ' ':
-            if (shiftPressed) {
-                return nil;
-            }
             return [self stringWithCharacter:0];
-
-        case '2':
-        case '@':  // Intentional deviation from the CSI u spec because control+number changes desktops.
-            return [self stringWithCharacter:0];
-
-        case '\\':
-            if (shiftPressed) {
-                return nil;
-            }
-            return [self stringWithCharacter:28];
-
-        case ']':
-            if (shiftPressed) {
-                return nil;
-            }
-            return [self stringWithCharacter:29];
-
-        case '^':  // Intentional deviation from the CSI u spec because control+number changes desktops.
-        case '6':
-            return [self stringWithCharacter:30];
-
-        case '-':
-        case '_':  // Intentional deviation from the CSI u spec for emacs users.
-            return [self stringWithCharacter:31];
-
-        case '/':  // Intentional deviation from the CSI u spec for the sake of tradition.
-            if (shiftPressed) {
-                return nil;
-            }
-            return [self stringWithCharacter:0x7f];
     }
 
     if (codePoint < 'a') {
@@ -516,20 +471,22 @@ static BOOL CodePointInPrivateUseArea(unichar c) {
     }
 
     // Modified unicode - control
-    const NSEventModifierFlags allEventModifierFlagsExShift = (NSEventModifierFlagControl |
-                                                               NSEventModifierFlagOption |
-                                                               maybeFunction);
-    if ((eventModifiers & allEventModifierFlagsExShift) == NSEventModifierFlagControl) {
-        NSString *string = [self modifiedUnicodeStringForControlCharacter:codePoint shiftPressed:!!(eventModifiers & NSEventModifierFlagShift)];
+    if ((eventModifiers & allEventModifierFlags) == NSEventModifierFlagControl) {
+        NSString *string = [self modifiedUnicodeStringForControlCharacter:codePoint];
         if (string) {
             return string;
         }
     }
 
     // Modified Unicode - option
-    if ((eventModifiers & allEventModifierFlags) == NSEventModifierFlagOption) {
+    const NSEventModifierFlags allEventModifierFlagsExShift = (NSEventModifierFlagControl |
+                                                               NSEventModifierFlagOption |
+                                                               maybeFunction);
+    if ((eventModifiers & allEventModifierFlagsExShift) == NSEventModifierFlagOption) {
         // Legacy code path: option-letter, for the "simplest form of these keys." Not sure what
         // he meant exactly, but anything that's not a function key seems simple to me. ¯\_(ツ)_/¯
+        // Update: based on his example of m-a -> esc a and m-A -> esc A, I interpret this to mean
+        // the shift key should not be considered.
         NSData *data = [self dataForOptionModifiedKeypress];
         if (data) {
             return [[NSString alloc] initWithData:data encoding:_configuration.encoding];
@@ -647,6 +604,11 @@ static NSRange iTermMakeRange(NSInteger smallestValueInRange,
 
     DLog(@"Don't bypass pre-cocoa");
     return NO;
+}
+
+- (BOOL)keyMapperWantsKeyEquivalent:(NSEvent *)event {
+    const BOOL cmdPressed = !!(event.modifierFlags & NSEventModifierFlagCommand);
+    return !cmdPressed;
 }
 
 @end

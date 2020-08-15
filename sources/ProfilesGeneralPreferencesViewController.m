@@ -7,7 +7,9 @@
 //
 
 #import "ProfilesGeneralPreferencesViewController.h"
+
 #import "AdvancedWorkingDirectoryWindowController.h"
+#import "DebugLogging.h"
 #import "ITAddressBookMgr.h"
 #import "iTermAPIHelper.h"
 #import "iTermBadgeConfigurationWindowController.h"
@@ -80,6 +82,8 @@ static NSString *const iTermProfilePreferencesUpdateSessionName = @"iTermProfile
     IBOutlet NSTextField *_badgeLabel;
     IBOutlet NSTextField *_badgeTextForEditCurrentSession;
     IBOutlet NSButton *_editBadgeButton;
+    iTermFunctionCallTextFieldDelegate *_commandDelegate;
+    iTermFunctionCallTextFieldDelegate *_sendTextAtStartDelegate;
     iTermFunctionCallTextFieldDelegate *_profileNameFieldDelegate;
     iTermFunctionCallTextFieldDelegate *_profileNameFieldForEditCurrentSessionDelegate;
     iTermFunctionCallTextFieldDelegate *_badgeTextFieldDelegate;
@@ -225,6 +229,15 @@ static NSString *const iTermProfilePreferencesUpdateSessionName = @"iTermProfile
 
     _customCommand.cell.usesSingleLineMode = YES;
     _customCommand.hidden = YES;
+
+    _commandDelegate =
+    [[iTermFunctionCallTextFieldDelegate alloc] initWithPathSource:[iTermVariableHistory pathSourceForContext:iTermVariablesSuggestionContextSession]
+                                                       passthrough:_customCommand.delegate
+                                                     functionsOnly:NO];
+    if ([[self objectForKey:KEY_CUSTOM_COMMAND] isEqual:kProfilePreferenceCommandTypeCustomValue]) {
+        _customCommand.delegate = _commandDelegate;
+    }
+
     info = [self defineControl:_customCommand
                            key:KEY_COMMAND_LINE
                    displayName:@"Profile custom ommand"
@@ -241,6 +254,13 @@ static NSString *const iTermProfilePreferencesUpdateSessionName = @"iTermProfile
                     key:KEY_INITIAL_TEXT
             relatedView:_sendTextAtStartLabel
                    type:kPreferenceInfoTypeStringTextField];
+
+    _sendTextAtStartDelegate =
+    [[iTermFunctionCallTextFieldDelegate alloc] initWithPathSource:[iTermVariableHistory pathSourceForContext:iTermVariablesSuggestionContextSession]
+                                                       passthrough:_sendTextAtStart.delegate
+                                                     functionsOnly:NO];
+    _sendTextAtStart.delegate = _sendTextAtStartDelegate;
+
 
     [self defineControl:_initialDirectoryType
                     key:KEY_CUSTOM_DIRECTORY
@@ -400,9 +420,10 @@ static NSString *const iTermProfilePreferencesUpdateSessionName = @"iTermProfile
     [panel setAllowedFileTypes:[NSImage imageTypes]];
 
     void (^completion)(NSInteger) = ^(NSInteger result) {
-        if (result == NSFileHandlingPanelOKButton) {
+        if (result == NSModalResponseOK) {
             NSURL *url = [[panel URLs] objectAtIndex:0];
             if (![self loadIconWithFilename:url.path]) {
+                DLog(@"Beep: Failed to load icon at %@", url);
                 NSBeep();
             }
         }
@@ -618,7 +639,7 @@ static NSString *const iTermProfilePreferencesUpdateSessionName = @"iTermProfile
 
 - (BOOL)validateMenuItem:(NSMenuItem *)menuItem {
     if (menuItem.menu == _urlSchemes.menu) {
-        menuItem.state = [self profileHandlesScheme:menuItem.title] ? NSOnState : NSOffState;
+        menuItem.state = [self profileHandlesScheme:menuItem.title] ? NSControlStateValueOn : NSControlStateValueOff;
     }
     return YES;
 }
@@ -730,12 +751,15 @@ static NSString *const iTermProfilePreferencesUpdateSessionName = @"iTermProfile
     switch (tag) {
         case iTermGeneralProfilePreferenceCustomCommandTagCustom:
             value = kProfilePreferenceCommandTypeCustomValue;
+            _customCommand.delegate = _commandDelegate;
             break;
         case iTermGeneralProfilePreferenceCustomCommandTagLoginShell:
             value = kProfilePreferenceCommandTypeLoginShellValue;
+            _customCommand.delegate = _commandDelegate.passthrough;
             break;
         case iTermGeneralProfilePreferenceCustomCommandTagCustomShell:
             value = kProfilePreferenceCommandTypeCustomShellValue;
+            _customCommand.delegate = _commandDelegate.passthrough;
             break;
     }
     [self setString:value forKey:KEY_CUSTOM_COMMAND];
@@ -946,7 +970,7 @@ static NSString *const iTermProfilePreferencesUpdateSessionName = @"iTermProfile
         } else if (item.tag == -1) {
             selected = NO;
         }
-        item.state = selected ? NSOnState : NSOffState;
+        item.state = selected ? NSControlStateValueOn : NSControlStateValueOff;
         if (selected) {
             [parts addObject:item.title];
         }

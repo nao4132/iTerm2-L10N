@@ -10,6 +10,7 @@
 #import "SolidColorView.h"
 #import "VT100GridTypes.h"
 
+@class iTermImageView;
 @class iTermRootTerminalView;
 @class iTermStatusBarViewController;
 @class iTermTabBarControlView;
@@ -52,6 +53,7 @@
 - (BOOL)rootTerminalViewShouldLeaveEmptyAreaAtTop;
 - (BOOL)rootTerminalViewShouldHideTabBarBackingWhenTabBarIsHidden;
 - (VT100GridSize)rootTerminalViewCurrentSessionSize;
+- (NSString *)rootTerminalViewWindowSizeViewDetailString;
 @end
 
 extern const NSInteger iTermRootTerminalViewWindowNumberLabelMargin;
@@ -88,6 +90,7 @@ extern const NSInteger iTermRootTerminalViewWindowNumberLabelWidth;
 @property(nonatomic, readonly) BOOL scrollbarShouldBeVisible;
 
 @property(nonatomic, readonly) BOOL tabBarShouldBeVisible;
+@property(nonatomic, readonly) BOOL tabBarShouldBeVisibleEvenWhenOnLoan;
 
 @property(nonatomic, readonly) CGFloat tabviewWidth;
 
@@ -97,6 +100,7 @@ extern const NSInteger iTermRootTerminalViewWindowNumberLabelWidth;
 @property(nonatomic) BOOL useMetal;
 @property(nonatomic, readonly) BOOL tabBarControlOnLoan NS_AVAILABLE_MAC(10_14);
 @property(nonatomic, strong, readonly) iTermStatusBarViewController *statusBarViewController;
+@property(nonatomic, readonly) iTermImageView *backgroundImage NS_AVAILABLE_MAC(10_14);
 
 - (instancetype)initWithFrame:(NSRect)frame
                         color:(NSColor *)color
@@ -136,5 +140,6 @@ extern const NSInteger iTermRootTerminalViewWindowNumberLabelWidth;
 - (void)setShowsWindowSize:(BOOL)showsWindowSize NS_AVAILABLE_MAC(10_14);
 - (void)windowDidResize;
 - (CGFloat)leftTabBarWidthForPreferredWidth:(CGFloat)preferredWidth contentWidth:(CGFloat)contentWidth;
+- (void)updateTitleAndBorderViews NS_AVAILABLE_MAC(10_14);
 
 @end

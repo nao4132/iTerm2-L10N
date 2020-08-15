@@ -41,7 +41,12 @@
 }
 
 - (NSImage *)snapshot {
-    return [[NSImage alloc] initWithData:[self dataWithPDFInsideRect:[self bounds]]];
+    NSBitmapImageRep *rep = [self bitmapImageRepForCachingDisplayInRect:self.bounds];
+    [self cacheDisplayInRect:self.bounds toBitmapImageRep:rep];
+    NSImage *image = [[NSImage alloc] initWithSize:self.bounds.size];
+    [image addRepresentation:rep];
+
+    return image;
 }
 
 - (void)insertSubview:(NSView *)subview atIndex:(NSInteger)index {
@@ -131,6 +136,9 @@
 
 - (CGFloat)retinaRound:(CGFloat)value {
     NSWindow *window = self.window;
+    if (!window) {
+        return round(value);
+    }
     CGFloat scale = window.backingScaleFactor;
     if (!scale) {
         scale = [[NSScreen mainScreen] backingScaleFactor];
@@ -143,6 +151,9 @@
 
 - (CGFloat)retinaRoundUp:(CGFloat)value {
     NSWindow *window = self.window;
+    if (!window) {
+        return ceil(value);
+    }
     CGFloat scale = window.backingScaleFactor;
     if (!scale) {
         scale = [[NSScreen mainScreen] backingScaleFactor];

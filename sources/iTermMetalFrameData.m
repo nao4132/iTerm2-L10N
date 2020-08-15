@@ -107,7 +107,9 @@ static NSInteger gNextFrameDataNumber;
 
 @implementation iTermMetalFrameData {
     NSTimeInterval _creation;
+#if ENABLE_STATS
     iTermPreciseTimerStats _stats[iTermMetalFrameDataStatCount];
+#endif
     iTermCellRenderConfiguration *_cellConfiguration;
 }
 
@@ -121,6 +123,7 @@ static NSInteger gNextFrameDataNumber;
         _frameNumber = gNextFrameDataNumber++;
         _framePoolContext = [[iTermMetalBufferPoolContext alloc] init];
         _transientStates = [NSMutableDictionary dictionary];
+#if ENABLE_STATS
         iTermMetalFrameDataStatsBundleInitialize(_stats);
         _statHistograms = [[NSArray sequenceWithRange:NSMakeRange(0, iTermMetalFrameDataStatCount)] mapWithBlock:^id(NSNumber *anObject) {
             return [[iTermHistogram alloc] init];
@@ -128,6 +131,7 @@ static NSInteger gNextFrameDataNumber;
         iTermPreciseTimerStatsStartTimer(&_stats[iTermMetalFrameDataStatEndToEnd]);
         iTermPreciseTimerStatsStartTimer(&_stats[iTermMetalFrameDataStatCPU]);
         iTermPreciseTimerStatsStartTimer(&_stats[iTermMetalFrameDataStatMainQueueTotal]);
+#endif
         self.status = @"just created";
     }
     return self;
@@ -149,63 +153,84 @@ static NSInteger gNextFrameDataNumber;
     [_debugInfo setRenderPassDescriptor:renderPassDescriptor];
 }
 
-- (NSTimeInterval)measureTimeForStat:(iTermMetalFrameDataStat)stat ofBlock:(void (^)(void))block {
+- (NSTimeInterval)measureTimeForStat:(iTermMetalFrameDataStat)stat ofBlock:(void (^ NS_NOESCAPE)(void))block {
     if (stat == iTermMetalFrameDataStatNA) {
         block();
         return 0;
     }
     
+#if ENABLE_STATS
     self.status = [NSString stringWithUTF8String:_stats[stat].name];
     iTermPreciseTimerStatsStartTimer(&_stats[stat]);
+#endif
     block();
+#if ENABLE_STATS
     const double duration = iTermPreciseTimerStatsMeasureAndRecordTimer(&_stats[stat]);
     [_statHistograms[stat] addValue:duration * 1000];
     return duration;
+#else
+    return 0;
+#endif
 }
 
 - (void)extractStateFromAppInBlock:(void (^)(void))block {
+#if ENABLE_STATS
     iTermPreciseTimerStatsStartTimer(&_stats[iTermMetalFrameDataStatMtExtractFromApp]);
+#endif
     block();
+#if ENABLE_STATS
     const double duration = iTermPreciseTimerStatsMeasureAndRecordTimer(&_stats[iTermMetalFrameDataStatMtExtractFromApp]);
     [_statHistograms[iTermMetalFrameDataStatMtExtractFromApp] addValue:duration * 1000];
+#endif
 }
 
 - (void)dispatchToPrivateQueue:(dispatch_queue_t)queue forPreparation:(void (^)(void))block {
+#if ENABLE_STATS
     const double duration = iTermPreciseTimerStatsMeasureAndRecordTimer(&_stats[iTermMetalFrameDataStatMainQueueTotal]);
     [_statHistograms[iTermMetalFrameDataStatMainQueueTotal] addValue:duration * 1000];
 
     iTermPreciseTimerStatsStartTimer(&_stats[iTermMetalFrameDataStatDispatchToPrivateQueue]);
+#endif
     dispatch_async(queue, ^{
+#if ENABLE_STATS
         iTermPreciseTimerStatsStartTimer(&self->_stats[iTermMetalFrameDataStatPrivateQueueTotal]);
         const double duration = iTermPreciseTimerStatsMeasureAndRecordTimer(&self->_stats[iTermMetalFrameDataStatDispatchToPrivateQueue]);
         [self->_statHistograms[iTermMetalFrameDataStatPrivateQueueTotal] addValue:duration * 1000];
-
+#endif
         block();
     });
 }
 
 - (void)dispatchToMainQueueForDrawing:(void (^)(void))block {
+#if ENABLE_STATS
     iTermPreciseTimerStatsStartTimer(&_stats[iTermMetalFrameDataStatDispatchToMainQueue]);
+#endif
     dispatch_async(dispatch_get_main_queue(), ^{
+#if ENABLE_STATS
         const double duration = iTermPreciseTimerStatsMeasureAndRecordTimer(&self->_stats[iTermMetalFrameDataStatDispatchToMainQueue]);
         [self->_statHistograms[iTermMetalFrameDataStatDispatchToMainQueue] addValue:duration * 1000];
-
+#endif
         block();
     });
 }
 
 - (void)dispatchToQueue:(dispatch_queue_t)queue forCompletion:(void (^)(void))block {
     self.status = @"completion handler, waiting for dispatch";
+#if ENABLE_STATS
     iTermPreciseTimerStatsStartTimer(&_stats[iTermMetalFrameDataStatDispatchToPrivateQueueForCompletion]);
+#endif
     dispatch_async(queue, ^{
         self.status = @"completion handler on private queue";
+#if ENABLE_STATS
         const double duration = iTermPreciseTimerStatsMeasureAndRecordTimer(&self->_stats[iTermMetalFrameDataStatDispatchToPrivateQueueForCompletion]);
         [self->_statHistograms[iTermMetalFrameDataStatDispatchToPrivateQueueForCompletion] addValue:duration * 1000];
+#endif
         block();
     });
 }
 
 - (void)willHandOffToGPU {
+#if ENABLE_STATS
     double duration;
     duration = iTermPreciseTimerStatsMeasureAndRecordTimer(&_stats[iTermMetalFrameDataStatCPU]);
     [_statHistograms[iTermMetalFrameDataStatCPU] addValue:duration * 1000];
@@ -214,6 +239,7 @@ static NSInteger gNextFrameDataNumber;
     [_statHistograms[iTermMetalFrameDataStatPrivateQueueTotal] addValue:duration * 1000];
 
     iTermPreciseTimerStatsStartTimer(&_stats[iTermMetalFrameDataStatGpu]);
+#endif
 }
 
 - (void)updateRenderEncoderWithRenderPassDescriptor:(MTLRenderPassDescriptor *)renderPassDescriptor
@@ -240,7 +266,7 @@ static NSInteger gNextFrameDataNumber;
         0.0,
         viewportSize.x * 2,
         viewportSize.y * 2,
-        -1.0,
+        0.0,
         1.0
     };
     [renderEncoder setViewport:viewport];
@@ -252,6 +278,27 @@ static NSInteger gNextFrameDataNumber;
     MTLRenderPassDescriptor *renderPassDescriptor = [MTLRenderPassDescriptor renderPassDescriptor];
     MTLRenderPassColorAttachmentDescriptor *colorAttachment = renderPassDescriptor.colorAttachments[0];
     colorAttachment.storeAction = MTLStoreActionStore;
+    // FB8143283
+    // .load is important because we re-use textures.
+    //
+    // For example, drawing antialiased text requires multiple passes when text overlaps text.
+    // We follow these steps:
+    // 1. Draw background to to Temporary texture
+    // 2. Copy Temporary to Intermediate
+    // 3. Draw text to Temporary, sampling from Intermediate to blend.
+    // 4. GOTO 2
+    // 5. Copy Temporary to Drawable
+    //
+    // If the loadAction is anything other than .load, the temporary texture's contents are
+    // destroyed between step 2 and 3.
+    //
+    // The documentation for MTLLoadActionLoad says "The GPU preserves the existing contents
+    // of the attachment at the start of the render pass." The reason this affects step 2 is
+    // that it creates a MTLBlitCommandEncoder, encodes the copy command, and invokes -endEncoding.
+    // At the time -endEncoding is called, the render pass ends. My interpretation is that
+    // at the beginning of the render pass to draw text in step 3, the load action is executed.
+    // By setting it to .load, the Temporary texture's contents survives.
+    colorAttachment.loadAction = MTLLoadActionLoad;
     colorAttachment.texture = fast ? [self.fullSizeTexturePool requestTextureOfSize:self.viewportSize] : nil;
     if (!colorAttachment.texture) {
         // Allocate a new texture.
@@ -295,7 +342,6 @@ static NSInteger gNextFrameDataNumber;
     }];
 }
 
-#if ENABLE_USE_TEMPORARY_TEXTURE
 - (void)createTemporaryRenderPassDescriptor {
     [self measureTimeForStat:iTermMetalFrameDataStatPqCreateTemporary ofBlock:^{
         assert(!self.temporaryRenderPassDescriptor);
@@ -306,7 +352,6 @@ static NSInteger gNextFrameDataNumber;
         [self->_debugInfo setTemporaryRenderPassDescriptor:self.temporaryRenderPassDescriptor];
     }];
 }
-#endif
 
 - (void)didCompleteWithAggregateStats:(iTermPreciseTimerStats *)aggregateStats
                            histograms:(NSArray<iTermHistogram *> *)aggregateHistograms
@@ -315,11 +360,10 @@ static NSInteger gNextFrameDataNumber;
     if (self.intermediateRenderPassDescriptor) {
         [self.fullSizeTexturePool returnTexture:self.intermediateRenderPassDescriptor.colorAttachments[0].texture];
     }
-#if ENABLE_USE_TEMPORARY_TEXTURE
     if (self.temporaryRenderPassDescriptor) {
         [self.fullSizeTexturePool returnTexture:self.temporaryRenderPassDescriptor.colorAttachments[0].texture];
     }
-#endif
+#if ENABLE_STATS
     double duration;
 
     duration = iTermPreciseTimerStatsMeasureAndRecordTimer(&_stats[iTermMetalFrameDataStatGpu]);
@@ -361,6 +405,7 @@ static NSInteger gNextFrameDataNumber;
         [aggregateHistograms[i] mergeFrom:_statHistograms[i]];
     }
     iTermPreciseTimerPeriodicLog([NSString stringWithFormat:@"%@: Metal Frame Data", owner], temp, iTermMetalFrameDataStatCount, 1, [iTermAdvancedSettingsModel logDrawingPerformance], aggregateHistograms);
+#endif  // ENABLE_STATS
 }
 
 - (__kindof iTermMetalRendererTransientState *)transientStateForRenderer:(NSObject *)renderer {
@@ -372,6 +417,7 @@ static NSInteger gNextFrameDataNumber;
 }
 
 - (void)mergeHistogram:(iTermHistogram *)histogramToMerge name:(NSString *)name {
+#if ENABLE_STATS
     if (!name) {
         return;
     }
@@ -387,9 +433,11 @@ static NSInteger gNextFrameDataNumber;
         }
         [hist mergeFrom:histogramToMerge];
     }
+#endif
 }
 
 - (NSString *)histogramsString {
+#if ENABLE_STATS
     NSMutableString *result = [NSMutableString string];
     @synchronized(sHistograms) {
         [[sHistograms.allKeys sortedArrayUsingSelector:@selector(compare:)] enumerateObjectsUsingBlock:^(NSString * _Nonnull name, NSUInteger idx, BOOL * _Nonnull stop) {
@@ -398,17 +446,24 @@ static NSInteger gNextFrameDataNumber;
         }];
     }
     return result;
+#else
+    return @"stats disabled";
+#endif
 }
 
 - (void)addStatsTo:(iTermPreciseTimerStats *)dest {
+#if ENABLE_STATS
     for (int i = 0; i < iTermMetalFrameDataStatCount; i++) {
         iTermPreciseTimerStatsRecord(&dest[i], _stats[i].mean * _stats[i].n, _stats[i].n);
     }
+#endif
 }
 
+#if ENABLE_STATS
 - (iTermPreciseTimerStats *)stats {
     return _stats;
 }
+#endif
 
 - (void)enqueueDrawCallsWithBlock:(void (^)(void))block {
 #if ENABLE_DISPATCH_TO_MAIN_QUEUE_FOR_ENQUEUEING_DRAW_CALLS
@@ -427,6 +482,7 @@ static NSInteger gNextFrameDataNumber;
         _cellConfiguration = [[iTermCellRenderConfiguration alloc] initWithViewportSize:self.viewportSize
                                                                                   scale:self.scale
                                                                      hasBackgroundImage:self.hasBackgroundImage
+                                                                           extraMargins:self.extraMargins
                                                                                cellSize:self.cellSize
                                                                               glyphSize:self.glyphSize
                                                                  cellSizeWithoutSpacing:self.cellSizeWithoutSpacing

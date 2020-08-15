@@ -30,6 +30,7 @@
 @property(nonatomic, assign) int cursorX;
 @property(nonatomic, assign) int cursorY;
 @property(nonatomic, assign) VT100GridCoord cursor;
+@property(nonatomic, readonly) BOOL haveScrollRegion;  // is there a left-right or top-bottom margin?
 @property(nonatomic, assign) VT100GridRange scrollRegionRows;
 @property(nonatomic, assign) VT100GridRange scrollRegionCols;
 @property(nonatomic, assign) BOOL useScrollRegionCols;
@@ -41,6 +42,8 @@
 @property(nonatomic, assign) screen_char_t savedDefaultChar;
 @property(nonatomic, assign) id<VT100GridDelegate> delegate;
 @property(nonatomic, assign) VT100GridCoord preferredCursorPosition;
+// Size of the grid if the cursor is outside the scroll region. Otherwise, size of the scroll region.
+@property(nonatomic, readonly) VT100GridSize sizeRespectingRegionConditionally;
 
 // Did the whole screen scroll up? Won't be reflected in dirty bits.
 @property(nonatomic, assign) BOOL haveScrolled;
@@ -245,6 +248,8 @@
 - (NSString *)compactLineDumpWithTimestamps;
 - (NSString *)compactLineDumpWithContinuationMarks;
 - (NSString *)compactDirtyDump;
+
+- (void)setContinuationMarkOnLine:(int)line to:(unichar)code ;
 
 // Returns the coordinate of the cell before this one. It respects scroll regions and double-width
 // characters.

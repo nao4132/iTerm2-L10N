@@ -19,7 +19,7 @@ NS_ASSUME_NONNULL_BEGIN
 iTermMouseReportingFrustrationDetectorDelegate,
 iTermURLActionHelperDelegate>
 
-- (void)arcInit;
+- (void)initARC;
 
 #pragma mark - Coordinate Space Conversions
 
@@ -69,11 +69,6 @@ iTermURLActionHelperDelegate>
 - (BOOL)setCursor:(NSCursor *)cursor;
 - (BOOL)mouseIsOverImageInEvent:(NSEvent *)event;
 
-#pragma mark - Mouse Reporting
-
-- (BOOL)xtermMouseReporting;
-- (BOOL)xtermMouseReportingAllowMouseWheel;
-- (BOOL)terminalWantsMouseReports;
 
 #pragma mark - Quicklook
 
@@ -87,6 +82,10 @@ iTermURLActionHelperDelegate>
 #pragma mark - Install Shell Integration
 
 - (IBAction)installShellIntegration:(nullable id)sender;
+
+#pragma mark - Mouse Reporting Frustration Detector
+
+- (void)didCopyToPasteboardWithControlSequence;
 
 @end
 

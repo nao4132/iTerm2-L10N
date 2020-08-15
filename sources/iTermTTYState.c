@@ -8,6 +8,7 @@
 #import "iTermTTYState.h"
 
 #import "DebugLogging.h"
+#import "iTermCLogging.h"
 
 #include <stdbool.h>
 #include <string.h>
@@ -91,7 +92,7 @@ static void iTermForceSetTerminalSize(int fd, PTYTaskSize taskSize) {
         .ws_ypixel = taskSize.pixelSize.height
     };
 
-    CLog("Set window size to cells=(%d x %d) pixels=(%d x %d)",
+    FDLog(LOG_DEBUG, "Set window size to cells=(%d x %d) pixels=(%d x %d)",
          winsize.ws_col,
          winsize.ws_row,
          winsize.ws_xpixel,
@@ -145,3 +146,9 @@ iTermTTYCellSize iTermTTYCellSizeMake(double width, double height) {
     return result;
 }
 
+int PTYTaskSizeEqual(PTYTaskSize lhs, PTYTaskSize rhs) {
+    return (lhs.pixelSize.width == rhs.pixelSize.width &&
+            lhs.pixelSize.height == rhs.pixelSize.height &&
+            lhs.cellSize.width == rhs.cellSize.width &&
+            lhs.cellSize.height == rhs.cellSize.height);
+}

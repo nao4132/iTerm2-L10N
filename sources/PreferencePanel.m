@@ -76,7 +76,6 @@
 #import "iTermApplication.h"
 #import "iTermApplicationDelegate.h"
 #import "iTermController.h"
-#import "iTermKeyBindingMgr.h"
 #import "iTermKeyMappingViewController.h"
 #import "iTermLaunchServices.h"
 #import "iTermPreferences.h"
@@ -90,6 +89,7 @@
 #import "NSArray+iTerm.h"
 #import "NSDictionary+iTerm.h"
 #import "NSFileManager+iTerm.h"
+#import "NSImage+iTerm.h"
 #import "NSPopUpButton+iTerm.h"
 #import "NSStringITerm.h"
 #import "NSView+iTerm.h"
@@ -336,6 +336,9 @@ static iTermPreferencesSearchEngine *gSearchEngine;
     IBOutlet NSTabViewItem *_advancedTabViewItem;
     IBOutlet NSToolbarItem *_flexibleSpaceToolbarItem;
     NSToolbarItem *_searchFieldToolbarItem;
+#ifdef MAC_OS_X_VERSION_10_16
+    NSSearchToolbarItem *_bigSurSearchFieldToolbarItem NS_AVAILABLE_MAC(10_16);
+#endif
     NSDictionary<NSString *, NSString *> *_keywords;
     NSDictionary<NSString *, id<iTermSearchableViewController>> *_keywordToViewController;
     // This class is not well named. It is a view controller for the window
@@ -390,10 +393,22 @@ static iTermPreferencesSearchEngine *gSearchEngine;
 #pragma mark - View layout
 
 - (void)awakeFromNib {
-    ITUpgradedNSAssert(self.isWindowLoaded, @"window not loaded in %@", NSStringFromSelector(_cmd));
+    ITAssertWithMessage(self.isWindowLoaded, @"window not loaded in %@", NSStringFromSelector(_cmd));
     [self.window setCollectionBehavior:NSWindowCollectionBehaviorMoveToActiveSpace];
     [_toolbar setSelectedItemIdentifier:[_globalToolbarItem itemIdentifier]];
 
+#ifdef MAC_OS_X_VERSION_10_16
+    if (@available(macOS 10.16, *)) {
+        self.window.toolbarStyle = NSWindowToolbarStylePreference;
+        _globalToolbarItem.image = [NSImage it_imageForSymbolName:@"gearshape" accessibilityDescription:@"General"];
+        _appearanceToolbarItem.image = [NSImage it_imageForSymbolName:@"eye" accessibilityDescription:@"Appearance"];
+        _keyboardToolbarItem.image = [NSImage it_imageForSymbolName:@"keyboard" accessibilityDescription:@"Keys"];
+        _arrangementsToolbarItem.image = [NSImage it_imageForSymbolName:@"macwindow.on.rectangle" accessibilityDescription:@"Arrangements"];
+        _bookmarksToolbarItem.image = [NSImage it_imageForSymbolName:@"person" accessibilityDescription:@"Profiles"];
+        _mouseToolbarItem.image = [NSImage it_imageForSymbolName:@"cursorarrow.motionlines" accessibilityDescription:@"Pointer"];
+        _advancedToolbarItem.image = [NSImage it_imageForSymbolName:@"gearshape.2" accessibilityDescription:@"Advanced"];
+    }
+#endif
     _globalTabViewItem.view = _generalPreferencesViewController.view;
     _appearanceTabViewItem.view = _appearancePreferencesViewController.view;
     _keyboardTabViewItem.view = _keysViewController.view;
@@ -588,10 +603,10 @@ andEditComponentWithIdentifier:(NSString *)identifier
 #pragma mark - NSWindowDelegate
 
 - (void)responderWillBecomeFirstResponder:(NSResponder *)responder {
-    NSSearchField *searchField = (NSSearchField *)_searchFieldToolbarItem.view;
+    NSSearchField *searchField = self.searchField;
     if (responder == searchField && searchField.stringValue.length > 0) {
         [self showScrimAndSERP];
-    } else {
+    } else if (responder != nil) {
         [self hideScrimAndSERP];
     }
 }
@@ -625,8 +640,8 @@ andEditComponentWithIdentifier:(NSString *)identifier
 }
 
 - (void)updateSERPOrigin {
-    NSPoint point = [self.window convertPointToScreen:[_searchFieldToolbarItem.view convertPoint:NSMakePoint(0, NSHeight(_searchFieldToolbarItem.view.bounds))
-                                                                                          toView:nil]];
+    NSPoint point = [self.window convertPointToScreen:[self.searchField convertPoint:NSMakePoint(0, NSHeight(self.searchField.bounds))
+                                                                              toView:nil]];
     point.y -= 1;
     [_serpWindowController.window setFrameTopLeftPoint:point];
 }
@@ -695,29 +710,49 @@ andEditComponentWithIdentifier:(NSString *)identifier
     return TRUE;
 }
 
+#ifdef MAC_OS_X_VERSION_10_16
+- (NSSearchToolbarItem *)bigSurSearchFieldToolbarItem NS_AVAILABLE_MAC(10_16){
+    if (!_bigSurSearchFieldToolbarItem) {
+        _bigSurSearchFieldToolbarItem = [[NSSearchToolbarItem alloc] initWithItemIdentifier:iTermPreferencePanelSearchFieldToolbarItemIdentifier];
+        _bigSurSearchFieldToolbarItem.label = @"Search";
+        _bigSurSearchFieldToolbarItem.searchField.delegate = self;
+    }
+    return _bigSurSearchFieldToolbarItem;
+}
+#endif
+
 - (NSArray *)orderedToolbarIdentifiers {
     if (!_globalToolbarItem) {
         return @[];
     }
-    return @[ [_globalToolbarItem itemIdentifier],
-              [_appearanceToolbarItem itemIdentifier],
-              [_bookmarksToolbarItem itemIdentifier],
-              [_keyboardToolbarItem itemIdentifier],
-              [_arrangementsToolbarItem itemIdentifier],
-              [_mouseToolbarItem itemIdentifier],
-              [_advancedToolbarItem itemIdentifier],
-              [_flexibleSpaceToolbarItem itemIdentifier],
-              iTermPreferencePanelSearchFieldToolbarItemIdentifier];
+    if (!_searchFieldToolbarItem) {
+        [self createSearchField];
+    }
+    NSArray *result = @[ [_globalToolbarItem itemIdentifier],
+                         [_appearanceToolbarItem itemIdentifier],
+                         [_bookmarksToolbarItem itemIdentifier],
+                         [_keyboardToolbarItem itemIdentifier],
+                         [_arrangementsToolbarItem itemIdentifier],
+                         [_mouseToolbarItem itemIdentifier],
+                         [_advancedToolbarItem itemIdentifier],
+                         [_flexibleSpaceToolbarItem itemIdentifier],
+                         _searchFieldToolbarItem.itemIdentifier];
+    return result;
 }
 
 - (void)createSearchField {
+#ifdef MAC_OS_X_VERSION_10_16
+    if (@available(macOS 10.16, *)) {
+        _searchFieldToolbarItem = self.bigSurSearchFieldToolbarItem;
+        return;
+    }
+#endif
     _searchFieldToolbarItem = [[NSToolbarItem alloc] initWithItemIdentifier:iTermPreferencePanelSearchFieldToolbarItemIdentifier];
 
     NSSearchField *searchField = [[NSSearchField alloc] init];
     searchField.delegate = self;
     [searchField sizeToFit];
 
-//    [_searchFieldToolbarItem setLabel:@"Search"];
     [_searchFieldToolbarItem setView:searchField];
 }
 
@@ -728,14 +763,16 @@ andEditComponentWithIdentifier:(NSString *)identifier
     if (!_searchFieldToolbarItem) {
         [self createSearchField];
     }
-    return @{ [_globalToolbarItem itemIdentifier]: _globalToolbarItem,
-              [_appearanceToolbarItem itemIdentifier]: _appearanceToolbarItem,
-              [_bookmarksToolbarItem itemIdentifier]: _bookmarksToolbarItem,
-              [_keyboardToolbarItem itemIdentifier]: _keyboardToolbarItem,
-              [_arrangementsToolbarItem itemIdentifier]: _arrangementsToolbarItem,
-              [_mouseToolbarItem itemIdentifier]: _mouseToolbarItem,
-              [_advancedToolbarItem itemIdentifier]: _advancedToolbarItem,
-              iTermPreferencePanelSearchFieldToolbarItemIdentifier: _searchFieldToolbarItem };
+    NSDictionary *dict =
+    @{ [_globalToolbarItem itemIdentifier]: _globalToolbarItem,
+       [_appearanceToolbarItem itemIdentifier]: _appearanceToolbarItem,
+       [_bookmarksToolbarItem itemIdentifier]: _bookmarksToolbarItem,
+       [_keyboardToolbarItem itemIdentifier]: _keyboardToolbarItem,
+       [_arrangementsToolbarItem itemIdentifier]: _arrangementsToolbarItem,
+       [_mouseToolbarItem itemIdentifier]: _mouseToolbarItem,
+       [_advancedToolbarItem itemIdentifier]: _advancedToolbarItem,
+       _searchFieldToolbarItem.itemIdentifier: _searchFieldToolbarItem };
+    return dict;
 }
 
 - (NSToolbarItem *)toolbar:(NSToolbar *)toolbar
@@ -896,8 +933,19 @@ andEditComponentWithIdentifier:(NSString *)identifier
 
 #pragma mark - NSSearchFieldDelegate
 
+- (NSSearchField *)searchField {
+#ifdef MAC_OS_X_VERSION_10_16
+    if (@available(macOS 10.16, *)) {
+        if (self.bigSurSearchFieldToolbarItem) {
+            return self.bigSurSearchFieldToolbarItem.searchField;
+        }
+    }
+#endif
+    return (NSSearchField *)_searchFieldToolbarItem.view;
+}
+
 - (void)controlTextDidChange:(NSNotification *)obj {
-    NSSearchField *searchField = (NSSearchField *)_searchFieldToolbarItem.view;
+    NSSearchField *searchField = self.searchField;
     if (searchField.stringValue.length == 0) {
         [self hideScrimAndSERP];
     } else {
@@ -930,8 +978,7 @@ andEditComponentWithIdentifier:(NSString *)identifier
 
 - (NSArray<iTermPreferencesSearchDocument *> *)searchResults {
     [self buildSearchEngineIfNeeded];
-    NSSearchField *searchField = (NSSearchField *)_searchFieldToolbarItem.view;
-    return [gSearchEngine documentsMatchingQuery:searchField.stringValue];
+    return [gSearchEngine documentsMatchingQuery:self.searchField.stringValue];
 }
 
 - (void)controlTextDidEndEditing:(NSNotification *)obj {
@@ -1029,9 +1076,8 @@ andEditComponentWithIdentifier:(NSString *)identifier
     [self selectTabForViewController:viewController];
     const BOOL waitForTabToSwitch = (tabViewItemBefore != _tabView.selectedTabViewItem);
     BOOL waitForInnerTabToSwitch = NO;
-    NSSearchField *searchField = (NSSearchField *)_searchFieldToolbarItem.view;
     _scrim.cutoutView = [viewController searchableViewControllerRevealItemForDocument:document
-                                                                             forQuery:searchField.stringValue
+                                                                             forQuery:self.searchField.stringValue
                                                                         willChangeTab:&waitForInnerTabToSwitch];
     if (switchingTabsOut) {
         *switchingTabsOut = waitForTabToSwitch;

@@ -26,6 +26,7 @@
 @class iTermQuickLookController;
 @class iTermSelection;
 @protocol iTermSemanticHistoryControllerDelegate;
+@protocol iTermSwipeHandler;
 @class iTermURLActionHelper;
 @class iTermVariableScope;
 @class MovingAverage;
@@ -55,6 +56,7 @@ typedef NS_ENUM(NSInteger, PTYCharType) {
 
 - (BOOL)xtermMouseReporting;
 - (BOOL)xtermMouseReportingAllowMouseWheel;
+- (BOOL)xtermMouseReportingAllowClicksAndDrags;
 - (BOOL)isPasting;
 - (void)queueKeyDown:(NSEvent *)event;
 - (void)keyDown:(NSEvent *)event;
@@ -76,6 +78,7 @@ typedef NS_ENUM(NSInteger, PTYCharType) {
 - (void)sendHexCode:(NSString *)codes;
 - (void)sendText:(NSString *)text;
 - (void)sendTextSlowly:(NSString *)text;
+- (void)textViewSelectionDidChangeToTruncatedString:(NSString *)maybeSelection;
 - (void)launchCoprocessWithCommand:(NSString *)command;
 - (void)insertText:(NSString *)string;
 - (PTYTask *)shell;
@@ -165,13 +168,14 @@ typedef NS_ENUM(NSInteger, PTYCharType) {
 - (void)textViewThinksUserIsTryingToSendArrowKeysWithScrollWheel:(BOOL)trying;
 
 // Update the text view's frame needed.
-- (void)textViewResizeFrameIfNeeded;
+- (BOOL)textViewResizeFrameIfNeeded;
 
 - (NSInteger)textViewUnicodeVersion;
 - (void)textViewDidRefresh;
 
 // The background color in the color map changed.
 - (void)textViewBackgroundColorDidChange;
+- (void)textViewProcessedBackgroundColorDidChange;
 
 // Describes the current user, host, and path.
 - (NSURL *)textViewCurrentLocation;
@@ -201,6 +205,14 @@ typedef NS_ENUM(NSInteger, PTYCharType) {
 - (BOOL)textViewTerminalBackgroundColorDeterminesWindowDecorationColor;
 - (void)textViewDidUpdateDropTargetVisibility;
 - (void)textViewDidDetectMouseReportingFrustration;
+- (BOOL)textViewCanBury;
+- (void)textViewFindOnPageLocationsDidChange;
+- (void)textViewFindOnPageSelectedResultDidChange;
+- (CGFloat)textViewBlend;
+- (NSEdgeInsets)textViewExtraMargins;
+- (id<iTermSwipeHandler>)textViewSwipeHandler;
+- (void)textViewAddContextMenuItems:(NSMenu *)menu;
+
 @end
 
 @interface iTermHighlightedRow : NSObject
@@ -328,9 +340,6 @@ typedef NS_ENUM(NSInteger, PTYCharType) {
 // Is this view in the key window?
 @property(nonatomic, readonly) BOOL isInKeyWindow;
 
-// Blending level for background color over background image
-@property(nonatomic, assign) float blend;
-
 // Used by tests to modify drawing helper. Called within -drawRect:.
 typedef void (^PTYTextViewDrawingHookBlock)(iTermTextDrawingHelper *);
 @property(nonatomic, copy) PTYTextViewDrawingHookBlock drawingHook;
@@ -378,6 +387,7 @@ typedef void (^PTYTextViewDrawingHookBlock)(iTermTextDrawingHelper *);
 @property (nonatomic, readonly) iTermURLActionHelper *urlActionHelper;
 
 @property (nonatomic, readonly) VT100GridCoord cursorCoord;
+@property (nonatomic, readonly) iTermFindOnPageHelper *findOnPageHelper;
 
 // Returns the size of a cell for a given font. hspace and vspace are multipliers and the width
 // and height.

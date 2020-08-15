@@ -82,6 +82,7 @@ NSString *const kTmuxWindowOpenerWindowOptionStyleValueFullScreen = @"FullScreen
     [_tabColors release];
     [_profile release];
     [_completion release];
+    [_unpausingWindowPanes release];
 
     [super dealloc];
 }
@@ -116,25 +117,37 @@ NSString *const kTmuxWindowOpenerWindowOptionStyleValueFullScreen = @"FullScreen
     return YES;
 }
 
-- (void)updateLayoutInTab:(PTYTab *)tab {
+- (void)unpauseWindowPanes:(NSArray<NSNumber *> *)windowPanes {
+    if (!windowPanes.count) {
+        return;
+    }
+    _unpausingWindowPanes = [windowPanes copy];
+    NSMutableArray<NSDictionary *> *commands = [NSMutableArray array];
+    for (NSNumber *wp in windowPanes) {
+        [self appendRequestsForWindowPane:wp toArray:commands];
+    }
+    [gateway_ sendCommandList:commands];
+}
+
+- (BOOL)updateLayoutInTab:(PTYTab *)tab {
     if (!self.layout) {
         DLog(@"Bad layout");
-        return;
+        return NO;
     }
     if (!self.controller) {
         DLog(@"No controller");
-        return;
+        return NO;
     }
     if (!self.gateway) {
         DLog(@"No gateway");
-        return;
+        return NO;
     }
 
     TmuxLayoutParser *parser = [TmuxLayoutParser sharedInstance];
     self.parseTree = [parser parsedLayoutFromString:self.layout];
     if (!self.parseTree) {
         [gateway_ abortWithErrorMessage:[NSString stringWithFormat:@"Error parsing layout %@", self.layout]];
-        return;
+        return NO;
     }
     NSSet *oldPanes = [NSSet setWithArray:[tab windowPanes]];
     NSMutableArray *cmdList = [NSMutableArray array];
@@ -147,24 +160,12 @@ NSString *const kTmuxWindowOpenerWindowOptionStyleValueFullScreen = @"FullScreen
     if (cmdList.count) {
         tabToUpdate_ = [tab retain];
         [gateway_ sendCommandList:cmdList];
-    } else {
-        [tab setTmuxLayout:self.parseTree
-            tmuxController:controller_
-                    zoomed:_zoomed];
-        if ([tab layoutIsTooLarge]) {
-            // The tab's root splitter is larger than the window's tabview.
-            // If there are no outstanding window resizes then setTmuxLayout:tmuxController:
-            // has called fitWindowToTabs:, and it's still too big, so shrink
-            // the layout.
-            for (TmuxController *controller in [[tab realParentWindow] uniqueTmuxControllers]) {
-                if ([controller hasOutstandingWindowResize]) {
-                    return;
-                }
-            }
-            DLog(@"Tab's root splitter is oversize. Fit layout to windows");
-            [controller_ fitLayoutToWindows];
-        }
+        return NO;
     }
+    [tab setTmuxLayout:self.parseTree
+        tmuxController:controller_
+                zoomed:_zoomed];
+    return YES;
 }
 
 #pragma mark - Private
@@ -185,9 +186,25 @@ NSString *const kTmuxWindowOpenerWindowOptionStyleValueFullScreen = @"FullScreen
     [cmdList addObject:[self dictForRequestHistoryForWindowPane:wp alt:YES]];
     [cmdList addObject:[self dictForDumpStateForWindowPane:wp]];
     [cmdList addObject:[self dictForGetPendingOutputForWindowPane:wp]];
+    if (gateway_.pauseModeEnabled) {
+        [cmdList addObject:[self dictToUnpauseWindowPane:wp]];
+    }
     if (self.minimumServerVersion.doubleValue >= 3) {
         [cmdList addObject:[self dictForGetUserVars:wp]];
     }
+}
+
+- (NSDictionary *)dictToUnpauseWindowPane:(NSNumber *)wp {
+    // If tmux is too old to support pause mode, this does nothing.
+    // If the pane isn't paused, this does nothing.
+    // If we are unpausing the pane at the user's behest, this is obviously important.
+    // The tricky case: if we got unpaused before accepting notifications, this unpauses the pane.
+    NSString *command = [NSString stringWithFormat:@"refresh-client -A '%%%@:continue'", wp];
+    return [gateway_ dictionaryForCommand:command
+                           responseTarget:self
+                         responseSelector:@selector(requestDidComplete)
+                           responseObject:nil
+                                    flags:kTmuxGatewayCommandShouldTolerateErrors];
 }
 
 - (NSDictionary *)dictToToggleZoomForWindow {
@@ -198,18 +215,19 @@ NSString *const kTmuxWindowOpenerWindowOptionStyleValueFullScreen = @"FullScreen
                            responseTarget:self
                          responseSelector:@selector(requestDidComplete)
                            responseObject:nil
-                                    flags:0];
+                                    flags:kTmuxGatewayCommandShouldTolerateErrors];
 }
 
 - (NSDictionary *)dictForGetPendingOutputForWindowPane:(NSNumber *)wp {
     ++pendingRequests_;
     DLog(@"Increment pending requests to %d", pendingRequests_);
+
     NSString *command = [NSString stringWithFormat:@"capture-pane -p -P -C -t \"%%%d\"", [wp intValue]];
     return [gateway_ dictionaryForCommand:command
                            responseTarget:self
                          responseSelector:@selector(getPendingOutputResponse:pane:)
                            responseObject:wp
-                                    flags:kTmuxGatewayCommandWantsData];
+                                    flags:kTmuxGatewayCommandWantsData | kTmuxGatewayCommandShouldTolerateErrors];
 }
 
 - (NSDictionary *)dictForGetUserVars:(NSNumber *)wp {
@@ -221,7 +239,7 @@ NSString *const kTmuxWindowOpenerWindowOptionStyleValueFullScreen = @"FullScreen
                            responseTarget:self
                          responseSelector:@selector(getUserVarsResponse:pane:)
                            responseObject:wp
-                                    flags:0];
+                                    flags:kTmuxGatewayCommandShouldTolerateErrors];
 }
 
 - (NSDictionary *)dictForDumpStateForWindowPane:(NSNumber *)wp {
@@ -233,14 +251,19 @@ NSString *const kTmuxWindowOpenerWindowOptionStyleValueFullScreen = @"FullScreen
                            responseTarget:self
                          responseSelector:@selector(dumpStateResponse:pane:)
                            responseObject:wp
-                                    flags:0];
+                                    flags:kTmuxGatewayCommandShouldTolerateErrors];
 }
 
- - (NSDictionary *)dictForRequestHistoryForWindowPane:(NSNumber *)wp
-                        alt:(BOOL)alternate {
+- (NSDictionary *)dictForRequestHistoryForWindowPane:(NSNumber *)wp
+                                                 alt:(BOOL)alternate {
     ++pendingRequests_;
     DLog(@"Increment pending requests to %d", pendingRequests_);
-    NSString *command = [NSString stringWithFormat:@"capture-pane -peqJ %@-t \"%%%d\" -S -%d",
+    NSString *maybeN = @"";
+    if (self.minimumServerVersion && [self.minimumServerVersion compare:[NSDecimalNumber decimalNumberWithString:@"3.1"]] != NSOrderedAscending) {
+        maybeN = @"N";
+    }
+    NSString *command = [NSString stringWithFormat:@"capture-pane -peqJ%@ %@-t \"%%%d\" -S -%d",
+                         maybeN,
                          (alternate ? @"-a " : @""), [wp intValue], self.maxHistory];
     return [gateway_ dictionaryForCommand:command
                            responseTarget:self
@@ -249,13 +272,35 @@ NSString *const kTmuxWindowOpenerWindowOptionStyleValueFullScreen = @"FullScreen
                                            wp,
                                            [NSNumber numberWithBool:alternate],
                                            nil]
-                                    flags:0];
+                                    flags:kTmuxGatewayCommandShouldTolerateErrors];
+}
+
+- (void)didReceiveError {
+    _errorCount += 1;
+    if (pendingRequests_ - _errorCount == 0) {
+        [self finishErroneously];
+    }
+}
+
+- (void)finishErroneously {
+    if (self.target) {
+        [self.target performSelector:self.selector
+                          withObject:self];
+    }
+    if (self.completion) {
+        self.completion(windowIndex_);
+    }
 }
 
 // Command response handler for dump-history
 // info is an array: [window pane number, isAlternate flag]
 - (void)dumpHistoryResponse:(NSString *)response
            paneAndAlternate:(NSArray *)info {
+    if (!response) {
+        [self didReceiveError];
+        return;
+    }
+
     NSNumber *wp = [info objectAtIndex:0];
     NSNumber *alt = [info objectAtIndex:1];
     NSArray *history = [[TmuxHistoryParser sharedInstance] parseDumpHistoryResponse:response
@@ -276,6 +321,11 @@ NSString *const kTmuxWindowOpenerWindowOptionStyleValueFullScreen = @"FullScreen
     [self requestDidComplete];
 }
 
+- (NSArray<NSData *> *)historyLinesForWindowPane:(int)wp alternateScreen:(BOOL)altScreen {
+    NSDictionary *dict = altScreen ? altHistories_ : histories_;
+    return dict[@(wp)];
+}
+
 static BOOL IsOctalDigit(char c) {
     return c >= '0' && c <= '7';
 }
@@ -293,6 +343,11 @@ static int OctalValue(const char *bytes) {
 }
 
 - (void)getPendingOutputResponse:(NSData *)response pane:(NSNumber *)wp {
+    if (!response) {
+        [self didReceiveError];
+        return;
+    }
+
     const char *bytes = response.bytes;
     NSMutableData *pending = [NSMutableData data];
     for (int i = 0; i < response.length; i++) {
@@ -318,7 +373,16 @@ static int OctalValue(const char *bytes) {
     [self requestDidComplete];
 }
 
+- (NSDictionary *)stateForWindowPane:(int)wp {
+    return states_[@(wp)];
+}
+
 - (void)getUserVarsResponse:(NSString *)response pane:(NSNumber *)wp {
+    if (!response) {
+        [self didReceiveError];
+        return;
+    }
+
     if (wp) {
         [self.controller setEncodedUserVars:response forPane:wp.intValue];
     }
@@ -326,107 +390,144 @@ static int OctalValue(const char *bytes) {
 }
 
 - (void)dumpStateResponse:(NSString *)response pane:(NSNumber *)wp {
+    if (!response) {
+        [self didReceiveError];
+        return;
+    }
+
     NSDictionary *state = [[TmuxStateParser sharedInstance] parsedStateFromString:response
                                                                         forPaneId:[wp intValue]];
     [states_ setObject:state forKey:wp];
     [self requestDidComplete];
 }
 
+- (void)didResizePane:(NSString *)response {
+    if (!response) {
+        [self didReceiveError];
+        return;
+    }
+    [self requestDidComplete];
+}
+
 - (void)requestDidComplete {
     --pendingRequests_;
-    DLog(@"requestDidComplete. Pending requests is now %d", pendingRequests_);
-    if (pendingRequests_ == 0) {
-        NSWindowController<iTermWindowController> *term = nil;
-        BOOL isNewWindow = NO;
-        if (!tabToUpdate_) {
-            DLog(@"Have no tab to update.");
-            if (![self.profile[KEY_PREVENT_TAB] boolValue]) {
-                term = [self.controller windowWithAffinityForWindowId:self.windowIndex];
-                DLog(@"Term with affinity is %@", term);
-            }
-        } else {
-            term = [tabToUpdate_ realParentWindow];
-            DLog(@"Using window of tabToUpdate: %@", term);
-        }
-        if (!term) {
-            BOOL useOriginalWindow =
-                [iTermPreferences intForKey:kPreferenceKeyOpenTmuxWindowsIn] == kOpenTmuxWindowsAsNativeTabsInExistingWindow;
-            if (self.initial && useOriginalWindow) {
-                term = [gateway_ window];
-                DLog(@"Use original window %@", term);
-            }
-            if (!term) {
-                term = [[iTermController sharedInstance] openTmuxIntegrationWindowUsingProfile:self.profile];
-                isNewWindow = YES;
-                DLog(@"Opened a new window %@", term);
-            }
-        }
-        NSMutableDictionary *parseTree = [[TmuxLayoutParser sharedInstance] parsedLayoutFromString:self.layout];
-        if (!parseTree) {
-            [gateway_ abortWithErrorMessage:[NSString stringWithFormat:@"Error parsing layout %@", self.layout]];
+    if (_errorCount) {
+        if (pendingRequests_ - _errorCount == 0) {
+            [self finishErroneously];
             return;
         }
-        DLog(@"Parse tree: %@", parseTree);
-        [self decorateParseTree:parseTree];
-        DLog(@"Decorated parse tree: %@", parseTree);
-        if (tabToUpdate_) {
-            DLog(@"Updating existing tab");
-            [tabToUpdate_ setTmuxLayout:parseTree
-                         tmuxController:controller_
-                                 zoomed:@NO];
-            if ([tabToUpdate_ layoutIsTooLarge]) {
-                DLog(@"layout is too large! fit the layout to windows");
-                [controller_ fitLayoutToWindows];
-            }
-        } else {
-            if (![self.controller window:windowIndex_]) {
-                DLog(@"Calling loadTmuxLayout");
-                // Safety valve: don't open an existing tmux window.
-                [term loadTmuxLayout:parseTree
-                              window:windowIndex_
-                      tmuxController:controller_
-                                name:name_];
+    }
+    DLog(@"requestDidComplete. Pending requests is now %d", pendingRequests_);
+    if (pendingRequests_ != 0) {
+        return;
+    }
+    if (_unpausingWindowPanes) {
+        [self.target performSelector:self.selector
+                          withObject:self];
+        return;
+    }
+    NSWindowController<iTermWindowController> *term = nil;
+    BOOL isNewWindow = NO;
+    if (!tabToUpdate_) {
+        DLog(@"Have no tab to update.");
+        if (![self.profile[KEY_PREVENT_TAB] boolValue]) {
+            term = [self.controller windowWithAffinityForWindowId:self.windowIndex];
+            DLog(@"Term with affinity is %@", term);
+        }
+    } else {
+        term = [tabToUpdate_ realParentWindow];
+        DLog(@"Using window of tabToUpdate: %@", term);
+    }
+    const BOOL useOriginalWindow = [iTermPreferences intForKey:kPreferenceKeyOpenTmuxWindowsIn] == kOpenTmuxWindowsAsNativeTabsInExistingWindow;
+    NSInteger initialTabs = term.tabs.count;
+    if (!term) {
+        if (self.initial && useOriginalWindow) {
+            term = [gateway_ window];
+            initialTabs = term.tabs.count;
+            DLog(@"Use original window %@", term);
+        }
+        if (!term) {
+            term = [[iTermController sharedInstance] openTmuxIntegrationWindowUsingProfile:self.profile];
+            isNewWindow = YES;
+            DLog(@"Opened a new window %@", term);
+        }
+    }
+    NSMutableDictionary *parseTree = [[TmuxLayoutParser sharedInstance] parsedLayoutFromString:self.layout];
+    if (!parseTree) {
+        [gateway_ abortWithErrorMessage:[NSString stringWithFormat:@"Error parsing layout %@", self.layout]];
+        return;
+    }
+    DLog(@"Parse tree: %@", parseTree);
+    [self decorateParseTree:parseTree];
+    DLog(@"Decorated parse tree: %@", parseTree);
+    NSValue *windowPos = nil;
+    if (tabToUpdate_) {
+        DLog(@"Updating existing tab");
+        [tabToUpdate_ setTmuxLayout:parseTree
+                     tmuxController:controller_
+                             zoomed:@NO];
+        if ([tabToUpdate_ updatedTmuxLayoutRequiresAdjustment]) {
+            DLog(@"layout requires adjustment! fit the layout to windows");
+            [controller_ fitLayoutToWindows];
+        }
+    } else {
+        if (![self.controller window:windowIndex_]) {
+            DLog(@"Calling loadTmuxLayout");
+            // Safety valve: don't open an existing tmux window.
+            [term loadTmuxLayout:parseTree
+                          window:windowIndex_
+                  tmuxController:controller_
+                            name:name_];
 
-                // Check if we know the position for the window
-                NSArray *panes = [[TmuxLayoutParser sharedInstance] windowPanesInParseTree:parseTree];
-                NSValue *windowPos = [self.controller positionForWindowWithPanes:panes windowID:windowIndex_];
+            // Check if we know the position for the window
+            NSArray *panes = [[TmuxLayoutParser sharedInstance] windowPanesInParseTree:parseTree];
+            windowPos = [[[self.controller positionForWindowWithPanes:panes windowID:windowIndex_] retain] autorelease];
+
+            // This is to handle the case where we couldn't create a window as
+            // large as we were asked to (for instance, if the gateway is full-
+            // screen).
+            DLog(@"Calling windowDidResize: in case the window was smaller than we'd hoped");
+            [controller_ windowDidResize:term];
+
+            // Check the window flags
+            NSString *windowId = [NSString stringWithFormat:@"%d", windowIndex_];
+            NSDictionary *flags = _windowOptions[windowId];
+            NSString *style = flags[kTmuxWindowOpenerWindowOptionStyle];
+            BOOL wantFullScreen = [style isEqual:kTmuxWindowOpenerWindowOptionStyleValueFullScreen];
+            BOOL isFullScreen = [term anyFullScreen];
+            if (wantFullScreen && !isFullScreen) {
                 if (windowPos) {
                     [[term window] setFrameOrigin:[windowPos pointValue]];
+                    windowPos = nil;
                 }
-
-                // This is to handle the case where we couldn't create a window as
-                // large as we were asked to (for instance, if the gateway is full-
-                // screen).
-                DLog(@"Calling windowDidResize: in case the window was smaller than we'd hoped");
-                [controller_ windowDidResize:term];
-
-                // Check the window flags
-                NSString *windowId = [NSString stringWithFormat:@"%d", windowIndex_];
-                NSDictionary *flags = _windowOptions[windowId];
-                NSString *style = flags[kTmuxWindowOpenerWindowOptionStyle];
-                BOOL wantFullScreen = [style isEqual:kTmuxWindowOpenerWindowOptionStyleValueFullScreen];
-                BOOL isFullScreen = [term anyFullScreen];
-                if (wantFullScreen && !isFullScreen) {
-                    if ([iTermAdvancedSettingsModel serializeOpeningMultipleFullScreenWindows]) {
-                        [[iTermController sharedInstance] makeTerminalWindowFullScreen:term];
-                    } else {
-                        [term toggleFullScreenMode:nil];
-                    }
+                if ([iTermAdvancedSettingsModel serializeOpeningMultipleFullScreenWindows]) {
+                    [[iTermController sharedInstance] makeTerminalWindowFullScreen:term];
+                } else {
+                    [term toggleFullScreenMode:nil];
                 }
-            } else {
-                DLog(@"Not calling loadTmuxLayout");
             }
+        } else {
+            DLog(@"Not calling loadTmuxLayout");
         }
-        if (self.target) {
-            [self.target performSelector:self.selector
-                              withObject:self];
+    }
+    if (self.target) {
+        [self.target performSelector:self.selector
+                          withObject:self];
+    }
+    DLog(@"useOriginalWindow=%@ initialTabs=%@ initial=%@ windowPos=%@",
+         @(useOriginalWindow), @(initialTabs), @(self.initial), windowPos);
+    if (windowPos) {
+        if (!useOriginalWindow || initialTabs < 2 || !self.initial) {
+            // Do this after calling the completion selector because it may affect the window's
+            // frame (e.g., when burying a session and that causes the number of tabs to change).
+            [[term window] setFrameOrigin:[windowPos pointValue]];
         }
-        if (isNewWindow) {
-            [[iTermController sharedInstance] didFinishCreatingTmuxWindow:(PseudoTerminal *)term];
-        }
-        if (self.completion) {
-            self.completion(windowIndex_);
-        }
+    }
+    if (isNewWindow) {
+        [[iTermController sharedInstance] didFinishCreatingTmuxWindow:(PseudoTerminal *)term];
+    }
+    if (self.completion) {
+        self.completion(windowIndex_);
     }
 }
 

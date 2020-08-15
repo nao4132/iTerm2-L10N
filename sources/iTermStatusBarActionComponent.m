@@ -102,21 +102,21 @@ static NSString *const iTermStatusBarActionKey = @"action";
     }
 }
 
-- (CGFloat)statusBarComponentVerticalOffset {
-    return 0;
-}
-
 - (void)setDelegate:(id<iTermStatusBarComponentDelegate>)delegate {
     [super setDelegate:delegate];
     [self updateTitleInButton];
 }
 
 - (NSImage *)statusBarComponentIcon {
-    return [NSImage it_imageNamed:@"StatusBarIconAction" forClass:[self class]];
+    return [NSImage it_cacheableImageNamed:@"StatusBarIconAction" forClass:[self class]];
 }
 
 - (BOOL)statusBarComponentHandlesClicks {
     return YES;
+}
+
+- (BOOL)statusBarComponentIsEmpty {
+    return NO;
 }
 
 - (void)statusBarComponentDidClickWithView:(NSView *)view {
@@ -130,7 +130,7 @@ static NSString *const iTermStatusBarActionKey = @"action";
 @implementation iTermStatusBarActionMenuComponent
 
 - (NSImage *)statusBarComponentIcon {
-    return [NSImage it_imageNamed:@"StatusBarIconAction" forClass:[self class]];
+    return [NSImage it_cacheableImageNamed:@"StatusBarIconAction" forClass:[self class]];
 }
 
 - (NSString *)statusBarComponentShortDescription {
@@ -164,6 +164,10 @@ static NSString *const iTermStatusBarActionKey = @"action";
 
 - (BOOL)statusBarComponentHandlesClicks {
     return YES;
+}
+
+- (BOOL)statusBarComponentIsEmpty {
+    return [[[iTermActionsModel sharedInstance] actions] count] == 0;
 }
 
 - (void)statusBarComponentDidClickWithView:(NSView *)view {

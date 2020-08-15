@@ -69,6 +69,10 @@ NS_CLASS_AVAILABLE(10_11, NA)
 @property (nonatomic, readonly) NSEdgeInsets edgeInsets;
 @property (nonatomic, readonly) BOOL hasBackgroundImage;
 @property (nonatomic, readonly) CGFloat transparencyAlpha;
+@property (nonatomic, readonly) CGFloat blend;
+@property (nonatomic, readonly) NSEdgeInsets extraMargins;
+@property (nonatomic, readonly) BOOL thinStrokesForTimestamps;
+@property (nonatomic, readonly) BOOL asciiAntiAliased;
 
 // Initialize sketchPtr to 0. The number of set bits estimates the unique number of color combinations.
 - (void)metalGetGlyphKeys:(iTermMetalGlyphKey *)glyphKeys
@@ -80,8 +84,7 @@ NS_CLASS_AVAILABLE(10_11, NA)
                       row:(int)row
                     width:(int)width
            drawableGlyphs:(int *)drawableGlyphsPtr
-                     date:(out NSDate * _Nonnull * _Nonnull)date
-                     sketch:(out NSUInteger *)sketchPtr;
+                     date:(out NSDate * _Nonnull * _Nonnull)date;
 
 - (iTermCharacterSourceDescriptor *)characterSourceDescriptorForASCIIWithGlyphSize:(CGSize)glyphSize
                                                                        asciiOffset:(CGSize)asciiOffset;

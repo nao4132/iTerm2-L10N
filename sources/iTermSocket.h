@@ -14,11 +14,12 @@
 @interface iTermSocket : NSObject
 @property (nonatomic, readonly) int fd;
 
-+ (instancetype)tcpIPV4Socket;
++ (instancetype)unixDomainSocket;
 
 - (void)setReuseAddr:(BOOL)reuse;
 - (BOOL)bindToAddress:(iTermSocketAddress *)address;
-- (BOOL)listenWithBacklog:(int)backlog accept:(void (^)(int, iTermSocketAddress *))acceptBlock;
+// If nonnil, the number is the effective user ID of the connecting process.
+- (BOOL)listenWithBacklog:(int)backlog accept:(void (^)(int, iTermSocketAddress *, NSNumber *))acceptBlock;
 - (void)close;
 
 @end

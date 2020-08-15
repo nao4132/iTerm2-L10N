@@ -9,6 +9,7 @@
 
 #import "DebugLogging.h"
 #import "iTermAdvancedSettingsModel.h"
+#import "iTermAlphaBlendingHelper.h"
 #import "iTermBoxDrawingBezierCurveFactory.h"
 #import "iTermCharacterSource.h"
 #import "iTermColorMap.h"
@@ -111,6 +112,7 @@ typedef struct {
     NSDictionary<NSNumber *, NSIndexSet *> *_rowToAnnotationRanges;  // Row on screen to characters with annotation underline on that row.
     NSArray<iTermHighlightedRow *> *_highlightedRows;
     NSTimeInterval _startTime;
+    NSEdgeInsets _extraMargins;
 }
 @end
 
@@ -147,14 +149,14 @@ typedef struct {
                        glue:(id<iTermMetalPerFrameStateDelegate>)glue {
     iTermTextDrawingHelper *drawingHelper = textView.drawingHelper;
 
-    [_configuration loadSettingsWithDrawingHelper:drawingHelper textView:textView];
+    [_configuration loadSettingsWithDrawingHelper:drawingHelper textView:textView glue:glue];
     [self loadSettingsWithDrawingHelper:drawingHelper textView:textView];
     [self loadMetricsWithDrawingHelper:drawingHelper textView:textView screen:screen];
     [self loadLinesWithDrawingHelper:drawingHelper textView:textView screen:screen];
     [self loadBadgeWithDrawingHelper:drawingHelper textView:textView];
     [self loadBlinkingCursorWithTextView:textView glue:glue];
     [self loadCursorInfoWithDrawingHelper:drawingHelper textView:textView];
-    [self loadBackgroundImageWithTextView:textView];
+    [self loadBackgroundImageWithGlue:glue];
     [self loadMarkedTextWithDrawingHelper:drawingHelper];
     [self loadIndicatorsFromTextView:textView];
     [self loadHighlightedRowsFromTextView:textView];
@@ -185,6 +187,7 @@ typedef struct {
     _lastVisibleAbsoluteLineNumber = _visibleRange.end.y + totalScrollbackOverflow;
     _relativeFrame = textView.delegate.textViewRelativeFrame;
     _containerRect = textView.delegate.textViewContainerRect;
+    _extraMargins = textView.delegate.textViewExtraMargins;
 }
 
 - (void)loadLinesWithDrawingHelper:(iTermTextDrawingHelper *)drawingHelper
@@ -317,8 +320,8 @@ typedef struct {
     }
 }
 
-- (void)loadBackgroundImageWithTextView:(PTYTextView *)textView {
-    _backgroundImage = [textView.delegate textViewBackgroundImage];
+- (void)loadBackgroundImageWithGlue:(id<iTermMetalPerFrameStateDelegate>)glue {
+    _backgroundImage = [glue backgroundImage];
 }
 
 // Replace screen contents with input method editor.
@@ -359,6 +362,10 @@ typedef struct {
 
 - (CGFloat)transparencyAlpha {
     return _configuration->_transparencyAlpha;
+}
+
+- (CGFloat)blend {
+    return _configuration->_backgroundImageBlend;
 }
 
 - (BOOL)hasBackgroundImage {
@@ -491,6 +498,7 @@ ambiguousIsDoubleWidth:(BOOL)ambiguousIsDoubleWidth
             c.backgroundColorMode = ColorModeAlternate;
 
             c.underline = YES;
+            c.underlineStyle = VT100UnderlineStyleSingle;
             c.strikethrough = NO;
             
             if (i + 1 < len &&
@@ -625,9 +633,19 @@ ambiguousIsDoubleWidth:(BOOL)ambiguousIsDoubleWidth
 - (vector_float4)processedDefaultBackgroundColor {
     float alpha;
     if (iTermTextIsMonochrome()) {
-        alpha = _backgroundImage ? 1 - _configuration->_backgroundImageBlending : _configuration->_transparencyAlpha;
+        if (_backgroundImage) {
+            alpha = iTermAlphaValueForTopView(1 - _configuration->_transparencyAlpha,
+                                              _configuration->_backgroundImageBlend);
+        } else {
+            alpha = iTermAlphaValueForTopView(1 - _configuration->_transparencyAlpha, 0);
+        }
     } else {
-        alpha = _backgroundImage ? 1 - _configuration->_backgroundImageBlending : 1;
+        // Can assume transparencyAlpha is 1
+        if (@available(macOS 10.14, *)) {
+            alpha = iTermAlphaValueForTopView(0, _configuration->_backgroundImageBlend);
+        } else {
+            alpha = _backgroundImage ? 1 - _configuration->_backgroundColorAlpha : 1;
+        }
     }
     return simd_make_float4((float)_configuration->_processedDefaultBackgroundColor.redComponent,
                             (float)_configuration->_processedDefaultBackgroundColor.greenComponent,
@@ -658,8 +676,7 @@ ambiguousIsDoubleWidth:(BOOL)ambiguousIsDoubleWidth
                       row:(int)row
                     width:(int)width
            drawableGlyphs:(int *)drawableGlyphsPtr
-                     date:(out NSDate **)datePtr
-                   sketch:(out NSUInteger *)sketchPtr {
+                     date:(out NSDate **)datePtr {
     NSCharacterSet *boxCharacterSet = [iTermBoxDrawingBezierCurveFactory boxDrawingCharactersWithBezierPathsIncludingPowerline:_configuration->_useNativePowerlineGlyphs];
     if (_configuration->_timestampsEnabled) {
         *datePtr = _rows[row]->_date;
@@ -677,13 +694,9 @@ ambiguousIsDoubleWidth:(BOOL)ambiguousIsDoubleWidth
     int previousImageCode = -1;
     VT100GridCoord previousImageCoord;
     NSIndexSet *annotatedIndexes = _rowToAnnotationRanges[@(row)];
-    NSUInteger sketch = *sketchPtr;
     vector_float4 lastUnprocessedBackgroundColor = simd_make_float4(0, 0, 0, 0);
     BOOL lastSelected = NO;
     const BOOL underlineHyperlinks = [iTermAdvancedSettingsModel underlineHyperlinks];
-    // Prime numbers chosen more or less arbitrarily.
-    const vector_float4 bmul = simd_make_float4(7, 11, 13, 1) * 255;
-    const vector_float4 fmul = simd_make_float4(17, 19, 23, 1) * 255;
     iTermMetalPerFrameStateCaches caches;
     memset(&caches, 0, sizeof(caches));
 
@@ -737,7 +750,12 @@ ambiguousIsDoubleWidth:(BOOL)ambiguousIsDoubleWidth
             backgroundRLE[previousRLE].count++;
             unprocessedBackgroundColor = lastUnprocessedBackgroundColor;
         } else {
-            unprocessedBackgroundColor = [self unprocessedColorForBackgroundColorKey:&backgroundKey];
+            BOOL enableBlending = YES;
+            if (@available(macOS 10.14, *)) {
+                enableBlending = NO;
+            }
+            unprocessedBackgroundColor = [self unprocessedColorForBackgroundColorKey:&backgroundKey
+                                                                      enableBlending:enableBlending];
             lastUnprocessedBackgroundColor = unprocessedBackgroundColor;
             // The unprocessed color is needed for minimum contrast computation for text color.
             backgroundColor = [_configuration->_colorMap fastProcessedBackgroundColorForBackgroundColor:unprocessedBackgroundColor];
@@ -803,8 +821,11 @@ ambiguousIsDoubleWidth:(BOOL)ambiguousIsDoubleWidth
         if (annotated) {
             attributes[x].underlineStyle = iTermMetalGlyphAttributesUnderlineSingle;
         } else if (line[x].underline || inUnderlinedRange) {
+            const BOOL curly = line[x].underline && line[x].underlineStyle == VT100UnderlineStyleCurly;
             if (line[x].urlCode) {
                 attributes[x].underlineStyle = iTermMetalGlyphAttributesUnderlineDouble;
+            } else if (curly && !inUnderlinedRange) {
+                attributes[x].underlineStyle = iTermMetalGlyphAttributesUnderlineCurly;
             } else {
                 attributes[x].underlineStyle = iTermMetalGlyphAttributesUnderlineSingle;
             }
@@ -841,10 +862,15 @@ ambiguousIsDoubleWidth:(BOOL)ambiguousIsDoubleWidth
             }
             glyphKeys[x].drawable = NO;
             glyphKeys[x].combiningSuccessor = 0;
-        } else if (annotated || characterIsDrawable) {
+        } else if (attributes[x].underlineStyle != iTermMetalGlyphAttributesUnderlineNone || characterIsDrawable) {
             lastDrawableGlyph = x;
-            glyphKeys[x].code = line[x].code;
-            glyphKeys[x].isComplex = line[x].complexChar;
+            if (characterIsDrawable) {
+                glyphKeys[x].code = line[x].code;
+                glyphKeys[x].isComplex = line[x].complexChar;
+            } else {
+                glyphKeys[x].code = ' ';
+                glyphKeys[x].isComplex = NO;
+            }
             glyphKeys[x].boxDrawing = isBoxDrawingCharacter;
             glyphKeys[x].thinStrokes = [self useThinStrokesWithAttributes:&attributes[x]];
 
@@ -865,15 +891,7 @@ ambiguousIsDoubleWidth:(BOOL)ambiguousIsDoubleWidth
             glyphKeys[x].drawable = NO;
             glyphKeys[x].combiningSuccessor = 0;
         }
-
-        // This is my attempt at a fast sketch that estimates the number of unique combinations of
-        // foreground and background color.
-        const vector_float4 sum = attributes[x].backgroundColor * bmul + attributes[x].foregroundColor * fmul;
-        const unsigned int bit = ((unsigned int)(sum.x + sum.y + sum.z)) & 63;
-        sketch |= (1ULL << bit);
     }
-
-    *sketchPtr = sketch;
 
     *rleCount = rles;
     *drawableGlyphsPtr = lastDrawableGlyph + 1;
@@ -939,7 +957,8 @@ ambiguousIsDoubleWidth:(BOOL)ambiguousIsDoubleWidth
     }
 }
 
-- (vector_float4)unprocessedColorForBackgroundColorKey:(iTermBackgroundColorKey *)colorKey {
+- (vector_float4)unprocessedColorForBackgroundColorKey:(iTermBackgroundColorKey *)colorKey
+                                        enableBlending:(BOOL)enableBlending {
     vector_float4 color = { 0, 0, 0, 0 };
     CGFloat alpha = _configuration->_transparencyAlpha;
     if (colorKey->selected) {
@@ -958,7 +977,8 @@ ambiguousIsDoubleWidth:(BOOL)ambiguousIsDoubleWidth
             .isMatch = NO,
             .image = NO
         };
-        return [self unprocessedColorForBackgroundColorKey:&temp];
+        return [self unprocessedColorForBackgroundColorKey:&temp
+                                            enableBlending:enableBlending];
     } else if (colorKey->isMatch) {
         color = (vector_float4){ 1, 1, 0, 1 };
     } else {
@@ -992,7 +1012,18 @@ ambiguousIsDoubleWidth:(BOOL)ambiguousIsDoubleWidth
         }
 
         if (defaultBackground && _backgroundImage) {
-            alpha = 1 - _configuration->_backgroundImageBlending;
+            if (enableBlending) {
+                // Legacy
+                alpha = 1 - _configuration->_backgroundImageBlend;
+            } else {
+                // 10.14+
+                alpha = iTermAlphaValueForTopView(1 - _configuration->_transparencyAlpha,
+                                                  _configuration->_backgroundImageBlend);
+            }
+        } else if (!_configuration->_reverseVideo && defaultBackground && !enableBlending) {
+            // 10.14+
+            alpha = iTermAlphaValueForTopView(1 - _configuration->_transparencyAlpha,
+                                              _configuration->_backgroundImageBlend);
         }
     }
     color.w = alpha;
@@ -1079,7 +1110,7 @@ ambiguousIsDoubleWidth:(BOOL)ambiguousIsDoubleWidth
         case ColorModeInvalid:
             return kColorMapInvalid;
     }
-    ITUpgradedNSAssert(ok, @"Bogus color mode %d", (int)theMode);
+    ITAssertWithMessage(ok, @"Bogus color mode %d", (int)theMode);
     return kColorMapInvalid;
 }
 
@@ -1217,6 +1248,29 @@ ambiguousIsDoubleWidth:(BOOL)ambiguousIsDoubleWidth
                       1 - _relativeFrame.size.height - _relativeFrame.origin.y,
                       _relativeFrame.size.width,
                       _relativeFrame.size.height);
+}
+
+- (NSEdgeInsets)extraMargins {
+    return _extraMargins;
+}
+
+- (BOOL)thinStrokesForTimestamps {
+    switch (_configuration->_thinStrokes) {
+        case iTermThinStrokesSettingNever:
+            return NO;
+        case iTermThinStrokesSettingAlways:
+            return YES;
+        case iTermThinStrokesSettingRetinaOnly:
+            return _configuration->_isRetina;
+        case iTermThinStrokesSettingDarkBackgroundsOnly:
+            return self.timestampsBackgroundColor.isDark;
+        case iTermThinStrokesSettingRetinaDarkBackgroundsOnly:
+            return _configuration->_isRetina && self.timestampsBackgroundColor.isDark;
+    }
+}
+
+- (BOOL)asciiAntiAliased {
+    return _configuration->_asciiAntialias;
 }
 
 #pragma mark - Color

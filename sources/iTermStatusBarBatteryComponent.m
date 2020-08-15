@@ -60,11 +60,7 @@ static NSString *const iTermBatteryComponentKnobKeyShowTime = @"ShowTime";
     static dispatch_once_t onceToken;
     static BOOL result;
     dispatch_once(&onceToken, ^{
-        if ([[iTermPowerManager sharedInstance] currentState] == nil) {
-            result = NO;
-        } else {
-            result = YES;
-        }
+        result = [[iTermPowerManager sharedInstance] hasBattery];
     });
     return result;
 }
@@ -74,12 +70,16 @@ static NSString *const iTermBatteryComponentKnobKeyShowTime = @"ShowTime";
     static NSImage *image;
     dispatch_once(&onceToken, ^{
         if ([self.class machineHasBattery]) {
-            image = [NSImage it_imageNamed:@"StatusBarIconBattery" forClass:[self class]];
+            image = [NSImage it_cacheableImageNamed:@"StatusBarIconBattery" forClass:[self class]];
         } else {
-            image = [NSImage it_imageNamed:@"StatusBarIconNoBattery" forClass:[self class]];
+            image = [NSImage it_cacheableImageNamed:@"StatusBarIconNoBattery" forClass:[self class]];
         }
     });
     return image;
+}
+
+- (BOOL)statusBarComponentIsEmpty {
+    return ![self.class machineHasBattery];
 }
 
 - (NSString *)statusBarComponentShortDescription {
@@ -99,10 +99,6 @@ static NSString *const iTermBatteryComponentKnobKeyShowTime = @"ShowTime";
     return NO;
 }
 
-- (NSTimeInterval)statusBarComponentUpdateCadence {
-    return 60;
-}
-
 - (CGFloat)statusBarComponentMinimumWidth {
     return iTermBatteryWidth;
 }
@@ -111,40 +107,24 @@ static NSString *const iTermBatteryComponentKnobKeyShowTime = @"ShowTime";
     return iTermBatteryWidth;
 }
 
-- (NSArray<NSNumber *> *)values {
-    return [[[iTermPowerManager sharedInstance] percentageSamples] mapWithBlock:^id(NSNumber *percentage) {
-        return @(percentage.doubleValue / 100.0);
+- (double)ceiling {
+    return 1.0;
+}
+
+- (iTermStatusBarSparklinesModel *)sparklinesModel {
+    NSArray<NSNumber *> *values = [[[iTermPowerManager sharedInstance] percentageSamples] mapWithBlock:^id(NSNumber *anObject) {
+        return @(anObject.doubleValue / 100.0);
     }];
+    iTermStatusBarTimeSeries *timeSeries = [[iTermStatusBarTimeSeries alloc] initWithValues:values];
+    iTermStatusBarTimeSeriesRendition *rendition =
+    [[iTermStatusBarTimeSeriesRendition alloc] initWithTimeSeries:timeSeries
+                                                            color:[self statusBarTextColor]];
+    return [[iTermStatusBarSparklinesModel alloc] initWithDictionary:@{ @"main": rendition}];
 }
 
 - (int)currentEstimate {
     const double x = [[[[iTermPowerManager sharedInstance] currentState] percentage] doubleValue];
     return x;
-}
-
-- (void)drawTextWithRect:(NSRect)rect
-                    left:(NSString *)left
-                   right:(NSString *)right
-               rightSize:(CGSize)rightSize {
-    NSRect textRect = rect;
-    textRect.size.height = rightSize.height;
-    textRect.origin.y = [self textOffset];
-    [left drawInRect:textRect withAttributes:[self.leftAttributes it_attributesDictionaryWithAppearance:self.view.effectiveAppearance]];
-    [right drawInRect:textRect withAttributes:[self.rightAttributes it_attributesDictionaryWithAppearance:self.view.effectiveAppearance]];
-}
-
-- (NSRect)graphRectForRect:(NSRect)rect
-                  leftSize:(CGSize)leftSize
-                 rightSize:(CGSize)rightSize {
-    NSRect graphRect = rect;
-    const CGFloat margin = 4;
-    CGFloat rightWidth = rightSize.width + margin;
-    CGFloat leftWidth = leftSize.width + margin;
-    graphRect.origin.x += leftWidth;
-    graphRect.size.width -= (leftWidth + rightWidth);
-    graphRect = NSInsetRect(graphRect, 0, [self.view retinaRound:-self.font.descender] + self.statusBarComponentVerticalOffset);
-
-    return graphRect;
 }
 
 - (NSFont *)font {
@@ -172,16 +152,6 @@ static NSString *const iTermBatteryComponentKnobKeyShowTime = @"ShowTime";
               NSForegroundColorAttributeName: self.textColor };
 }
 
-- (CGFloat)textOffset {
-    NSFont *font = self.advancedConfiguration.font ?: [iTermStatusBarAdvancedConfiguration defaultFont];
-    const CGFloat containerHeight = self.view.superview.bounds.size.height;
-    const CGFloat capHeight = font.capHeight;
-    const CGFloat descender = font.descender - font.leading;  // negative (distance from bottom of bounding box to baseline)
-    const CGFloat frameY = (containerHeight - self.view.frame.size.height) / 2;
-    const CGFloat origin = containerHeight / 2.0 - frameY + descender - capHeight / 2.0;
-    return origin;
-}
-
 - (NSSize)leftSize {
     if (!self.showPercentage) {
         return NSMakeSize(0, 0);
@@ -192,6 +162,13 @@ static NSString *const iTermBatteryComponentKnobKeyShowTime = @"ShowTime";
 
 - (BOOL)isCharging {
     return [self.class machineHasBattery] && [[iTermPowerManager sharedInstance] connectedToPower];
+}
+
+- (NSImage *)rightImage {
+    if (!self.isCharging) {
+        return nil;
+    }
+    return _chargingImage;
 }
 
 - (CGSize)rightSize {
@@ -254,35 +231,6 @@ static NSString *const iTermBatteryComponentKnobKeyShowTime = @"ShowTime";
         return [NSDateFormatter durationString:[[[[iTermPowerManager sharedInstance] currentState] time] doubleValue]];
     }
     return @"";
-}
-
-- (void)drawRect:(NSRect)rect {
-    CGSize rightSize = self.rightSize;
-
-    NSRect textRect = rect;
-    const BOOL charging = self.isCharging;
-    if (self.showTimeOnRight && charging) {
-        textRect.size.width -= _chargingImage.size.width;
-    }
-    [self drawTextWithRect:textRect
-                      left:self.leftText
-                     right:self.rightText
-                 rightSize:rightSize];
-
-    NSRect graphRect = [self graphRectForRect:rect leftSize:self.leftSize rightSize:rightSize];
-
-    if (charging) {
-        NSImage *tintedImage = [_chargingImage it_imageWithTintColor:[self statusBarTextColor] ?: [self.delegate statusBarComponentDefaultTextColor]];
-        [tintedImage drawInRect:NSMakeRect(NSMaxX(rect) - _chargingImage.size.width,
-                                           [self.view retinaRound:(rect.size.height - _chargingImage.size.height) / 2.0],
-                                           _chargingImage.size.width,
-                                           _chargingImage.size.height)
-                       fromRect:NSZeroRect
-                      operation:NSCompositingOperationSourceOver
-                       fraction:1];
-    }
-
-    [super drawRect:graphRect];
 }
 
 #pragma mark - Private

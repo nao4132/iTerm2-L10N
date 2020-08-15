@@ -584,10 +584,6 @@ NSLog(@"Known bug: %s should be true, but %s is.", #expressionThatShouldBeTrue, 
     return @"Default";
 }
 
-- (void)screenLogWorkingDirectoryAtLine:(int)line withDirectory:(NSString *)directory pushed:(BOOL)pushed {
-    [dirlog_ addObject:@[ @(line), directory ? directory : [NSNull null] ]];
-}
-
 - (NSRect)screenWindowFrame {
     return NSMakeRect(10, 20, 100, 200);
 }
@@ -904,6 +900,8 @@ NSLog(@"Known bug: %s should be true, but %s is.", #expressionThatShouldBeTrue, 
 - (void)screenReportFocusWillChangeTo:(BOOL)reportFocus {
 }
 
+- (void)screenReportPasteBracketingWillChangeTo:(BOOL)bracket {
+}
 
 - (void)screenSoftAlternateScreenModeDidChange {
 }
@@ -932,6 +930,62 @@ NSLog(@"Known bug: %s should be true, but %s is.", #expressionThatShouldBeTrue, 
 - (void)screenWillReceiveFileNamed:(NSString *)name ofSize:(NSInteger)size preconfirmed:(BOOL)preconfirmed {
 }
 
+- (void)screenCommandDidExitWithCode:(int)code mark:(VT100ScreenMark *)maybeMark {
+}
+
+
+- (BOOL)screenConfirmDownloadAllowed:(NSString *)name size:(NSInteger)size promptIfBig:(BOOL *)promptIfBig {
+    return YES;
+}
+
+
+- (void)screenDidTryToUseDECRQCRA {
+}
+
+
+- (void)screenGetWorkingDirectoryWithCompletion:(void (^)(NSString *))completion {
+    completion(@"/");
+}
+
+
+- (void)screenLogWorkingDirectoryAtLine:(int)line withDirectory:(NSString *)directory pushed:(BOOL)pushed timely:(BOOL)timely {
+    [dirlog_ addObject:@[ @(line), directory ? directory : [NSNull null] ]];
+}
+
+
+- (BOOL)screenShouldSendReportForVariable:(NSString *)name {
+    return YES;
+}
+
+- (BOOL)screenConfirmDownloadAllowed:(NSString *)name size:(NSInteger)size displayInline:(BOOL)displayInline promptIfBig:(BOOL *)promptIfBig {
+    return NO;
+}
+
+- (void)screenGetCursorType:(ITermCursorType *)cursorTypeOut blinking:(BOOL *)blinking {
+    *cursorTypeOut = CURSOR_BOX;
+    *blinking = NO;
+}
+
+- (void)screenRefreshFindOnPageView {
+}
+
+- (void)screenResetCursorTypeAndBlink {
+}
+
+- (void)screenSetUseCSIu:(int)terminalSetting {
+}
+
+- (BOOL)screenShouldClearScrollbackBuffer {
+    return YES;
+}
+
+- (VT100GridRange)screenRangeOfVisibleLines {
+    return VT100GridRangeMake(0, 1);
+}
+
+
+- (void)screenSizeDidChangeWithNewTopLineAt:(int)newTop {
+}
 
 
 #pragma mark - iTermSelectionDelegate
@@ -1905,6 +1959,27 @@ NSLog(@"Known bug: %s should be true, but %s is.", #expressionThatShouldBeTrue, 
     }
 }
 
+- (void)testUnicode12Emoji {
+    int32_t codePoints[] = {
+        0x1F468,
+        0x1F3FF,
+        0x200D,
+        0x1F91D,
+        0x200D,
+        0x1F468,
+        0x1F3FB };
+    NSData *expectedData = [NSData dataWithBytes:codePoints length:sizeof(codePoints)];
+    NSString *expectedString = [[NSString alloc] initWithData:expectedData encoding:NSUTF32LittleEndianStringEncoding];
+    VT100Screen *screen = [self screenWithWidth:20 height:2];
+    screen.delegate = (id<VT100ScreenDelegate>)self;
+    [screen appendStringAtCursor:expectedString];
+    screen_char_t *line = [screen getLineAtScreenIndex:0];
+    NSString *actualString = [ScreenCharToStr(line) decomposedStringWithCompatibilityMapping];
+    XCTAssertEqualObjects(expectedString, actualString);
+    NSData *actualData = [actualString dataUsingEncoding:NSUTF32LittleEndianStringEncoding];
+    XCTAssertEqualObjects(expectedData, actualData);
+}
+
 - (void)testAppendStringAtCursorNonAscii {
     // Make sure colors and attrs are set properly
     VT100Screen *screen = [self screenWithWidth:20 height:2];
@@ -1982,7 +2057,13 @@ NSLog(@"Known bug: %s should be true, but %s is.", #expressionThatShouldBeTrue, 
     XCTAssert([ScreenCharToStr(line + i++) isEqualToString:@"ł"]);
 
     XCTAssert([ScreenCharToStr(line + i++) isEqualToString:@"🖕🏾"]);
+    BOOL lettersHaveSkin = NO;
     if (@available(macOS 10.14, *)) {
+        if (@available(macOS 10.15, *)) { } else {
+            lettersHaveSkin = YES;
+        }
+    }
+    if (lettersHaveSkin) {
         XCTAssert([ScreenCharToStr(line + i++) isEqualToString:@"g\U0001F3FE"]);  // macOS 10.14 does a silly thing
     } else {
         XCTAssert([ScreenCharToStr(line + i++) isEqualToString:@"g"]);
@@ -3465,7 +3546,7 @@ NSLog(@"Known bug: %s should be true, but %s is.", #expressionThatShouldBeTrue, 
     XCTAssert(dirlog_.count == 1);
     NSArray *entry = dirlog_[0];
     XCTAssert([entry[0] intValue] == 4);
-    XCTAssert([entry[1] isKindOfClass:[NSNull class]]);
+    XCTAssertEqualObjects(entry[1], @"/");
 
     // Add some scrollback
     for (int i = 0; i < 10; i++) {
@@ -3476,7 +3557,7 @@ NSLog(@"Known bug: %s should be true, but %s is.", #expressionThatShouldBeTrue, 
     XCTAssert(dirlog_.count == 1);
     entry = dirlog_[0];
     XCTAssert([entry[0] intValue] == 14);
-    XCTAssert([entry[1] isKindOfClass:[NSNull class]]);
+    XCTAssertEqualObjects(entry[1], @"/");
 
     // Make sure scrollback overflow is included.
     for (int i = 0; i < 100; i++) {
@@ -3487,7 +3568,7 @@ NSLog(@"Known bug: %s should be true, but %s is.", #expressionThatShouldBeTrue, 
     XCTAssert(dirlog_.count == 1);
     entry = dirlog_[0];
     XCTAssert([entry[0] intValue] == 29);  // 20 lines of scrollback + 10th line of display
-    XCTAssert([entry[1] isKindOfClass:[NSNull class]]);
+    XCTAssertEqualObjects(entry[1], @"/");
 
 //    // Test icon title, which is the same, but does not log the pwd.
     [screen terminalSetIconTitle:@"test3"];
@@ -4120,7 +4201,10 @@ NSLog(@"Known bug: %s should be true, but %s is.", #expressionThatShouldBeTrue, 
                @"....."]);
     PTYNoteViewController *note = [[[PTYNoteViewController alloc] init] autorelease];
     [screen addNote:note inRange:range];
-    NSDictionary *state = screen.contentsDictionary;
+    iTermMutableDictionaryEncoderAdapter *encoder = [iTermMutableDictionaryEncoderAdapter encoder];
+    int linesDropped = 0;
+    [screen encodeContents:encoder linesDropped:&linesDropped];
+    NSDictionary *state = encoder.mutableDictionary;
 
     screen = [self screenWithWidth:3 height:4];
     [screen restoreFromDictionary:state includeRestorationBanner:NO knownTriggers:@[] reattached:NO];
@@ -4226,7 +4310,10 @@ NSLog(@"Known bug: %s should be true, but %s is.", #expressionThatShouldBeTrue, 
     [self appendLines:@[@"", @"", @"", @"Georges-iMac:/Users/gnachman% xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"] toScreen:screen];
     PTYNoteViewController *note = [[[PTYNoteViewController alloc] init] autorelease];
     [screen addNote:note inRange:range1];
-    NSDictionary *state = screen.contentsDictionary;
+    iTermMutableDictionaryEncoderAdapter *encoder = [iTermMutableDictionaryEncoderAdapter encoder];
+    int linesDropped = 0;
+    [screen encodeContents:encoder linesDropped:&linesDropped];
+    NSDictionary *state = encoder.mutableDictionary;
 
     screen = [self screenWithWidth:80 height:25];
     [screen restoreFromDictionary:state includeRestorationBanner:NO knownTriggers:@[] reattached:YES];

@@ -19,7 +19,7 @@ static const CGFloat kRightMargin = 4;
 static const CGFloat kBottomMargin = 8;
 static const CGFloat kButtonSize = 17;
 static const CGFloat kTopMargin = 3;  // Margin above title bar and close button
-static const CGFloat kCloseButtonLeftMargin = 5;
+static const CGFloat kCloseButtonLeftMargin = 2;
 
 @implementation NSView (ToolWrapper)
 
@@ -56,12 +56,13 @@ static const CGFloat kCloseButtonLeftMargin = 5;
         [_title setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
         [_title setAlignment:NSTextAlignmentCenter];
         [_title setBezeled:NO];
+        _title.lineBreakMode = NSLineBreakByTruncatingTail;
         [self addSubview:_title];
         [_title release];
 
         NSImage *closeImage = [NSImage it_imageNamed:@"closebutton" forClass:self.class];
         _closeButton = [[NSButton alloc] initWithFrame:NSMakeRect(kCloseButtonLeftMargin, 10, kButtonSize, kButtonSize)];
-        [_closeButton setButtonType:NSMomentaryPushInButton];
+        [_closeButton setButtonType:NSButtonTypeMomentaryPushIn];
         [_closeButton setImage:closeImage];
         [_closeButton setTarget:self];
         [_closeButton setAction:@selector(close:)];
@@ -94,9 +95,10 @@ static const CGFloat kCloseButtonLeftMargin = 5;
 
 - (void)relayout {
     NSRect frame = [self frame];
-    _title.frame = NSMakeRect(kCloseButtonLeftMargin + kButtonSize,
+    const CGFloat sideMargin = kCloseButtonLeftMargin + kButtonSize;
+    _title.frame = NSMakeRect(sideMargin,
                               kTopMargin,
-                              frame.size.width - kButtonSize - kRightMargin - kCloseButtonLeftMargin,
+                              frame.size.width - kButtonSize - kRightMargin - sideMargin,
                               kTitleHeight - kTopMargin);
     _closeButton.frame = NSMakeRect(kCloseButtonLeftMargin, kTopMargin, kButtonSize, kButtonSize);
     _container.frame = NSMakeRect(kLeftMargin,

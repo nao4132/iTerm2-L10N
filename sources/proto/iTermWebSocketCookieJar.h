@@ -11,6 +11,8 @@
 
 + (instancetype)sharedInstance;
 - (BOOL)consumeCookie:(NSString *)cookie;
-- (NSString *)randomStringForCooke;
+- (NSString *)randomStringForCookie;
+- (void)removeCookie:(NSString *)cookie;
+- (void)addCookie:(NSString *)cookie;
 
 @end

@@ -10,22 +10,28 @@
 #import "DebugLogging.h"
 #import "FileTransferManager.h"
 #import "iTermAdvancedSettingsModel.h"
+#import "iTermCommandRunner.h"
 #import "iTermController.h"
 #import "iTermImageInfo.h"
 #import "iTermLaunchServices.h"
 #import "iTermLocalHostNameGuesser.h"
 #import "iTermMouseCursor.h"
+#import "iTermNotificationController.h"
 #import "iTermPreferences.h"
+#import "iTermScriptConsole.h"
+#import "iTermScriptHistory.h"
 #import "iTermShellIntegrationWindowController.h"
 #import "iTermTextExtractor.h"
 #import "iTermURLActionFactory.h"
 #import "iTermURLStore.h"
 #import "iTermWebViewWrapperViewController.h"
 #import "NSColor+iTerm.h"
+#import "NSData+iTerm.h"
 #import "NSDictionary+iTerm.h"
 #import "NSEvent+iTerm.h"
 #import "NSObject+iTerm.h"
 #import "NSURL+iTerm.h"
+#import "PTYMouseHandler.h"
 #import "PTYTextView+Private.h"
 #import "SCPPath.h"
 #import "URLAction.h"
@@ -36,6 +42,7 @@
 static const NSUInteger kDragPaneModifiers = (NSEventModifierFlagOption | NSEventModifierFlagCommand | NSEventModifierFlagShift);
 static const NSUInteger kRectangularSelectionModifiers = (NSEventModifierFlagCommand | NSEventModifierFlagOption);
 static const NSUInteger kRectangularSelectionModifierMask = (kRectangularSelectionModifiers | NSEventModifierFlagControl);
+static NSString *const PTYTextViewSmartSelectionActionFailedNotification = @"PTYTextViewSmartSelectionActionFailedNotification";
 
 @interface PTYTextView (ARCPrivate)<iTermShellIntegrationWindowControllerDelegate>
 @end
@@ -43,13 +50,12 @@ static const NSUInteger kRectangularSelectionModifierMask = (kRectangularSelecti
 
 @implementation PTYTextView (ARC)
 
-- (void)arcInit {
-    _mouseReportingFrustrationDetector = [[iTermMouseReportingFrustrationDetector alloc] init];
-    _mouseReportingFrustrationDetector.delegate = self;
+- (void)initARC {
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(smartSelectionActionFailedNotificationSelected:)
+                                                 name:PTYTextViewSmartSelectionActionFailedNotification
+                                               object:nil];
 }
-
-#pragma mark - Attributes
-
 
 #pragma mark - Coordinate Space Conversions
 
@@ -147,8 +153,6 @@ static const NSUInteger kRectangularSelectionModifierMask = (kRectangularSelecti
 - (void)handleSemanticHistoryItemDragWithEvent:(NSEvent *)event
                                          coord:(VT100GridCoord)coord {
     DLog(@"do semantic history check");
-    // Only one Semantic History check per drag
-    _semanticHistoryDragged = YES;
 
     // Drag a file handle (only possible when there is no selection).
     __weak __typeof(self) weakSelf = self;
@@ -159,7 +163,7 @@ static const NSUInteger kRectangularSelectionModifierMask = (kRectangularSelecti
 
 - (void)finishHandlingSemanticHistoryItemDragWithEvent:(NSEvent *)event
                                                 action:(URLAction *)action {
-    if (!_semanticHistoryDragged) {
+    if (!_mouseHandler.semanticHistoryDragged) {
         return;
     }
     const VT100GridCoord coord = [self coordForMouseLocation:[NSEvent mouseLocation]];
@@ -192,10 +196,7 @@ static const NSUInteger kRectangularSelectionModifierMask = (kRectangularSelecti
 
     draggingSession.animatesToStartingPositionsOnCancelOrFail = YES;
     draggingSession.draggingFormation = NSDraggingFormationNone;
-    _committedToDrag = YES;
-
-    // Valid drag, so we reset the flag because mouseUp doesn't get called when a drag is done
-    _semanticHistoryDragged = NO;
+    [_mouseHandler didDragSemanticHistory];
     DLog(@"did semantic history drag");
 }
 
@@ -222,6 +223,7 @@ static const NSUInteger kRectangularSelectionModifierMask = (kRectangularSelecti
     }
 
     __weak __typeof(self) weakSelf = self;
+    DLog(@"updateUnderlinedURLs in screen:\n%@", [self.dataSource compactLineDumpWithContinuationMarks]);
     [_urlActionHelper urlActionForClickAtCoord:coord completion:^(URLAction *action) {
         [weakSelf finishUpdatingUnderlinesWithAction:action
                                                event:event];
@@ -301,9 +303,48 @@ static const NSUInteger kRectangularSelectionModifierMask = (kRectangularSelecti
 }
 
 + (void)runCommand:(NSString *)command {
-    @autoreleasepool {
-        system([command UTF8String]);
+    iTermCommandRunner *commandRunner = [[iTermCommandRunner alloc] initWithCommand:@"/bin/sh"
+                                                                      withArguments:@[ @"-c", command ]
+                                                                               path:[[NSFileManager defaultManager] currentDirectoryPath]];
+    iTermScriptHistoryEntry *entry =
+    [[iTermScriptHistoryEntry alloc] initWithName:@"Smart Selection Action"
+                                         fullPath:command
+                                       identifier:[[NSUUID UUID] UUIDString]
+                                         relaunch:nil];
+    [[iTermScriptHistory sharedInstance] addHistoryEntry:entry];
+    [entry addOutput:[NSString stringWithFormat:@"Run command:\n%@\n", command]];
+    commandRunner.outputHandler = ^(NSData *data) {
+        NSString *string = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+        if (!string) {
+            string = [data it_hexEncoded];
+        }
+        [entry addOutput:string];
+    };
+    commandRunner.completion = ^(int status) {
+        if (status) {
+            [entry addOutput:[NSString stringWithFormat:@"\nFinished with status %d", status]];
+        }
+        [entry stopRunning];
+        if (status) {
+            [[iTermNotificationController sharedInstance] postNotificationWithTitle:@"Smart Selection Action Failed"
+                                                                             detail:[NSString stringWithFormat:@"\nFinished with status %d", status]
+                                                           callbackNotificationName:PTYTextViewSmartSelectionActionFailedNotification
+                                                       callbackNotificationUserInfo:@{ @"identifier": entry.identifier }];
+        }
+    };
+    [commandRunner run];
+}
+
+- (void)smartSelectionActionFailedNotificationSelected:(NSNotification *)notification {
+    NSString *identifier = notification.userInfo[@"identifier"];
+    if (!identifier) {
+        return;
     }
+    iTermScriptHistoryEntry *entry = [[iTermScriptHistory sharedInstance] entryWithIdentifier:identifier];
+    if (!entry) {
+        return;
+    }
+    [[iTermScriptConsole sharedInstance] revealTailOfHistoryEntry:entry];
 }
 
 - (void)contextMenuActionRunCoprocess:(id)sender {
@@ -335,8 +376,8 @@ static const NSUInteger kRectangularSelectionModifierMask = (kRectangularSelecti
         }
     } else if ([self mouseIsOverImageInEvent:event]) {
         changed = [self setCursor:[NSCursor arrowCursor]];
-    } else if ([self xtermMouseReporting] &&
-               [self terminalWantsMouseReports]) {
+    } else if ([_mouseHandler mouseReportingAllowedForEvent:event] &&
+               [_mouseHandler terminalWantsMouseReports]) {
         changed = [self setCursor:[iTermMouseCursor mouseCursorOfType:iTermMouseCursorTypeIBeamWithCircle]];
     } else {
         changed = [self setCursor:[iTermMouseCursor mouseCursorOfType:iTermMouseCursorTypeIBeam]];
@@ -358,30 +399,6 @@ static const NSUInteger kRectangularSelectionModifierMask = (kRectangularSelecti
 - (BOOL)mouseIsOverImageInEvent:(NSEvent *)event {
     NSPoint point = [self clickPoint:event allowRightMarginOverflow:NO];
     return [self imageInfoAtCoord:VT100GridCoordMake(point.x, point.y)] != nil;
-}
-
-#pragma mark - Mouse Reporting
-
-// WARNING: This indicates if mouse reporting is a possibility. -terminalWantsMouseReports indicates
-// if the reporting mode would cause any action to be taken if this returns YES. They should be used
-// in conjunction most of the time.
-- (BOOL)xtermMouseReporting {
-    NSEvent *event = [NSApp currentEvent];
-    return (([[self delegate] xtermMouseReporting]) &&        // Xterm mouse reporting is on
-            !([event it_modifierFlags] & NSEventModifierFlagOption));   // Not holding Opt to disable mouse reporting
-}
-
-- (BOOL)xtermMouseReportingAllowMouseWheel {
-    return [[self delegate] xtermMouseReportingAllowMouseWheel];
-}
-
-// If mouse reports are sent to the delegate, will it use them? Use with -xtermMouseReporting, which
-// understands Option to turn off reporting.
-- (BOOL)terminalWantsMouseReports {
-    MouseMode mouseMode = [[self.dataSource terminal] mouseMode];
-    return ([self.delegate xtermMouseReporting] &&
-            mouseMode != MOUSE_REPORTING_NONE &&
-            mouseMode != MOUSE_REPORTING_HIGHLIGHT);
 }
 
 #pragma mark - Quicklook
@@ -723,9 +740,15 @@ static const NSUInteger kRectangularSelectionModifierMask = (kRectangularSelecti
 #pragma mark - iTermMouseReportingFrustrationDetectorDelegate
 
 - (void)mouseReportingFrustrationDetectorDidDetectFrustration:(iTermMouseReportingFrustrationDetector *)sender {
-    if ([self.delegate xtermMouseReporting]) {
+    if ([self.delegate xtermMouseReporting] && !self.selection.hasSelection) {
         [self.delegate textViewDidDetectMouseReportingFrustration];
     }
+}
+
+#pragma mark - Mouse Reporting Frustration Detector
+
+- (void)didCopyToPasteboardWithControlSequence {
+    [_mouseHandler didCopyToPasteboardWithControlSequence];
 }
 
 @end

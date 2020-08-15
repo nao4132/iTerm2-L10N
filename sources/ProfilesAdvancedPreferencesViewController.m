@@ -8,6 +8,7 @@
 
 #import "ProfilesAdvancedPreferencesViewController.h"
 
+#import "DebugLogging.h"
 #import "ITAddressBookMgr.h"
 #import "iTermProfilePreferences.h"
 #import "iTermSemanticHistoryPrefsController.h"
@@ -84,7 +85,7 @@
                    displayName:@"Semantic history"
                        phrases:@[ @"cmd click", @"open file", @"open url" ]
                            key:nil];
-    _enableAPSLogging.state = iTermUserDefaults.enableAutomaticProfileSwitchingLogging ? NSOnState : NSOffState;
+    _enableAPSLogging.state = iTermUserDefaults.enableAutomaticProfileSwitchingLogging ? NSControlStateValueOn : NSControlStateValueOff;
 }
 
 - (NSArray *)keysForBulkCopy {
@@ -280,6 +281,7 @@
    forTableColumn:(NSTableColumn *)aTableColumn
               row:(NSInteger)rowIndex {
     if (![anObject length] || [[self boundHosts] containsObject:anObject]) {
+        DLog(@"Beep: Empty APS rule not allwoed");
         NSBeep();
         [self removeBoundHostOnRow:rowIndex];
         return;
@@ -373,7 +375,7 @@
 #pragma mark - Actions
 
 - (IBAction)didToggleAutomaticProfileSwitchingDebugLogging:(id)sender {
-    iTermUserDefaults.enableAutomaticProfileSwitchingLogging = (_enableAPSLogging.state == NSOnState);
+    iTermUserDefaults.enableAutomaticProfileSwitchingLogging = (_enableAPSLogging.state == NSControlStateValueOn);
 }
 
 @end

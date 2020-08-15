@@ -1,0 +1,21 @@
+[submodule "submodules/NMSSH"]
+	path = submodules/NMSSH
+	url = https://github.com/gnachman/NMSSH.git
+[submodule "submodules/CoreParse"]
+	path = submodules/CoreParse
+	url = https://github.com/beelsebob/CoreParse
+[submodule "submodules/Sparkle"]
+	path = submodules/Sparkle
+	url = https://github.com/gnachman/Sparkle.git
+[submodule "submodules/libsixel"]
+	path = submodules/libsixel
+	url = https://github.com/saitoha/libsixel
+[submodule "submodules/openssl"]
+	path = submodules/openssl
+	url = https://github.com/openssl/openssl
+[submodule "submodules/libssh2"]
+	path = submodules/libssh2
+	url = https://github.com/libssh2/libssh2
+[submodule "submodules/fmdb"]
+	path = submodules/fmdb
+	url = https://github.com/ccgus/fmdb

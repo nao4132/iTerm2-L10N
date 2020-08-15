@@ -17,6 +17,7 @@
 #import "iTermScriptConsole.h"
 #import "iTermScriptHistory.h"
 #import "iTermSetupCfgParser.h"
+#import "iTermWarning.h"
 #import "iTermWebSocketCookieJar.h"
 #import "NSArray+iTerm.h"
 #import "NSFileManager+iTerm.h"
@@ -30,7 +31,7 @@ static NSString *const iTermAPIScriptLauncherScriptDidFailUserNotificationCallba
 @implementation iTermAPIScriptLauncher
 
 + (void)launchScript:(NSString *)filename
-           arguments:(NSString *)arguments
+           arguments:(NSArray<NSString *> *)arguments
   explicitUserAction:(BOOL)explicitUserAction {
     [self launchScript:filename
               fullPath:filename
@@ -50,23 +51,162 @@ static NSString *const iTermAPIScriptLauncherScriptDidFailUserNotificationCallba
     }
 }
 
++ (int)environmentVersionAt:(NSString *)iterm2env {
+    NSString *manifest = [iterm2env stringByAppendingPathComponent:@"iterm2env-metadata.json"];
+    return [[iTermPythonRuntimeDownloader sharedInstance] versionInMetadataAtURL:[NSURL fileURLWithPath:manifest]];
+}
+
++ (void)upgradeFullEnvironmentScriptAt:(NSString *)fullPath
+                          configParser:(iTermSetupCfgParser *)configParser
+                            completion:(void (^)(NSString *))completion {
+    NSString *message = [NSString stringWithFormat:@"The Python API script “%@” needs a newer version of the runtime environment for security reasons. You must upgrade it before this version of iTerm2 can launch the script.", fullPath.lastPathComponent];
+    const iTermWarningSelection selection =
+    [iTermWarning showWarningWithTitle:message
+                               actions:@[ @"Upgrade", @"Cancel" ]
+                             accessory:nil
+                            identifier:@"UpgradeFullEnvironmentScript"
+                           silenceable:kiTermWarningTypePersistent
+                               heading:@"Upgrade Python Runtime?"
+                                window:nil];
+    switch (selection) {
+        case kiTermWarningSelection0:
+            [self downloadIfNeededAndUpgradeFullEnvironmentScriptAt:fullPath
+                                                       configParser:configParser
+                                                         completion:completion];
+            break;
+
+        default:
+            break;
+    }
+}
+
++ (void)downloadIfNeededAndUpgradeFullEnvironmentScriptAt:(NSString *)fullPath
+                                             configParser:(iTermSetupCfgParser *)configParser
+                                               completion:(void (^)(NSString *))completion {
+    iTermPythonRuntimeDownloader *downloader = [iTermPythonRuntimeDownloader sharedInstance];
+    if ([downloader installedVersionWithPythonVersion:configParser.pythonVersion] >= iTermMinimumPythonEnvironmentVersion) {
+        [self reallyUpgradeFullEnvironmentScriptAt:fullPath
+                                      configParser:configParser
+                                        completion:completion];
+        return;
+    }
+
+    [downloader downloadOptionalComponentsIfNeededWithConfirmation:YES
+                                                                                        pythonVersion:nil
+                                                                            minimumEnvironmentVersion:0
+                                                                                   requiredToContinue:YES
+                                                                                       withCompletion:
+     ^(iTermPythonRuntimeDownloaderStatus status) {
+         switch (status) {
+             case iTermPythonRuntimeDownloaderStatusNotNeeded:
+             case iTermPythonRuntimeDownloaderStatusDownloaded:
+                 [self reallyUpgradeFullEnvironmentScriptAt:fullPath
+                                               configParser:configParser
+                                                 completion:completion];
+                 break;
+             case iTermPythonRuntimeDownloaderStatusError:
+             case iTermPythonRuntimeDownloaderStatusUnknown:
+             case iTermPythonRuntimeDownloaderStatusWorking:
+             case iTermPythonRuntimeDownloaderStatusCanceledByUser:
+             case iTermPythonRuntimeDownloaderStatusRequestedVersionNotFound:
+                 break;
+        }
+    }];
+}
+
++ (void)reallyUpgradeFullEnvironmentScriptAt:(NSString *)fullPath
+                                configParser:(iTermSetupCfgParser *)configParser
+                                  completion:(void (^)(NSString *))completion {
+    NSURL *url = [NSURL fileURLWithPath:fullPath];
+    NSURL *existingEnv = [url URLByAppendingPathComponent:@"iterm2env"];
+    NSURL *savedEnv = [url URLByAppendingPathComponent:@"saved-iterm2env"];
+    if ([[NSFileManager defaultManager] fileExistsAtPath:existingEnv.path]) {
+        if ([[NSFileManager defaultManager] fileExistsAtPath:savedEnv.path]) {
+            NSError *error = nil;
+            [[NSFileManager defaultManager] removeItemAtURL:existingEnv error:&error];
+            DLog(@"remove broken %@: %@", existingEnv.path, error);
+        } else {
+            NSError *error = nil;
+            [[NSFileManager defaultManager] moveItemAtURL:existingEnv toURL:savedEnv error:&error];
+            DLog(@"saving - move '%@' to '%@': %@", existingEnv.path, savedEnv.path, error);
+        }
+    }
+    [[iTermPythonRuntimeDownloader sharedInstance] installPythonEnvironmentTo:url
+                                                                 dependencies:configParser.dependencies
+                                                                pythonVersion:configParser.pythonVersion
+                                                                   completion:^(BOOL ok) {
+        if (ok) {
+            NSError *error = nil;
+            [[NSFileManager defaultManager] removeItemAtURL:savedEnv error:&error];
+            DLog(@"remove saved - %@: %@", savedEnv.path, error);
+            NSString *venv = [self environmentForScript:fullPath checkForMain:YES checkForSaved:NO];
+            completion(venv);
+            return;
+        }
+
+        NSError *error = nil;
+        [[NSFileManager defaultManager] removeItemAtURL:existingEnv error:&error];
+        DLog(@"remove failed install - %@: %@", existingEnv.path, error);
+
+        error = nil;
+        [[NSFileManager defaultManager] moveItemAtURL:savedEnv toURL:existingEnv error:&error];
+        DLog(@"restore saved - move '%@' to '%@': %@", savedEnv.path, existingEnv.path, error);
+    }];
+}
+
++ (void)upgradeIfNeededFullEnvironmentScriptAt:(NSString *)fullPath
+                                  configParser:(iTermSetupCfgParser *)configParser
+                                    virtualEnv:(NSString *)originalVirtualenv
+                                    completion:(void (^)(NSString *))completion {
+    NSString *virtualenv = originalVirtualenv;
+    NSString *iterm2env = [fullPath stringByAppendingPathComponent:@"iterm2env"];
+    NSString *saved = [fullPath stringByAppendingPathComponent:@"saved-iterm2env"];
+    if ([[NSFileManager defaultManager] fileExistsAtPath:saved]) {
+        // If there's a saved folder, then something went wrong while upgrading. Restore it.
+        NSError *error = nil;
+        [[NSFileManager defaultManager] removeItemAtPath:iterm2env
+                                                   error:&error];
+        DLog(@"Remove unfinished %@: %@", iterm2env, error);
+
+        [[NSFileManager defaultManager] moveItemAtPath:saved
+                                                toPath:iterm2env
+                                                 error:&error];
+        DLog(@"Move %@ to %@: %@", saved, iterm2env, error);
+        virtualenv = [self environmentForScript:fullPath checkForMain:YES checkForSaved:NO];
+    }
+
+    const int version = [self environmentVersionAt:iterm2env];
+    if (version < iTermMinimumPythonEnvironmentVersion) {
+        [self upgradeFullEnvironmentScriptAt:fullPath
+                                configParser:configParser
+                                  completion:completion];
+        return;
+    }
+    completion(virtualenv);
+}
+
 + (void)launchScript:(NSString *)filename
             fullPath:(NSString *)fullPath
-           arguments:(NSString *)arguments
+           arguments:(NSArray<NSString *> *)arguments
       withVirtualEnv:(NSString *)virtualenv
         setupCfgPath:(NSString *)setupCfgPath
   explicitUserAction:(BOOL)explicitUserAction {
     if (virtualenv != nil) {
+        // This is a full-environment script. Check if its environment version is supported and
+        // offer to upgrade.
         iTermSetupCfgParser *parser = [[iTermSetupCfgParser alloc] initWithPath:setupCfgPath];
-        NSString *pythonVersion = parser.pythonVersion;
-        // Launching a full environment script: do not check for a newer version, as it is frozen and
-        // downloading wouldn't affect it anyway.
-        [self reallyLaunchScript:filename
-                        fullPath:fullPath
-                       arguments:arguments
-                  withVirtualEnv:virtualenv
-                   pythonVersion:pythonVersion
-              explicitUserAction:explicitUserAction];
+        [self upgradeIfNeededFullEnvironmentScriptAt:fullPath
+                                        configParser:parser
+                                          virtualEnv:virtualenv
+                                          completion:^(NSString *updatedVirtualEnv) {
+            NSString *pythonVersion = parser.pythonVersion;
+            [self reallyLaunchScript:filename
+                            fullPath:fullPath
+                           arguments:arguments
+                      withVirtualEnv:updatedVirtualEnv
+                       pythonVersion:pythonVersion
+                  explicitUserAction:explicitUserAction];
+        }];
         return;
     }
 
@@ -140,7 +280,7 @@ static NSString *const iTermAPIScriptLauncherScriptDidFailUserNotificationCallba
 
 + (void)reallyLaunchScript:(NSString *)filename
                   fullPath:(NSString *)fullPath
-                 arguments:(NSString *)arguments
+                 arguments:(NSArray<NSString *> *)arguments
             withVirtualEnv:(NSString *)virtualenv
              pythonVersion:(NSString *)pythonVersion
         explicitUserAction:(BOOL)explicitUserAction {
@@ -155,12 +295,12 @@ static NSString *const iTermAPIScriptLauncherScriptDidFailUserNotificationCallba
     }
 
     NSString *key = [[NSUUID UUID] UUIDString];
+    NSString *identifier = [[iTermAPIConnectionIdentifierController sharedInstance] identifierForKey:key];
     NSString *name = [[filename lastPathComponent] stringByDeletingPathExtension];
     if (virtualenv) {
         // Convert /foo/bar/Name/Name/main.py to Name
         name = [[[filename stringByDeletingLastPathComponent] pathComponents] lastObject];
     }
-    NSString *identifier = [[iTermAPIConnectionIdentifierController sharedInstance] identifierForKey:key];
     iTermScriptHistoryEntry *entry = [[iTermScriptHistoryEntry alloc] initWithName:name
                                                                           fullPath:fullPath
                                                                         identifier:identifier
@@ -193,7 +333,7 @@ static NSString *const iTermAPIScriptLauncherScriptDidFailUserNotificationCallba
 
 // THROWS
 + (void)tryLaunchScript:(NSString *)filename
-              arguments:(NSString *)arguments
+              arguments:(NSArray<NSString *> *)arguments
            historyEntry:(iTermScriptHistoryEntry *)entry
                     key:(NSString *)key
          withVirtualEnv:(NSString *)virtualenv
@@ -214,8 +354,17 @@ static NSString *const iTermAPIScriptLauncherScriptDidFailUserNotificationCallba
                                       arguments:arguments
                                  withVirtualEnv:virtualenv
                                   pythonVersion:pythonVersion];
-    NSString *cookie = [[iTermWebSocketCookieJar sharedInstance] randomStringForCooke];
-    task.environment = [self environmentFromEnvironment:task.environment shell:[iTermOpenDirectory userShell] cookie:cookie key:key];
+    NSString *cookie = [[iTermWebSocketCookieJar sharedInstance] randomStringForCookie];
+    NSString *standardEnv = [[iTermPythonRuntimeDownloader sharedInstance] pathToStandardPyenvPythonWithPythonVersion:pythonVersion];
+    NSString *searchPath = [iTermPythonRuntimeDownloader.sharedInstance pathToStandardPyenvWithVersion:pythonVersion];
+    NSString *path = [searchPath stringByAppendingPathComponent:@"versions"];
+    NSString *standardPythonVersion = [[iTermPythonRuntimeDownloader bestPythonVersionAt:path] it_twoPartVersionNumber];
+    task.environment = [self environmentFromEnvironment:task.environment
+                                                  shell:[iTermOpenDirectory userShell]
+                                                 cookie:cookie
+                                                    key:key
+                                             virtualenv:virtualenv ?: standardEnv
+                                          pythonVersion:pythonVersion ?: standardPythonVersion];
 
     NSPipe *pipe = [[NSPipe alloc] init];
     [task setStandardOutput:pipe];
@@ -230,7 +379,9 @@ static NSString *const iTermAPIScriptLauncherScriptDidFailUserNotificationCallba
 + (NSDictionary *)environmentFromEnvironment:(NSDictionary *)initialEnvironment
                                        shell:(NSString *)shell
                                       cookie:(NSString *)cookie
-                                         key:(NSString *)key {
+                                         key:(NSString *)key
+                                  virtualenv:(NSString *)virtualenv
+                               pythonVersion:(NSString *)pythonVersion {
     NSMutableDictionary *environment = [initialEnvironment ?: @{} mutableCopy];
 
     environment[@"ITERM2_COOKIE"] = cookie;
@@ -240,11 +391,30 @@ static NSString *const iTermAPIScriptLauncherScriptDidFailUserNotificationCallba
         environment[@"SHELL"] = shell;
     }
     environment[@"PYTHONIOENCODING"] = @"utf-8";
+    
+    // OpenSSL bakes in the directory where you compiled it so it can find root certs.
+    // That works great if you happen to be me, but it seems that most people aren't.
+    // Luckily it lets you set some environment variables to find cert stores.
+    NSString *version = [[virtualenv stringByDeletingLastPathComponent] stringByDeletingLastPathComponent];
+    environment[@"SSL_CERT_FILE"] = [version stringByAppendingPathComponents:@[
+        @"lib",
+        [NSString stringWithFormat:@"python%@", pythonVersion],
+        @"site-packages",
+        @"pip",
+        @"_vendor",
+        @"certifi",
+        @"cacert.pem"
+    ]];
+    environment[@"SSL_CERT_DIR"] = [version stringByAppendingPathComponents:@[
+        @"openssl",
+        @"ssl",
+        @"certs"
+    ]];
     return environment;
 }
 
 + (NSArray *)argumentsToRunScript:(NSString *)filename
-                        arguments:(NSString *)arguments
+                        arguments:(NSArray<NSString *> *)arguments
                    withVirtualEnv:(NSString *)providedVirtualEnv
                     pythonVersion:(NSString *)pythonVersion {
     NSString *wrapper = [[NSBundle bundleForClass:self.class] pathForResource:@"it2_api_wrapper" ofType:@"sh"];
@@ -254,8 +424,12 @@ static NSString *const iTermAPIScriptLauncherScriptDidFailUserNotificationCallba
                          [wrapper stringWithEscapedShellCharactersExceptTabAndNewline],
                          [virtualEnv stringWithEscapedShellCharactersExceptTabAndNewline],
                          [filename stringWithEscapedShellCharactersExceptTabAndNewline]];
-    if (arguments.length > 0) {
-        command = [command stringByAppendingFormat:@" %@", arguments];
+    if (arguments.count > 0) {
+        NSArray<NSString *> *escapedArguments = [arguments mapWithBlock:^id(NSString *anObject) {
+            return [anObject stringWithEscapedShellCharactersIncludingNewlines:YES];
+        }];
+        NSString *joinedArguments = [escapedArguments componentsJoinedByString:@" "];
+        command = [command stringByAppendingFormat:@" %@", joinedArguments];
     }
     NSArray<NSString *> *result = @[ @"-c", command ];
     return result;
@@ -268,7 +442,9 @@ static NSString *const iTermAPIScriptLauncherScriptDidFailUserNotificationCallba
         queues = [NSMutableArray array];
     });
     dispatch_queue_t q = dispatch_queue_create("com.iterm2.script-launcher", NULL);
-    [queues addObject:q];
+    @synchronized(queues) {
+        [queues addObject:q];
+    }
     dispatch_async(q, ^{
         NSFileHandle *readHandle = [pipe fileHandleForReading];
         NSData *inData = [readHandle availableData];
@@ -304,7 +480,9 @@ static NSString *const iTermAPIScriptLauncherScriptDidFailUserNotificationCallba
             }
             [entry stopRunning];
         });
-        [queues removeObject:q];
+        @synchronized(queues) {
+            [queues removeObject:q];
+        }
     });
 }
 
@@ -327,7 +505,7 @@ static NSString *const iTermAPIScriptLauncherScriptDidFailUserNotificationCallba
 
 + (NSString *)prospectivePythonPathForPyenvScriptNamed:(NSString *)name {
     NSArray<NSString *> *components = @[ name, @"iterm2env", @"versions" ];
-    NSString *path = [[NSFileManager defaultManager] scriptsPathWithoutSpaces];
+    NSString *path = [[NSFileManager defaultManager] scriptsPath];
     for (NSString *part in components) {
         path = [path stringByAppendingPathComponent:part];
     }
@@ -340,7 +518,9 @@ static NSString *const iTermAPIScriptLauncherScriptDidFailUserNotificationCallba
     return path;
 }
 
-+ (NSString *)environmentForScript:(NSString *)path checkForMain:(BOOL)checkForMain {
++ (NSString *)environmentForScript:(NSString *)path
+                      checkForMain:(BOOL)checkForMain
+                     checkForSaved:(BOOL)checkForSaved {
     if (checkForMain) {
         NSString *name = path.lastPathComponent;
         // If path is foo/bar then look for foo/bar/bar/bar.py
@@ -350,12 +530,27 @@ static NSString *const iTermAPIScriptLauncherScriptDidFailUserNotificationCallba
         }
     }
 
-    // Does it have an pyenv?
+    // Does it have a pyenv?
     // foo/bar/iterm2env
-    NSString *pyenvPython = [[iTermPythonRuntimeDownloader sharedInstance] pyenvAt:[path stringByAppendingPathComponent:@"iterm2env"]
-                                                                     pythonVersion:[iTermAPIScriptLauncher pythonVersionForScript:path]];
-    if ([[NSFileManager defaultManager] fileExistsAtPath:pyenvPython isDirectory:nil]) {
-        return pyenvPython;
+    iTermPythonRuntimeDownloader *downloader = [iTermPythonRuntimeDownloader sharedInstance];
+    {
+        NSString *pyenvPython = [downloader pyenvAt:[path stringByAppendingPathComponent:@"iterm2env"]
+                                      pythonVersion:[iTermAPIScriptLauncher pythonVersionForScript:path]];
+        if ([[NSFileManager defaultManager] fileExistsAtPath:pyenvPython isDirectory:nil]) {
+            return pyenvPython;
+        }
+    }
+
+    if (!checkForSaved) {
+        return nil;
+    }
+
+    {
+        NSString *pyenvPython = [downloader pyenvAt:[path stringByAppendingPathComponent:@"saved-iterm2env"]
+                                      pythonVersion:[iTermAPIScriptLauncher pythonVersionForScript:path]];
+        if ([[NSFileManager defaultManager] fileExistsAtPath:pyenvPython isDirectory:nil]) {
+            return pyenvPython;
+        }
     }
 
     return nil;

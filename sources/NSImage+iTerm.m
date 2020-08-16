@@ -9,6 +9,13 @@
 #import "NSAppearance+iTerm.h"
 #import "NSColor+iTerm.h"
 #import "NSImage+iTerm.h"
+#import "NSObject+iTerm.h"
+
+#ifndef MAC_OS_X_VERSION_10_16
+@interface NSImage(ImageFuture)
++ (NSImage *)imageWithSystemSymbolName:(NSString *)name accessibilityDescription:(NSString *)accessibilityDescription NS_AVAILABLE_MAC(10_16);
+@end
+#endif
 
 @implementation NSImage (iTerm)
 
@@ -124,8 +131,35 @@
     return map[type];
 }
 
++ (NSImage *)it_imageForSymbolName:(NSString *)name accessibilityDescription:(NSString *)accessibilityDescription NS_AVAILABLE_MAC(10_16) {
+    return [NSImage imageWithSystemSymbolName:name accessibilityDescription:accessibilityDescription];
+}
+
++ (NSImage *)it_hamburgerForClass:(Class)theClass {
+    if (@available(macOS 10.16, *)) {
+        return [self it_imageForSymbolName:@"ellipsis.circle" accessibilityDescription:@"Menu"];
+    }
+    return [NSImage it_imageNamed:@"Hamburger" forClass:theClass];
+}
+
 + (instancetype)it_imageNamed:(NSImageName)name forClass:(Class)theClass {
     return [[NSBundle bundleForClass:theClass] imageForResource:name];
+}
+
++ (instancetype)it_cacheableImageNamed:(NSImageName)name forClass:(Class)theClass {
+    static NSMutableDictionary<NSString *, NSImage *> *cache;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        cache = [NSMutableDictionary dictionary];
+    });
+    NSString *key = [NSString stringWithFormat:@"%@\n%@", NSStringFromClass(theClass), name];
+    NSImage *cached = cache[key];
+    if (cached) {
+        return cached;
+    }
+    NSImage *image = [self it_imageNamed:name forClass:theClass];
+    cache[key] = image;
+    return image;
 }
 
 - (NSImage *)blurredImageWithRadius:(int)radius {
@@ -225,7 +259,7 @@
 }
 
 - (void)saveAsPNGTo:(NSString *)filename {
-    [[self dataForFileOfType:NSPNGFileType] writeToFile:filename atomically:NO];
+    [[self dataForFileOfType:NSBitmapImageFileTypePNG] writeToFile:filename atomically:NO];
 }
 
 // TODO: Should this use -bitmapImageRep?
@@ -312,13 +346,32 @@
 
 }
 
-- (NSImage *)it_flippedImage {
+- (NSImage *)it_cachingImageWithTintColor:(NSColor *)tintColor key:(const void *)key {
+    NSImage *cached = [self it_associatedObjectForKey:key];
+    if (cached) {
+        return cached;
+    }
+
+    NSImage *image = [self it_imageWithTintColor:tintColor];
+    [self it_setAssociatedObject:image forKey:key];
+    return image;
+}
+
+- (NSImage *)it_verticallyFlippedImage {
+    return [self it_imageScaledByX:1 y:-1];
+}
+
+- (NSImage *)it_horizontallyFlippedImage {
+    return [self it_imageScaledByX:-1 y:1];
+}
+
+- (NSImage *)it_imageScaledByX:(CGFloat)xScale y:(CGFloat)yScale {
     const NSSize size = self.size;
     if (size.width == 0 || size.height == 0) {
         return self;
     }
     NSAffineTransform *transform = [NSAffineTransform transform];
-    [transform scaleXBy:1 yBy:-1];
+    [transform scaleXBy:xScale yBy:yScale];
     NSAffineTransform *center = [NSAffineTransform transform];
     [center translateXBy:size.width / 2. yBy:size.height / 2.];
     [transform appendTransform:center];
@@ -344,6 +397,48 @@
                operation:NSCompositingOperationCopy
                 fraction:1];
     }];
+}
+
+static NSBitmapImageRep * iTermCreateBitmapRep(NSSize size,
+                                               NSImage *sourceImage) {
+    NSBitmapImageRep *rep = [[NSBitmapImageRep alloc]
+              initWithBitmapDataPlanes:NULL
+                            pixelsWide:size.width
+                            pixelsHigh:size.height
+                         bitsPerSample:8
+                       samplesPerPixel:4
+                              hasAlpha:YES
+                              isPlanar:NO
+                             colorSpaceName:sourceImage.bitmapImageRep.colorSpaceName
+                           bytesPerRow:0
+                          bitsPerPixel:0];
+    rep.size = size;
+
+    [NSGraphicsContext saveGraphicsState];
+    [NSGraphicsContext setCurrentContext:[NSGraphicsContext graphicsContextWithBitmapImageRep:rep]];
+    [sourceImage drawInRect:NSMakeRect(0, 0, size.width, size.height)
+                   fromRect:NSZeroRect
+                  operation:NSCompositingOperationCopy
+                   fraction:1.0];
+    [NSGraphicsContext restoreGraphicsState];
+
+    return rep;
+}
+
++ (NSImage *)it_imageWithScaledBitmapFromFile:(NSString *)file pointSize:(NSSize)pointSize {
+    NSImage *sourceImage = [[NSImage alloc] initWithContentsOfFile:file];
+    if (!sourceImage.isValid) {
+        return nil;
+    }
+    NSBitmapImageRep *lowdpi = iTermCreateBitmapRep(pointSize, sourceImage);
+    const NSSize retinaPixelSize = NSMakeSize(pointSize.width * 2,
+                                              pointSize.height * 2);
+    NSBitmapImageRep *hidpi = iTermCreateBitmapRep(retinaPixelSize, sourceImage);
+
+    NSImage *image = [[NSImage alloc] initWithSize:pointSize];
+    [image addRepresentation:lowdpi];
+    [image addRepresentation:hidpi];
+    return image;
 }
 
 - (CGImageRef)CGImage {

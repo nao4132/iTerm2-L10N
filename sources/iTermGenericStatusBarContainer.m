@@ -8,6 +8,7 @@
 #import "iTermGenericStatusBarContainer.h"
 
 #import "iTermNotificationCenter.h"
+#import "iTermPreferenceDidChangeNotification.h"
 #import "iTermPreferences.h"
 #import "NSView+iTerm.h"
 
@@ -57,7 +58,7 @@
     const NSRect rect = NSMakeRect(0,
                                    0,
                                    self.frame.size.width,
-                                   iTermStatusBarHeight);
+                                   iTermGetStatusBarHeight());
     _backing.frame = rect;
     _statusBarViewController.view.frame = rect;
 }

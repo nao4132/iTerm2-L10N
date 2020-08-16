@@ -23,12 +23,14 @@ NSString *kSemanticHistoryTextKey = @"text";
 
 NSString *kSublimeText2Identifier = @"com.sublimetext.2";
 NSString *kSublimeText3Identifier = @"com.sublimetext.3";
+NSString *kSublimeText4Identifier = @"com.sublimetext.4";
 NSString *kMacVimIdentifier = @"org.vim.MacVim";
 NSString *kTextmateIdentifier = @"com.macromates.TextMate";
 NSString *kTextmate2Identifier = @"com.macromates.TextMate.preview";
 NSString *kBBEditIdentifier = @"com.barebones.bbedit";
 NSString *kAtomIdentifier = @"com.github.atom";
 NSString *kVSCodeIdentifier = @"com.microsoft.VSCode";
+NSString *kVSCodiumIdentifier = @"com.visualstudio.code.oss";
 NSString *kVSCodeInsidersIdentifier = @"com.microsoft.VSCodeInsiders";
 NSString *kEmacsAppIdentifier = @"org.gnu.Emacs";
 NSString *kIntelliJIDEAIdentifier = @"com.jetbrains.intellij.ce";
@@ -73,11 +75,14 @@ enum {
     kTextmateTag,
     kBBEditTag,
     kSublimeText3Tag,
+    kSublimeText4Tag,
     kAtomTag,
     kTextmate2Tag,
     kVSCodeTag,
     kVSCodeInsidersTag,
-    kEmacsAppTag
+    kEmacsAppTag,
+    kVSCodiumTag,
+    kIntelliJTag
     // Only append to the end of the list; never delete or change.
 };
 
@@ -96,7 +101,8 @@ enum {
 
     if (count > 0) {
         if ([bundleId isEqualToString:kSublimeText2Identifier] ||
-            [bundleId isEqualToString:kSublimeText3Identifier]) {
+            [bundleId isEqualToString:kSublimeText3Identifier] ||
+            [bundleId isEqualToString:kSublimeText4Identifier]) {
             // Extra check for sublime text.
             if (![[NSWorkspace sharedWorkspace] absolutePathForAppBundleWithIdentifier:bundleId]) {
                 return NO;
@@ -114,20 +120,24 @@ enum {
 + (NSString *)schemeForEditor:(NSString *)editor {
     NSDictionary *schemes = @{ kSublimeText2Identifier: @"subl",
                                kSublimeText3Identifier: @"subl",
+                               kSublimeText4Identifier: @"subl",
                                kMacVimIdentifier: @"mvim",
                                kTextmateIdentifier: @"txmt",
                                kTextmate2Identifier: @"txmt",
                                kBBEditIdentifier: @"txmt",
                                kAtomIdentifier: @"atom",
                                kVSCodeIdentifier: @"vscode",
+                               kVSCodiumIdentifier: @"vscodium",
                                kVSCodeInsidersIdentifier: @"vscode",
-                               kEmacsAppIdentifier: @"" };
+                               kEmacsAppIdentifier: @"",
+                               kIntelliJIDEAIdentifier: @"" };
     return schemes[editor];
 }
 
 + (NSArray *)editorsInPreferenceOrder {
     // Editors from most to least preferred.
-    return @[ kSublimeText3Identifier,
+    return @[ kSublimeText4Identifier,
+              kSublimeText3Identifier,
               kSublimeText2Identifier,
               kMacVimIdentifier,
               kTextmateIdentifier,
@@ -135,8 +145,10 @@ enum {
               kBBEditIdentifier,
               kAtomIdentifier,
               kVSCodeIdentifier,
+              kVSCodiumIdentifier,
               kVSCodeInsidersIdentifier,
-              kEmacsAppIdentifier ];
+              kEmacsAppIdentifier,
+              kIntelliJIDEAIdentifier ];
 }
 
 + (NSString *)bestEditor {
@@ -151,19 +163,23 @@ enum {
 + (BOOL)bundleIdIsEditor:(NSString *)bundleId {
     NSArray *editorBundleIds = @[ kSublimeText2Identifier,
                                   kSublimeText3Identifier,
+                                  kSublimeText4Identifier,
                                   kMacVimIdentifier,
                                   kTextmateIdentifier,
                                   kTextmate2Identifier,
                                   kBBEditIdentifier,
                                   kAtomIdentifier,
                                   kVSCodeIdentifier,
+                                  kVSCodiumIdentifier,
                                   kVSCodeInsidersIdentifier,
-                                  kEmacsAppIdentifier ];
+                                  kEmacsAppIdentifier,
+                                  kIntelliJIDEAIdentifier ];
     return [editorBundleIds containsObject:bundleId];
 }
 
 + (NSDictionary *)identifierToTagMap {
-    NSDictionary *tags = @{ kSublimeText3Identifier: @(kSublimeText3Tag),
+    NSDictionary *tags = @{ kSublimeText4Identifier: @(kSublimeText4Tag),
+                            kSublimeText3Identifier: @(kSublimeText3Tag),
                             kSublimeText2Identifier: @(kSublimeText2Tag),
                                   kMacVimIdentifier: @(kMacVimTag),
                                 kTextmateIdentifier: @(kTextmateTag),
@@ -171,8 +187,10 @@ enum {
                                   kBBEditIdentifier: @(kBBEditTag),
                                     kAtomIdentifier: @(kAtomTag),
                                   kVSCodeIdentifier: @(kVSCodeTag),
+                                kVSCodiumIdentifier: @(kVSCodiumTag),
                           kVSCodeInsidersIdentifier: @(kVSCodeInsidersTag),
-                                kEmacsAppIdentifier: @(kEmacsAppTag) };
+                                kEmacsAppIdentifier: @(kEmacsAppTag),
+                            kIntelliJIDEAIdentifier: @(kIntelliJTag) };
     return tags;
 }
 
@@ -200,7 +218,8 @@ enum {
                                                                           functionsOnly:NO];
     text_.delegate = _textFieldDelegate;
 
-    NSDictionary *names = @{ kSublimeText3Identifier: @"Sublime Text 3",
+    NSDictionary *names = @{ kSublimeText4Identifier: @"Sublime Text 4",
+                             kSublimeText3Identifier: @"Sublime Text 3",
                              kSublimeText2Identifier: @"Sublime Text 2",
                                    kMacVimIdentifier: @"MacVim",
                                  kTextmateIdentifier: @"Textmate",
@@ -208,8 +227,10 @@ enum {
                                    kBBEditIdentifier: @"BBEdit",
                                      kAtomIdentifier: @"Atom",
                                    kVSCodeIdentifier: @"VS Code",
+                                 kVSCodiumIdentifier: @"VS Codium",
                            kVSCodeInsidersIdentifier: @"VS Code Insiders",
-                                 kEmacsAppIdentifier:@"Emacs.app" };
+                                 kEmacsAppIdentifier: @"Emacs.app",
+                             kIntelliJIDEAIdentifier: @"IntelliJ IDEA" };
 
     NSDictionary *tags = [[self class] identifierToTagMap];
 
@@ -265,7 +286,8 @@ enum {
 
 - (NSString *)editorIdentifier
 {
-    NSDictionary *map = @{ @(kSublimeText3Tag): kSublimeText3Identifier,
+    NSDictionary *map = @{ @(kSublimeText4Tag): kSublimeText4Identifier,
+                           @(kSublimeText3Tag): kSublimeText3Identifier,
                            @(kSublimeText2Tag): kSublimeText2Identifier,
                                  @(kMacVimTag): kMacVimIdentifier,
                                @(kTextmateTag): kTextmateIdentifier,
@@ -273,8 +295,10 @@ enum {
                                  @(kBBEditTag): kBBEditIdentifier,
                                    @(kAtomTag): kAtomIdentifier,
                                  @(kVSCodeTag): kVSCodeIdentifier,
+                               @(kVSCodiumTag): kVSCodiumIdentifier,
                          @(kVSCodeInsidersTag): kVSCodeInsidersIdentifier,
-                               @(kEmacsAppTag): kEmacsAppIdentifier };
+                               @(kEmacsAppTag): kEmacsAppIdentifier,
+                           @(kIntelliJTag): kIntelliJIDEAIdentifier };
     return map[@([[editors_ selectedItem] tag])];
 }
 
@@ -427,7 +451,7 @@ enum {
     NSString *action = prefs[kSemanticHistoryActionKey];
     // Uncheck all items
     for (NSMenuItem *item in [[action_ menu] itemArray]) {
-        [item setState:NSOffState];
+        [item setState:NSControlStateValueOff];
     }
     // Set selection in menu
     NSDictionary *actionToTagMap = [[self class] actionToTagMap];
@@ -437,7 +461,7 @@ enum {
     }
 
     // Check selected item
-    [[[action_ menu] itemWithTag:[action_ selectedTag]] setState:NSOnState];
+    [[[action_ menu] itemWithTag:[action_ selectedTag]] setState:NSControlStateValueOn];
     [self actionChanged:nil];
     NSString *text = prefs[kSemanticHistoryTextKey];
     if (text) {

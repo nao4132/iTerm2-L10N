@@ -84,11 +84,15 @@ extern NSString *const kPreferenceKeyTmuxDashboardLimit;
 extern NSString *const kPreferenceKeyAutoHideTmuxClientSession;
 extern NSString *const kPreferenceKeyUseTmuxProfile;
 extern NSString *const kPreferenceKeyUseTmuxStatusBar;
+extern NSString *const kPreferenceKeyTmuxPauseModeAgeLimit;
+extern NSString *const kPreferenceKeyTmuxUnpauseAutomatically;
+extern NSString *const kPreferenceKeyTmuxWarnBeforePausing;
 extern NSString *const kPreferenceKeyUseMetal;
 extern NSString *const kPreferenceKeyDisableMetalWhenUnplugged;
 extern NSString *const kPreferenceKeyPreferIntegratedGPU;
 extern NSString *const kPreferenceKeyMetalMaximizeThroughput;
 extern NSString *const kPreferenceKeyEnableAPIServer;
+extern NSString *const kPreferenceKeyAPIAuthentication;
 
 // Appearance
 extern NSString *const kPreferenceKeyTabStyle_Deprecated;
@@ -106,6 +110,7 @@ extern NSString *const kPreferenceKeyShowPaneTitles;
 extern NSString *const kPreferenceKeyPerPaneBackgroundImage;
 extern NSString *const kPreferenceKeyHideMenuBarInFullscreen;
 extern NSString *const kPreferenceKeyUIElement;
+extern NSString *const kPreferenceKeyUIElementRequiresHotkeys;
 extern NSString *const kPreferenceKeyFlashTabBarInFullscreen;
 extern NSString *const kPreferenceKeyStretchTabsToFillBar;
 extern NSString *const kPreferenceKeyShowWindowNumber;
@@ -154,6 +159,8 @@ extern NSString *const kPreferenceKeyThreeFingerEmulatesMiddle;
 extern NSString *const kPreferenceKeyFocusFollowsMouse;
 extern NSString *const kPreferenceKeyTripleClickSelectsFullWrappedLines;
 extern NSString *const kPreferenceKeyDoubleClickPerformsSmartSelection;
+extern NSString *const kPreferenceKeyEnterCopyModeAutomatically;
+extern NSString *const kPreferenceKeyFocusOnRightOrMiddleClick;
 
 // Not in prefs
 // Stores the last CFBundleVersion run.

@@ -21,17 +21,31 @@ static NSString *const iTermNaggingControllerArrangementProfileMissingIdentifier
 static NSString *const iTermNaggingControllerTmuxSupplementaryPlaneErrorIdentifier = @"Tmux2.2SupplementaryPlaneAnnouncement";
 static NSString *const iTermNaggingControllerAskAboutAlternateMouseScrollIdentifier = @"AskAboutAlternateMouseScroll";
 static NSString *const iTermNaggingControllerAskAboutMouseReportingFrustrationIdentifier = @"AskAboutMouseReportingFrustration";
-static NSString *const kTurnOffBracketedPasteOnHostChangeAnnouncementIdentifier = @"TurnOffBracketedPasteOnHostChange";
+NSString *const kTurnOffBracketedPasteOnHostChangeAnnouncementIdentifier = @"TurnOffBracketedPasteOnHostChange";
+static NSString *const iTermNaggingControllerAskAboutClearingScrollbackHistoryIdentifier = @"ClearScrollbackHistory";
 NSString *const kTurnOffBracketedPasteOnHostChangeUserDefaultsKey = @"NoSyncTurnOffBracketedPasteOnHostChange";
+static NSString *const iTermNaggingControllerAskAboutChangingProfileIdentifier = @"AskAboutChangingProfile";
+static NSString *const iTermNaggingControllerTmuxWindowsShouldCloseAfterDetach = @"TmuxWindowsShouldCloseAfterDetach";
 
 static NSString *const iTermNaggingControllerUserDefaultNeverAskAboutSettingAlternateMouseScroll = @"NoSyncNeverAskAboutSettingAlternateMouseScroll";
-static NSString *const iTermNaggingControllerUserDefaultMouseReportingFrustrationDetectionDisabled = @"NoSyncNeverAskAboutMouseReportingFrustration";
 
 static NSString *iTermNaggingControllerSetBackgroundImageFileIdentifier = @"SetBackgroundImageFile";
 static NSString *iTermNaggingControllerUserDefaultAlwaysAllowBackgroundImage = @"AlwaysAllowBackgroundImage";
 static NSString *iTermNaggingControllerUserDefaultAlwaysDenyBackgroundImage = @"AlwaysDenyBackgroundImage";
+static NSString *const iTermNaggingControllerDidChangeTmuxWindowsShouldCloseAfterDetach = @"iTermNaggingControllerDidChangeTmuxWindowsShouldCloseAfterDetach";
 
 @implementation iTermNaggingController
+
+- (instancetype)init {
+    self = [super init];
+    if (self) {
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(didChangeTmuxWindowsShouldCloseAfterDetach:)
+                                                     name:iTermNaggingControllerDidChangeTmuxWindowsShouldCloseAfterDetach
+                                                   object:nil];
+    }
+    return self;
+}
 
 - (BOOL)permissionToReportVariableNamed:(NSString *)name {
     static NSString *const allow = @"allow:";
@@ -89,6 +103,40 @@ static NSString *iTermNaggingControllerUserDefaultAlwaysDenyBackgroundImage = @"
                                                                 guid:guid
                                                            selection:selection];
     }];
+}
+
+- (void)arrangementWithName:(NSString *)arrangementName
+              hasInvalidPWD:(NSString *)badPWD
+         forSessionWithGuid:(NSString *)sessionGUID {
+    DLog(@"Arrangement %@ has bad pwd of %@ for session guid %@", arrangementName, badPWD, sessionGUID);
+    if ([iTermAdvancedSettingsModel noSyncSuppressBadPWDInArrangementWarning]) {
+        return;
+    }
+    NSString *notice = [NSString stringWithFormat:@"The saved arrangement “%@” has a bad initial directory of “%@” for this session.", arrangementName, badPWD];
+
+    [self.delegate naggingControllerShowMessage:notice
+                                     isQuestion:NO
+                                      important:NO
+                                     identifier:iTermNaggingControllerArrangementProfileMissingIdentifier
+                                        options:@[ @"Don’t Warn Again", @"Repair" ]
+                                     completion:^(int selection) {
+        [self handleCompletionForInvalidPWDInArrangementWithName:arrangementName
+                                                            guid:sessionGUID
+                                                       selection:selection];
+    }];
+}
+
+- (void)handleCompletionForInvalidPWDInArrangementWithName:(NSString *)arrangementName
+                                                      guid:(NSString *)guid
+                                                 selection:(int)selection {
+    if (selection == 0) {
+        [iTermAdvancedSettingsModel setNoSyncSuppressBadPWDInArrangementWarning:YES];
+        return;
+    }
+    if (selection == 1) {
+        [self.delegate naggingControllerRepairInitialWorkingDirectoryOfSessionWithGUID:guid
+                                                                 inArrangementWithName:arrangementName];
+    }
 }
 
 - (void)didRestoreOrphan {
@@ -283,14 +331,14 @@ static NSString *iTermNaggingControllerUserDefaultAlwaysDenyBackgroundImage = @"
 }
 
 - (void)didDetectMouseReportingFrustration {
-    if ([[NSUserDefaults standardUserDefaults] boolForKey:iTermNaggingControllerUserDefaultMouseReportingFrustrationDetectionDisabled]) {
+    if ([iTermAdvancedSettingsModel noSyncNeverAskAboutMouseReportingFrustration]) {
         return;
     }
     [self.delegate naggingControllerShowMessage:@"Looks like you’re trying to copy to the pasteboard, but mouse reporting has prevented making a selection. Disable mouse reporting?"
                                      isQuestion:YES
                                       important:YES
                                      identifier:iTermNaggingControllerAskAboutMouseReportingFrustrationIdentifier
-                                        options:@[ @"_Temporarily", @"Permanently" ]
+                                        options:@[ @"_Temporarily", @"Permanently", @"Stop Asking" ]
                                      completion:^(int selection) {
         [self handleMouseReportingFrustration:selection];
     }];
@@ -305,6 +353,10 @@ static NSString *iTermNaggingControllerUserDefaultAlwaysDenyBackgroundImage = @"
         case 1: { // Never
             [self.delegate naggingControllerDisableMouseReportingPermanently:YES];
             break;
+        }
+
+        case 2: { // Stop asking
+            [iTermAdvancedSettingsModel setNoSyncNeverAskAboutMouseReportingFrustration:YES];
         }
     }
 }
@@ -348,6 +400,89 @@ static NSString *iTermNaggingControllerUserDefaultAlwaysDenyBackgroundImage = @"
     }];
 }
 
+- (BOOL)shouldAskAboutClearingScrollbackHistory {
+    return iTermAdvancedSettingsModel.preventEscapeSequenceFromClearingHistory == nil;
+}
+
+- (void)askAboutClearingScrollbackHistory {
+    NSString *message = @"A control sequence attempted to clear scrollback history. Allow this in the future?";
+    [self.delegate naggingControllerShowMessage:message
+                                     isQuestion:YES
+                                      important:NO
+                                     identifier:iTermNaggingControllerAskAboutClearingScrollbackHistoryIdentifier
+                                        options:@[ @"Always _Allow", @"Always _Deny" ]
+                                     completion:^(int selection) {
+        switch (selection) {
+            case 0: {
+                const BOOL value = NO;
+                iTermAdvancedSettingsModel.preventEscapeSequenceFromClearingHistory = &value;
+                break;
+            }
+            case 1: {
+                const BOOL value = YES;
+                iTermAdvancedSettingsModel.preventEscapeSequenceFromClearingHistory = &value;
+                break;
+            }
+        }
+    }];
+}
+
+- (BOOL)terminalCanChangeProfile {
+    const BOOL *boolPtr = iTermAdvancedSettingsModel.preventEscapeSequenceFromChangingProfile;
+    if (boolPtr) {
+        return !*boolPtr;
+    }
+    NSString *message = @"A control sequence attempted to change the current profile. Allow this in the future?";
+    [self.delegate naggingControllerShowMessage:message
+                                     isQuestion:YES
+                                      important:NO
+                                     identifier:iTermNaggingControllerAskAboutChangingProfileIdentifier
+                                        options:@[ @"Always _Allow", @"Always _Deny" ]
+                                     completion:^(int selection) {
+        switch (selection) {
+            case 0: {
+                const BOOL value = NO;
+                iTermAdvancedSettingsModel.preventEscapeSequenceFromChangingProfile = &value;
+                break;
+            }
+            case 1: {
+                const BOOL value = YES;
+                iTermAdvancedSettingsModel.preventEscapeSequenceFromChangingProfile = &value;
+                break;
+            }
+        }
+    }];
+    return NO;
+}
+
+- (BOOL)tmuxWindowsShouldCloseAfterDetach {
+    const BOOL *boolPtr = iTermAdvancedSettingsModel.tmuxWindowsShouldCloseAfterDetach;
+    if (boolPtr) {
+        return *boolPtr;
+    }
+    NSString *message = @"Close tmux windows after detaching?";
+    [self.delegate naggingControllerShowMessage:message
+                                     isQuestion:YES
+                                      important:YES
+                                     identifier:iTermNaggingControllerTmuxWindowsShouldCloseAfterDetach
+                                        options:@[ @"_Always", @"_Never" ]
+                                     completion:^(int selection) {
+        if (selection == 0 || selection == 1) {
+            BOOL value = (selection == 0);
+            iTermAdvancedSettingsModel.tmuxWindowsShouldCloseAfterDetach = &value;
+            [[NSNotificationCenter defaultCenter] postNotificationName:iTermNaggingControllerDidChangeTmuxWindowsShouldCloseAfterDetach
+                                                                object:@(value)];
+        }
+    }];
+    return NO;
+}
+
+- (void)didChangeTmuxWindowsShouldCloseAfterDetach:(NSNotification *)notification {
+    [self.delegate naggingControllerRemoveMessageWithIdentifier:iTermNaggingControllerTmuxWindowsShouldCloseAfterDetach];
+    if ([notification.object boolValue]) {
+        [self.delegate naggingControllerCloseSession];
+    }
+}
 
 #pragma mark - Variable Reporting
 

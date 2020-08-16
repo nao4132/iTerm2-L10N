@@ -12,6 +12,7 @@
 #import "iTermFileDescriptorSocketPath.h"
 #import "iTermOrphanServerAdopter.h"
 #import "iTermProcessCache.h"
+#import "NSArray+iTerm.h"
 #import "NSWorkspace+iTerm.h"
 #import "PTYTask+MRR.h"
 #import "TaskNotifier.h"
@@ -60,6 +61,17 @@
     assert(NO);
 }
 
+- (BOOL)closeFileDescriptor {
+    @synchronized (self) {
+        if (self.fd == -1) {
+            return NO;
+        }
+        close(self.fd);
+        self.fd = -1;
+        return YES;
+    }
+}
+
 - (NSString *)pathToNewUnixDomainSocket {
     // Create a temporary filename for the unix domain socket. It'll only exist for a moment.
     NSString *tempPath = [[NSWorkspace sharedWorkspace] temporaryFileNameWithPrefix:@"iTerm2-temp-socket."
@@ -67,16 +79,17 @@
     return tempPath;
 }
 
-- (void)forkAndExecWithTtyState:(iTermTTYState *)ttyStatePtr
-                        argpath:(const char *)argpath
-                           argv:(const char **)argv
-                     initialPwd:(const char *)initialPwd
-                     newEnviron:(const char **)newEnviron
+- (void)forkAndExecWithTtyState:(iTermTTYState)ttyState
+                        argpath:(NSString *)argpath
+                           argv:(NSArray<NSString *> *)argv
+                     initialPwd:(NSString *)initialPwd
+                     newEnviron:(NSArray<NSString *> *)newEnviron
                            task:(id<iTermTask>)task
-                     completion:(void (^)(iTermJobManagerForkAndExecStatus))completion {
+                     completion:(void (^)(iTermJobManagerForkAndExecStatus))completion  {
     // Completion wrapper. NOT called on self.queue because that will deadlock.
     void (^wrapper)(iTermJobManagerForkAndExecStatus) = ^(iTermJobManagerForkAndExecStatus status) {
         if (status == iTermJobManagerForkAndExecStatusSuccess) {
+            DLog(@"Register %@ after fork and exec", @(task.pid));
             [[TaskNotifier sharedInstance] registerTask:task];
         }
         completion(status);
@@ -84,7 +97,7 @@
 
     __block iTermJobManagerForkAndExecStatus savedStatus = iTermJobManagerForkAndExecStatusSuccess;
     dispatch_sync(self.queue, ^{
-        [self queueForkAndExecWithTtyState:ttyStatePtr
+        [self queueForkAndExecWithTtyState:ttyState
                                    argpath:argpath
                                       argv:argv
                                 initialPwd:initialPwd
@@ -100,11 +113,11 @@
     });
 }
 
-- (void)queueForkAndExecWithTtyState:(iTermTTYState *)ttyStatePtr
-                             argpath:(const char *)argpath
-                                argv:(const char **)argv
-                          initialPwd:(const char *)initialPwd
-                          newEnviron:(const char **)newEnviron
+- (void)queueForkAndExecWithTtyState:(iTermTTYState)ttyState
+                             argpath:(NSString *)argpath
+                                argv:(NSArray<NSString *> *)argv
+                          initialPwd:(NSString *)initialPwd
+                          newEnviron:(NSArray<NSString *> *)newEnviron
                                 task:(id<iTermTask>)task
                           completion:(void (^)(iTermJobManagerForkAndExecStatus))completion {
     // Create a temporary filename for the unix domain socket. It'll only exist for a moment.
@@ -124,14 +137,24 @@
         .deadMansPipe = { 0, 0 },
     };
 
+    const char **cArgv = [argv nullTerminatedCStringArray];
+    const char **cEnviron = [newEnviron nullTerminatedCStringArray];
     self.fd = iTermForkAndExecToRunJobInServer(&forkState,
-                                               ttyStatePtr,
+                                               &ttyState,
                                                unixDomainSocketPath,
-                                               argpath,
-                                               argv,
+                                               argpath.UTF8String,
+                                               cArgv,
                                                NO,
-                                               initialPwd,
-                                               newEnviron);
+                                               initialPwd.UTF8String,
+                                               cEnviron);
+    iTermFreeeNullTerminatedCStringArray(cArgv);
+    iTermFreeeNullTerminatedCStringArray(cEnviron);
+
+    const int fd = self.fd;
+    if (fd >= 0) {
+        fcntl(self.fd, F_SETFL, O_NONBLOCK);
+    }
+
     // If you get here you're the parent.
     _serverPid = forkState.pid;
 
@@ -141,13 +164,13 @@
     }
 
     [self queueDidForkParent:&forkState
-                    ttyState:ttyStatePtr
+                    ttyState:ttyState
                         task:task
                   completion:completion];
 }
 
 - (void)queueDidForkParent:(const iTermForkState *)forkStatePtr
-                  ttyState:(iTermTTYState *)ttyStatePtr
+                  ttyState:(iTermTTYState)ttyState
                       task:(id<iTermTask>)task
                 completion:(void (^)(iTermJobManagerForkAndExecStatus))completion {
     // Make sure the master side of the pty is closed on future exec() calls.
@@ -158,7 +181,6 @@
     // will send us the child pid now. We don't really need the rest of the
     // stuff in serverConnection since we already know it, but that's ok.
     iTermForkState forkState = *forkStatePtr;
-    iTermTTYState ttyState = *ttyStatePtr;
     DLog(@"Begin handshake");
     int connectionFd = forkState.connectionFd;
     int deadmansPipeFd = forkState.deadMansPipe[0];
@@ -234,15 +256,27 @@
     }
 }
 
-- (BOOL)attachToServer:(iTermGeneralServerConnection)serverConnection
+// NOTE: The caller assumes this is synchronous and can't fail when it knows it's a monoserver.
+- (void)attachToServer:(iTermGeneralServerConnection)serverConnection
          withProcessID:(NSNumber *)pidNumber
-                  task:(id<iTermTask>)task {
+                  task:(id<iTermTask>)task
+            completion:(void (^)(iTermJobManagerAttachResults results))completion {
+    completion([self attachToServer:serverConnection
+                      withProcessID:pidNumber
+                               task:task]);
+}
+
+- (iTermJobManagerAttachResults)attachToServer:(iTermGeneralServerConnection)serverConnection
+                                 withProcessID:(NSNumber *)pidNumber
+                                          task:(id<iTermTask>)task {
+    const iTermJobManagerAttachResults results = iTermJobManagerAttachResultsAttached | iTermJobManagerAttachResultsRegistered;
     dispatch_sync(self.queue, ^{
         [self queueAttachToServer:serverConnection task:task];
     });
+    DLog(@"Register task for %@", pidNumber);
     [[TaskNotifier sharedInstance] registerTask:task];
     if (pidNumber == nil) {
-        return YES;
+        return results;
     }
 
     const pid_t thePid = pidNumber.integerValue;
@@ -251,7 +285,7 @@
     iTermFileDescriptorSocketPath(buffer, sizeof(buffer), thePid);
     [[iTermOrphanServerAdopter sharedInstance] removePath:[NSString stringWithUTF8String:buffer]];
     [[iTermProcessCache sharedInstance] setNeedsUpdate:YES];
-    return YES;
+    return results;
 }
 
 - (void)closeSocketFd {
@@ -264,7 +298,7 @@
         if (_serverPid < 0) {
             return;
         }
-        DLog(@"Sending signal to server %@", @(_serverPid));
+        DLog(@"Sending signal %@ to server %@", @(signo), @(_serverPid));
         kill(_serverPid, signo);
         return;
     }
@@ -272,6 +306,7 @@
         return;
     }
     [[iTermProcessCache sharedInstance] unregisterTrackedPID:_serverChildPid];
+    DLog(@"Sending signal %@ to child %@", @(signo), @(_serverChildPid));
     kill(_serverChildPid, signo);
 }
 
@@ -283,6 +318,7 @@
             return;
         }
         // This makes the server unlink its socket and exit immediately.
+        DLog(@"Sending SIGUSR1 to server %@", @(_serverChildPid));
         kill(_serverPid, SIGUSR1);
         serverPid = _serverPid;
         // Don't want to leak these. They exist to let the server know when iTerm2 crashes, but if
@@ -298,6 +334,7 @@
 }
 
 - (void)killWithMode:(iTermJobManagerKillingMode)mode {
+    DLog(@"%@ killWithMode:%@", self, @(mode));
     switch (mode) {
         case iTermJobManagerKillingModeRegular:
             [self sendSignal:SIGHUP toServer:NO];
@@ -366,6 +403,10 @@
         result = (_fd != -1);
     });
     return result;
+}
+
+- (BOOL)isReadOnly {
+    return NO;
 }
 
 @end

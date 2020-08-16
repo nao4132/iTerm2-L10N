@@ -13,9 +13,14 @@
 #import "iTermHotKeyController.h"
 #import "iTermHotkeyPreferencesWindowController.h"
 #import "iTermAppHotKeyProvider.h"
-#import "iTermKeyBindingMgr.h"
 #import "iTermKeyMappingViewController.h"
+#import "iTermKeyMappings.h"
+#import "iTermKeystrokeFormatter.h"
 #import "iTermModifierRemapper.h"
+#import "iTermNotificationController.h"
+#import "iTermPresetKeyMappings.h"
+#import "iTermTouchbarMappings.h"
+#import "iTermUserDefaults.h"
 #import "iTermWarning.h"
 #import "NSArray+iTerm.h"
 #import "NSEvent+iTerm.h"
@@ -276,6 +281,15 @@ static NSString *const kHotkeyWindowGeneratedProfileNameKey = @"Hotkey Window";
             dict[KEY_NAME] = newProfileName;
             dict[KEY_DEFAULT_BOOKMARK] = @"No";
             dict[KEY_GUID] = [ProfileModel freshGuid];
+
+            // Assign cmd-t to "new tab with profile" with this profile.
+            NSMutableDictionary *keyboardMap = [dict[KEY_KEYBOARD_MAP] ?: @{} mutableCopy];
+            iTermKeyBindingAction *action = [iTermKeyBindingAction withAction:KEY_ACTION_NEW_TAB_WITH_PROFILE
+                                                                    parameter:dict[KEY_GUID]];
+            iTermKeystroke *keystroke = [iTermKeystroke withCharacter:'t' modifierFlags:NSEventModifierFlagCommand];
+            keyboardMap[keystroke.serialized] = action.dictionaryValue;
+            dict[KEY_KEYBOARD_MAP] = keyboardMap;
+
             [dict removeObjectForKey:KEY_TAGS];
 
             // Copy values from the profile model's generated dictionary.
@@ -323,8 +337,10 @@ static NSString *const kHotkeyWindowGeneratedProfileNameKey = @"Hotkey Window";
     int modifiers = [iTermPreferences intForKey:kPreferenceKeyHotkeyModifiers];
     int code = [iTermPreferences intForKey:kPreferenceKeyHotKeyCode];
     if (code || theChar) {
-        NSString *identifier = [NSString stringWithFormat:@"0x%x-0x%x", theChar, modifiers];
-        _hotkeyField.stringValue = [iTermKeyBindingMgr formatKeyCombination:identifier];
+        iTermKeystroke *keystroke = [[iTermKeystroke alloc] initWithVirtualKeyCode:code
+                                                                     modifierFlags:modifiers
+                                                                         character:theChar];
+        _hotkeyField.stringValue = [iTermKeystrokeFormatter stringForKeystroke:keystroke];
     } else {
         _hotkeyField.stringValue = @"";
     }
@@ -396,14 +412,14 @@ static NSString *const kHotkeyWindowGeneratedProfileNameKey = @"Hotkey Window";
         [self setBool:NO forKey:kPreferenceKeyHotkeyEnabled];
         if (wasEnabled) {
             [self hotkeyEnabledDidChange];
-            _hotkeyEnabled.state = NSOffState;
+            _hotkeyEnabled.state = NSControlStateValueOff;
         }
     }
 }
 
-- (BOOL)anyBookmarkHasKeyMapping:(NSString*)theString {
-    for (Profile* bookmark in [[ProfileModel sharedInstance] bookmarks]) {
-        if ([iTermKeyBindingMgr haveKeyMappingForKeyString:theString inBookmark:bookmark]) {
+- (BOOL)anyProfileHasMappingForKeystroke:(iTermKeystroke *)keystroke {
+    for (Profile *profile in [[ProfileModel sharedInstance] bookmarks]) {
+        if ([iTermKeyMappings haveKeyMappingForKeystroke:keystroke inProfile:profile]) {
             return YES;
         }
     }
@@ -428,85 +444,145 @@ static NSString *const kHotkeyWindowGeneratedProfileNameKey = @"Hotkey Window";
 #pragma mark - iTermKeyMappingViewControllerDelegate
 
 - (NSDictionary *)keyMappingDictionary:(iTermKeyMappingViewController *)viewController {
-    return [iTermKeyBindingMgr globalKeyMap];
+    return [iTermKeyMappings globalKeyMap];
 }
 
-- (NSArray *)keyMappingSortedKeys:(iTermKeyMappingViewController *)viewController {
-    return [iTermKeyBindingMgr sortedGlobalKeyCombinations];
+- (NSArray<iTermKeystroke *> *)keyMappingSortedKeystrokes:(iTermKeyMappingViewController *)viewController {
+    return [iTermKeyMappings sortedGlobalKeystrokes];
 }
 
-- (NSArray *)keyMappingSortedTouchBarKeys:(iTermKeyMappingViewController *)viewController {
-    NSDictionary *dict = [iTermKeyBindingMgr globalTouchBarMap];
-    return [iTermKeyBindingMgr sortedTouchBarKeysInDictionary:dict];
+- (NSArray<iTermTouchbarItem *> *)keyMappingSortedTouchbarItems:(iTermKeyMappingViewController *)viewController {
+    NSDictionary *dict = [iTermTouchbarMappings globalTouchBarMap];
+    return [iTermTouchbarMappings sortedTouchbarItemsInDictionary:dict];
 }
 
 - (NSDictionary *)keyMappingTouchBarItems {
-    return [iTermKeyBindingMgr globalTouchBarMap];
+    return [iTermTouchbarMappings globalTouchBarMap];
+}
+
+- (BOOL)keyMapping:(iTermKeyMappingViewController *)viewController shouldImportKeystrokes:(NSSet<iTermKeystroke *> *)keystrokesThatWillChange {
+    NSSet<iTermKeystroke *> *keystrokesInGlobalMapping = [iTermKeyMappings keystrokesInGlobalMapping];
+    if (![keystrokesInGlobalMapping isSubsetOfSet:keystrokesThatWillChange]) {
+        NSNumber *n = [viewController removeBeforeLoading:@"importing mappings"];
+        if (!n) {
+            return NO;
+        }
+        if (n.boolValue) {
+            [iTermKeyMappings removeAllGlobalKeyMappings];
+        }
+    }
+    return YES;
 }
 
 - (void)keyMapping:(iTermKeyMappingViewController *)viewController
-      didChangeKey:(NSString *)theKey
-    isTouchBarItem:(BOOL)isTouchBarItem
-            atIndex:(NSInteger)index
-          toAction:(int)action
-         parameter:(NSString *)parameter
-             label:(NSString *)label  // for touch bar only
+     didChangeItem:(iTermKeystrokeOrTouchbarItem *)item
+           atIndex:(NSInteger)index
+          toAction:(iTermKeyBindingAction *)action
         isAddition:(BOOL)addition {
-    NSMutableDictionary *dict;
-    if (isTouchBarItem) {
-        dict = [NSMutableDictionary dictionaryWithDictionary:[iTermKeyBindingMgr globalTouchBarMap]];
-        [iTermKeyBindingMgr updateDictionary:dict forTouchBarItem:theKey action:action value:parameter label:label];
-        [iTermKeyBindingMgr setGlobalTouchBarMap:dict];
-    } else {
-        dict = [NSMutableDictionary dictionaryWithDictionary:[iTermKeyBindingMgr globalKeyMap]];
-        if ([self anyBookmarkHasKeyMapping:theKey]) {
+    [item whenFirst:
+     ^(iTermKeystroke * _Nonnull keystroke) {
+        NSMutableDictionary *dict = [[iTermKeyMappings globalKeyMap] mutableCopy];
+        if ([self anyProfileHasMappingForKeystroke:keystroke]) {
             if (![self warnAboutPossibleOverride]) {
                 return;
             }
         }
-        [iTermKeyBindingMgr setMappingAtIndex:index
-                                       forKey:theKey
-                                       action:action
-                                        value:parameter
-                                    createNew:addition
-                                 inDictionary:dict];
-        [iTermKeyBindingMgr setGlobalKeyMap:dict];
+        [iTermKeyMappings setMappingAtIndex:index
+                               forKeystroke:keystroke
+                                     action:action
+                                  createNew:addition
+                               inDictionary:dict];
+        [iTermKeyMappings setGlobalKeyMap:dict];
     }
+             second:
+     ^(iTermTouchbarItem * _Nonnull touchbarItem) {
+        NSMutableDictionary *dict = [[iTermTouchbarMappings globalTouchBarMap] mutableCopy];
+        [iTermTouchbarMappings updateDictionary:dict
+                                forTouchbarItem:touchbarItem
+                                         action:action];
+        [iTermTouchbarMappings setGlobalTouchBarMap:dict];
+        [self maybeExplainHowToEditTouchBarControls];
+    }];
+
     [[NSNotificationCenter defaultCenter] postNotificationName:kKeyBindingsChangedNotification
                                                         object:nil
                                                       userInfo:nil];
 }
 
-- (void)keyMapping:(iTermKeyMappingViewController *)viewController setDictionary:(NSDictionary *)dict forKey:(NSString *)key {
-
+- (void)maybeExplainHowToEditTouchBarControls {
+    if ([iTermUserDefaults haveExplainedHowToAddTouchbarControls]) {
+        return;
+    }
+    if ([[iTermTouchbarMappings globalTouchBarMap] count] != 1) {
+        return;
+    }
+    [[iTermNotificationController sharedInstance] notify:@"Touch Bar Item Added"
+                                         withDescription:@"Select View > Customize Touch Bar to enable your new touch bar item."];
+    [iTermUserDefaults setHaveExplainedHowToAddTouchbarControls:YES];
 }
 
 - (void)keyMapping:(iTermKeyMappingViewController *)viewController
-         removeKey:(NSString *)key
-    isTouchBarItem:(BOOL)isTouchBarItem {
-    if (isTouchBarItem) {
-        [iTermKeyBindingMgr removeTouchBarItem:key];
-    } else {
-        NSUInteger index = [[iTermKeyBindingMgr sortedGlobalKeyCombinations] indexOfObject:key];
+  removeKeystrokes:(NSSet<iTermKeystroke *> *)keystrokes
+     touchbarItems:(NSSet<iTermTouchbarItem *> *)touchbarItems {
+    [keystrokes enumerateObjectsUsingBlock:^(iTermKeystroke * _Nonnull keystroke, BOOL * _Nonnull stop) {
+        NSUInteger index = [[iTermKeyMappings sortedGlobalKeystrokes] indexOfObject:keystroke];
         assert(index != NSNotFound);
-        [iTermKeyBindingMgr setGlobalKeyMap:[iTermKeyBindingMgr removeMappingAtIndex:index
-                                                                        inDictionary:[iTermKeyBindingMgr globalKeyMap]]];
-    }
+        [iTermKeyMappings setGlobalKeyMap:[iTermKeyMappings removeMappingAtIndex:index
+                                                                    inDictionary:[iTermKeyMappings globalKeyMap]]];
+    }];
+    [touchbarItems enumerateObjectsUsingBlock:^(iTermTouchbarItem * _Nonnull touchbarItem, BOOL * _Nonnull stop) {
+        [iTermTouchbarMappings removeTouchbarItem:touchbarItem];
+    }];
+
     [[NSNotificationCenter defaultCenter] postNotificationName:kKeyBindingsChangedNotification
                                                         object:nil
                                                       userInfo:nil];
 }
 
 - (NSArray *)keyMappingPresetNames:(iTermKeyMappingViewController *)viewController {
-    return [iTermKeyBindingMgr globalPresetNames];
+    return [iTermPresetKeyMappings globalPresetNames];
 }
 
 - (void)keyMapping:(iTermKeyMappingViewController *)viewController
   loadPresetsNamed:(NSString *)presetName {
-    [iTermKeyBindingMgr setGlobalKeyMappingsToPreset:presetName];
+
+    NSSet<iTermKeystroke *> *keystrokesThatWillChange = [iTermPresetKeyMappings keystrokesInGlobalPreset:presetName];
+    NSSet<iTermKeystroke *> *keystrokesInGlobalMapping = [iTermKeyMappings keystrokesInGlobalMapping];
+    BOOL replaceAll = YES;
+    if (![keystrokesInGlobalMapping isSubsetOfSet:keystrokesThatWillChange]) {
+        NSNumber *n = [viewController removeBeforeLoading:@"loading preset"];
+        if (!n) {
+            return;
+        }
+        replaceAll = n.boolValue;
+    }
+
+    [iTermPresetKeyMappings setGlobalKeyMappingsToPreset:presetName byReplacingAll:replaceAll];
     [[NSNotificationCenter defaultCenter] postNotificationName:kKeyBindingsChangedNotification
                                                         object:nil
                                                       userInfo:nil];
+}
+
+- (NSNumber *)removeBeforeLoading:(NSString *)thing {
+    const iTermWarningSelection selection =
+    [iTermWarning showWarningWithTitle:[NSString stringWithFormat:@"Remove all key mappings before loading %@?", thing]
+                               actions:@[ @"Keep", @"Remove", @"Cancel" ]
+                             accessory:nil
+                            identifier:@"RemoveExistingGlobalKeyMappingsBeforeLoading"
+                           silenceable:kiTermWarningTypePersistent
+                               heading:@"Load Preset"
+                                window:self.view.window];
+    switch (selection) {
+        case kiTermWarningSelection0:
+            return @NO;
+        case kiTermWarningSelection1:
+            return @YES;
+        case kiTermWarningSelection2:
+            return nil;
+        default:
+            assert(NO);
+    }
+    return nil;
 }
 
 - (NSTabView *)tabView {

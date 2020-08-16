@@ -34,6 +34,7 @@
 
 #import <Cocoa/Cocoa.h>
 
+#import "iTermOrderedDictionary.h"
 #import "iTermTuple.h"
 
 @class iTermVariableScope;
@@ -77,6 +78,11 @@ int decode_utf8_char(const unsigned char * restrict datap,
 - (NSUInteger)numberOfLines;
 // May use single quotes by user preference. Only safe to use with user's default shell.
 - (NSString *)stringWithEscapedShellCharactersIncludingNewlines:(BOOL)includingNewlines;
+
+// foo' -> $'foo\\x27'
+// Suitable for use as bash -c 'escaped string'
+- (NSString *)stringEscapedForBash;
+
 // Always uses backslash.
 - (NSString *)stringWithBackslashEscapedShellCharactersIncludingNewlines:(BOOL)includingNewlines;
 - (NSString *)stringWithEscapedShellCharactersExceptTabAndNewline;
@@ -225,10 +231,13 @@ int decode_utf8_char(const unsigned char * restrict datap,
                                               BOOL *stop))block;
 
 - (NSString *)firstComposedCharacter:(NSString **)rest;
+- (NSString *)lastComposedCharacter;
+- (NSInteger)numberOfComposedCharacters;
+- (NSString *)byTruncatingComposedCharactersInCenter:(NSInteger)count;
 
 // It is safe to modify, delete, or insert characters in `range` within `block`.
 - (void)reverseEnumerateSubstringsEqualTo:(NSString *)query
-                                    block:(void (^)(NSRange range))block;
+                                    block:(void (^ NS_NOESCAPE)(NSRange range))block;
 
 - (NSUInteger)iterm_unsignedIntegerValue;
 
@@ -305,6 +314,7 @@ int decode_utf8_char(const unsigned char * restrict datap,
 - (NSString *)stringByDroppingLastCharacters:(NSInteger)count;
 
 - (NSString *)stringByAppendingVariablePathComponent:(NSString *)component;
+- (NSString *)stringByAppendingPathComponents:(NSArray<NSString *> *)pathComponents;
 - (NSArray<NSString *> *)it_normalizedTokens;
 - (double)it_localizedDoubleValue;
 - (NSString *)it_contentHash;
@@ -312,6 +322,15 @@ int decode_utf8_char(const unsigned char * restrict datap,
 - (NSString *)it_substringToIndex:(NSInteger)index;
 - (NSString *)it_escapedForRegex;
 - (NSString *)it_compressedString;
+
+// Use this in #!/usr/bin/env -S "%@"
+// Important! It assumes you put the value in double quotes. Amusingly, the man page for env
+// trolls you by explaining that single-quoted values only need to escape ' and \ but neglects to
+// mention that other characters simple won't work at all, escaped or otherwise.
+- (NSString *)it_escapedForEnv;
+
+// Perform substitutions in order.
+- (NSString *)stringByPerformingOrderedSubstitutions:(iTermOrderedDictionary<NSString *, NSString *> *)substitutions;
 @end
 
 @interface NSMutableString (iTerm)
@@ -322,6 +341,9 @@ int decode_utf8_char(const unsigned char * restrict datap,
 - (void)escapeShellCharactersIncludingNewlines:(BOOL)includingNewlines;
 - (void)escapeShellCharactersWithBackslashIncludingNewlines:(BOOL)includingNewlines;
 - (void)escapeShellCharactersExceptTabAndNewline;
+
+// foo' -> $'foo\\x27'
+- (void)escapeShellCharactersForBash;
 
 // Convenience method to append a single character.
 - (void)appendCharacter:(unichar)c;

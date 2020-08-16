@@ -101,7 +101,7 @@ static const CGFloat kMargin = 8;
                                                                             closeSize.width,
                                                                             closeSize.height)] autorelease];
         closeButton.autoresizingMask = NSViewMinXMargin;
-        [closeButton setButtonType:NSMomentaryPushInButton];
+        [closeButton setButtonType:NSButtonTypeMomentaryPushIn];
         [closeButton setImage:closeImage];
         [closeButton setTarget:self];
         [closeButton setAction:@selector(close:)];
@@ -171,7 +171,7 @@ static const CGFloat kMargin = 8;
     if (shouldCreatePopup) {
         pullDown = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(0, 0, 0, 0) pullsDown:YES];
         pullDown.autoresizingMask = NSViewMinXMargin;
-        [pullDown setBezelStyle:NSTexturedRoundedBezelStyle];
+        [pullDown setBezelStyle:NSBezelStyleTexturedRounded];
         [pullDown setTarget:self];
         [pullDown setAction:@selector(pullDownItemSelected:)];
         [_internalView addSubview:pullDown];
@@ -193,13 +193,13 @@ static const CGFloat kMargin = 8;
     for (int i = start; i != limit; i += step) {
         NSString *action = actions[i];
         NSButton *button = [[[NSButton alloc] init] autorelease];
-        [button setButtonType:NSMomentaryPushInButton];
+        [button setButtonType:NSButtonTypeMomentaryPushIn];
         [button setTarget:self];
         [button setAction:@selector(buttonPressed:)];
         [button setTag:i];
 
         [button setTitle:[self stringByAddingShortcutInString:action]];
-        [button setBezelStyle:NSTexturedRoundedBezelStyle];
+        [button setBezelStyle:NSBezelStyleTexturedRounded];
         [button sizeToFit];
         button.autoresizingMask = NSViewMinXMargin;
         _buttonWidth += kMargin;
@@ -270,45 +270,55 @@ static const CGFloat kMargin = 8;
 }
 
 - (void)setTitle:(NSString *)title {
+    [_title autorelease];
+    _title = [title copy];
     NSImage *iconImage = [self iconImage];
 
     CGFloat y = floor((_internalView.frame.size.height - iconImage.size.height) / 2);
-    [_icon autorelease];
-    _icon = [[NSImageView alloc] initWithFrame:NSMakeRect(kMargin,
-                                                          y,
-                                                          iconImage.size.width,
-                                                          iconImage.size.height)];
-    [_icon setImage:iconImage];
-    [_internalView addSubview:_icon];
+    {
+        [_icon removeFromSuperview];
+        [_icon autorelease];
+        _icon = [[NSImageView alloc] initWithFrame:NSMakeRect(kMargin,
+                                                              y,
+                                                              iconImage.size.width,
+                                                              iconImage.size.height)];
+        [_icon setImage:iconImage];
+        [_internalView addSubview:_icon];
+    }
 
-    NSRect rect = _internalView.frame;
-    rect.origin.x += kMargin + _icon.frame.size.width + _icon.frame.origin.x;
-    rect.size.width -= rect.origin.x;
+    {
+        NSRect rect = _internalView.frame;
+        rect.origin.x += kMargin + _icon.frame.size.width + _icon.frame.origin.x;
+        rect.size.width -= rect.origin.x;
 
-    rect.size.width -= _buttonWidth;
-    NSTextView *textView = [[[NSTextView alloc] initWithFrame:rect] autorelease];
-    NSDictionary *attributes = @{ NSFontAttributeName: [NSFont systemFontOfSize:12] };
-    NSAttributedString *attributedString = [[[NSAttributedString alloc] initWithString:title
-                                                                            attributes:attributes] autorelease];
-    textView.textStorage.attributedString = attributedString;
-    [textView setEditable:NO];
-    textView.autoresizingMask = NSViewWidthSizable | NSViewMaxXMargin;
-    textView.drawsBackground = NO;
+        rect.size.width -= _buttonWidth;
+        NSTextView *textView = [[[NSTextView alloc] initWithFrame:rect] autorelease];
+        NSDictionary *attributes = @{ NSFontAttributeName: [NSFont systemFontOfSize:12] };
+        NSAttributedString *attributedString = [[[NSAttributedString alloc] initWithString:title
+                                                                                attributes:attributes] autorelease];
+        textView.textStorage.attributedString = attributedString;
+        [textView setEditable:NO];
+        textView.autoresizingMask = NSViewWidthSizable | NSViewMaxXMargin;
+        textView.drawsBackground = NO;
 
-    [textView setSelectable:NO];
+        [textView setSelectable:NO];
 
-    _textView = [textView retain];
-    CGFloat height = [title heightWithAttributes:attributes
-                              constrainedToWidth:rect.size.width];
-    CGFloat maxHeight = [self maximumHeightForWidth:rect.size.width];
-    height = MIN(height, maxHeight);
-    textView.frame = NSMakeRect(rect.origin.x,
-                                 floor((_internalView.frame.size.height - height) / 2),
-                                 rect.size.width,
-                                 height);
-    [self updateTextViewFrame];
+        [_textView removeFromSuperview];
+        [_textView autorelease];
+        _textView = [textView retain];
 
-    [_internalView addSubview:textView];
+        CGFloat height = [title heightWithAttributes:attributes
+                                  constrainedToWidth:rect.size.width];
+        CGFloat maxHeight = [self maximumHeightForWidth:rect.size.width];
+        height = MIN(height, maxHeight);
+        _textView.frame = NSMakeRect(rect.origin.x,
+                                     floor((_internalView.frame.size.height - height) / 2),
+                                     rect.size.width,
+                                     height);
+        [self updateTextViewFrame];
+
+        [_internalView addSubview:textView];
+    }
 }
 
 - (void)updateTrackingAreas {

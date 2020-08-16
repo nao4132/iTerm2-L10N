@@ -8,6 +8,7 @@
 
 #import "iTermMetalUnavailableReason.h"
 
+#import "iTermSwipeHandler.h"
 @class iTermVariables;
 @class NSImage;
 @class PTYSession;
@@ -28,7 +29,7 @@ typedef NS_OPTIONS(NSUInteger, PTYTabState) {
     kPTYTabDeadState = (1 << 3)
 };
 
-@protocol PTYTabDelegate<NSObject>
+@protocol PTYTabDelegate<iTermSwipeHandler, NSObject>
 
 - (void)tab:(PTYTab *)tab didChangeProcessingStatus:(BOOL)isProcessing;
 - (void)tab:(PTYTab *)tab didChangeIcon:(NSImage *)icon;
@@ -53,4 +54,14 @@ typedef NS_OPTIONS(NSUInteger, PTYTabState) {
 - (void)tabDidSetWindowTitle:(PTYTab *)tab to:(NSString *)title;
 - (void)tabHasNontrivialJobDidChange:(PTYTab *)tab;
 - (void)tabRevealActionsTool:(PTYTab *)tab;
+- (void)tab:(PTYTab *)tab
+setBackgroundImage:(NSImage *)image
+       mode:(iTermBackgroundImageMode)imageMode
+backgroundColor:(NSColor *)backgroundColor;
+- (NSImage *)tabBackgroundImage;
+- (iTermBackgroundImageMode)tabBackgroundImageMode;
+- (CGFloat)tabBlend;
+- (void)tabActiveSessionDidUpdatePreferencesFromProfile:(PTYTab *)tab;
+- (BOOL)tabIsSwiping;
+
 @end

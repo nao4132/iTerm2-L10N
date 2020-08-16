@@ -66,6 +66,11 @@ extern NSString *const iTermApplicationDidCloseModalWindow;
 @property(nonatomic, readonly) BOOL it_modalWindowOpen;
 @property(nonatomic, readonly) BOOL it_imeOpen;
 @property(nonatomic, readonly) NSWindow *it_windowBecomingKey;
+@property(nonatomic, readonly) BOOL it_justBecameActive;
+@property(nonatomic) BOOL it_restorableStateInvalid;
+
+// In big sur, sheets aren't key windows any more. This finds the current sheet for the key window and returns it.
+@property(nonatomic, readonly) NSWindow *it_keyWindow;
 
 - (void)sendEvent:(NSEvent *)anEvent;
 - (iTermApplicationDelegate<iTermApplicationDelegate> *)delegate;

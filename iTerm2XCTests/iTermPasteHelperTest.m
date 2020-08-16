@@ -128,7 +128,7 @@ static const double kFloatingPointTolerance = 0.00001;
                                                    regex:regex
                                             substitution:substitution];
     [iTermPasteHelper sanitizePasteEvent:event encoding:NSUTF8StringEncoding];
-    XCTAssert([expected isEqualToString:event.string]);
+    XCTAssertEqualObjects(expected, event.string);
 }
 
 - (void)testSanitizeIdentity {
@@ -253,7 +253,7 @@ static const double kFloatingPointTolerance = 0.00001;
             spacesPerTab:4];
     [self runTimer];
     NSString *expected = @"\\ \\ \\ \\ ";
-    XCTAssert([_writeBuffer isEqualToString:expected]);
+    XCTAssertEqualObjects(_writeBuffer, expected);
 }
 
 - (void)testEscapeDoesNotEscapeCarriageReturn {
@@ -277,7 +277,7 @@ static const double kFloatingPointTolerance = 0.00001;
             spacesPerTab:4];
     [self runTimer];
     NSString *expected = @"a\\ \\(\\ \\ \\ \\ \r\r“”‘’–—b";
-    XCTAssert([_writeBuffer isEqualToString:expected]);
+    XCTAssertEqualObjects(_writeBuffer, expected);
 }
 
 - (void)testDoNotEscapeNonAscii {

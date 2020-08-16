@@ -7,9 +7,30 @@
 //
 
 #import "iTermFindOnPageHelper.h"
+#import "DebugLogging.h"
 #import "FindContext.h"
 #import "iTermSelection.h"
 #import "SearchResult.h"
+
+@interface iTermFindOnPageHelper()
+@property (nonatomic, strong) SearchResult *selectedResult;
+@end
+
+typedef struct {
+    // Should this struct be believed?
+    BOOL valid;
+
+    // Any search results with absEndY less than this should be ignored. Saves
+    // when it was last updated. Consider invalid if the overflowAdjustment has
+    // changed.
+    long long overflowAdjustment;
+
+    // Number of valid search results.
+    NSInteger count;
+
+    // 1-based index of the currently highlighted result, or 0 if none.
+    NSInteger index;
+} iTermFindOnPageCachedCounts;
 
 @implementation iTermFindOnPageHelper {
     // Find context just after initialization.
@@ -53,6 +74,12 @@
 
     // Mode for the last search.
     iTermFindMode _mode;
+
+    iTermFindOnPageCachedCounts _cachedCounts;
+
+    NSMutableIndexSet *_locations NS_AVAILABLE_MAC(10_14);
+
+    BOOL _locationsHaveChanged NS_AVAILABLE_MAC(10_14);
 }
 
 - (instancetype)init {
@@ -60,6 +87,7 @@
     if (self) {
         _highlightMap = [[NSMutableDictionary alloc] init];
         _copiedContext = [[FindContext alloc] init];
+        _locations = [[NSMutableIndexSet alloc] init];
     }
     return self;
 }
@@ -67,7 +95,20 @@
 - (void)dealloc {
     [_highlightMap release];
     [_copiedContext release];
+    [_selectedResult release];
+    [_locations release];
     [super dealloc];
+}
+
+- (void)locationsDidChange NS_AVAILABLE_MAC(10_14) {
+    if (_locationsHaveChanged) {
+        return;
+    }
+    _locationsHaveChanged = YES;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        self->_locationsHaveChanged = NO;
+        [self.delegate findOnPageLocationsDidChange];
+    });
 }
 
 - (BOOL)findInProgress {
@@ -95,6 +136,7 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
         // noticeable.
     } else {
         // Begin a brand new search.
+        self.selectedResult = nil;
         if (_findInProgress) {
             [findContext reset];
         }
@@ -134,7 +176,12 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
     _lastStringSearchedFor = nil;
 
     [_searchResults release];
-    _searchResults = nil;
+    if (@available(macOS 10.14, *)) {
+        [_locations removeAllIndexes];
+        [self locationsDidChange];
+    }
+    _searchResults = [[NSMutableOrderedSet alloc] init];
+    _cachedCounts.valid = NO;
 
     _numberOfProcessedSearchResults = 0;
     _haveRevealedSearchResult = NO;
@@ -224,6 +271,11 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
                                                  }
                                              }];
     [_searchResults insertObject:searchResult atIndex:insertionIndex];
+    if (@available(macOS 10.14, *)) {
+        [_locations addIndex:searchResult.absStartY];
+        [self locationsDidChange];
+    }
+    _cachedCounts.valid = NO;
 
     // Update highlights.
     for (long long y = searchResult.absStartY; y <= searchResult.absEndY; y++) {
@@ -256,6 +308,16 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
             _highlightMap[key] = data;
         }
     }
+}
+
+- (void)setSelectedResult:(SearchResult *)selectedResult {
+    _cachedCounts.valid = NO;
+    if (selectedResult == _selectedResult) {
+        return;
+    }
+    [_selectedResult autorelease];
+    _selectedResult = [selectedResult retain];
+    [self.delegate findOnPageSelectedResultDidChange];
 }
 
 // Select the next highlighted result by searching findResults_ for a match just before/after the
@@ -295,18 +357,26 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
     // determines whether wrapping should occur.
     long long wrapAroundResultPosition = -1;
     SearchResult *wrapAroundResult = nil;
-    int i = start;
-    for (int j = 0; !found && j < [_searchResults count]; j++) {
+    NSInteger currentIndex = 0;
+    for (int j = 0, i = start; !found && j < [_searchResults count]; j++) {
         SearchResult* r = _searchResults[i];
+        i += stride;
+        if (i < 0) {
+            i += _searchResults.count;
+        } else if (i >= _searchResults.count) {
+            i -= _searchResults.count;
+        }
         if (r.absEndY < overflowAdjustment) {
             continue;
         }
+        currentIndex += 1;
         NSInteger pos = r.startX + (long long)r.absStartY * width;
         if (!found) {
             if (NSLocationInRange(pos, range)) {
                 found = YES;
                 wrapAroundResult = nil;
                 wrapAroundResultPosition = -1;
+                self.selectedResult = r;
                 selectedRange =
                     VT100GridCoordRangeMake(r.startX,
                                             MAX(0, r.absStartY - overflowAdjustment),
@@ -316,18 +386,19 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
             } else if (!_haveRevealedSearchResult) {
                 if (forward) {
                     if (wrapAroundResultPosition == -1 || pos < wrapAroundResultPosition) {
+                        self.selectedResult = r;
                         wrapAroundResult = r;
                         wrapAroundResultPosition = pos;
                     }
                 } else {
                     if (wrapAroundResultPosition == -1 || pos > wrapAroundResultPosition) {
+                        self.selectedResult = r;
                         wrapAroundResult = r;
                         wrapAroundResultPosition = pos;
                     }
                 }
             }
         }
-        i += stride;
     }
 
     if (wrapAroundResult != nil) {
@@ -424,12 +495,22 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
 
 - (void)removeAllSearchResults {
     [_searchResults removeAllObjects];
+    if (@available(macOS 10.14, *)) {
+        [_locations removeAllIndexes];
+        [self locationsDidChange];
+    }
+    _cachedCounts.valid = NO;
 }
 
 - (void)removeSearchResultsInRange:(NSRange)range {
     NSRange objectRange = [self rangeOfSearchResultsInRangeOfLines:range];
     if (objectRange.location != NSNotFound && objectRange.length > 0) {
         [_searchResults removeObjectsInRange:objectRange];
+        if (@available(macOS 10.14, *)) {
+            [_locations removeIndexesInRange:range];
+            [self locationsDidChange];
+        }
+        _cachedCounts.valid = NO;
     }
 }
 
@@ -443,6 +524,109 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
 
 - (VT100GridAbsCoord)findCursorAbsCoord {
     return _findCursor;
+}
+
+- (NSInteger)currentIndex {
+    [self updateCachedCountsIfNeeded];
+    return _cachedCounts.index;
+}
+
+- (NSInteger)numberOfSearchResults {
+    [self updateCachedCountsIfNeeded];
+    return _cachedCounts.count;
+}
+
+- (void)overflowAdjustmentDidChange {
+    if (self.selectedResult == nil) {
+        return;
+    }
+    [self updateCachedCountsIfNeeded];
+}
+
+- (void)updateCachedCountsIfNeeded {
+    const long long overflowAdjustment = [self.delegate findOnPageOverflowAdjustment];
+    if (self.selectedResult.absEndY < overflowAdjustment) {
+        self.selectedResult = nil;
+    }
+    if (self.selectedResult == nil) {
+        _cachedCounts.valid = YES;
+        _cachedCounts.index = 0;
+        _cachedCounts.count = 0;
+        _cachedCounts.overflowAdjustment = 0;
+        return;
+    }
+    DLog(@"selected result ok vs %@: %@", @(overflowAdjustment), self.selectedResult);
+    if (_cachedCounts.valid && _cachedCounts.overflowAdjustment == overflowAdjustment) {
+        return;
+    }
+
+    [self updateCachedCounts];
+}
+
+- (void)updateCachedCounts {
+    _cachedCounts.overflowAdjustment = [self.delegate findOnPageOverflowAdjustment];
+    SearchResult *temp = [SearchResult searchResultFromX:0 y:_cachedCounts.overflowAdjustment toX:0 y:_cachedCounts.overflowAdjustment];
+
+    _cachedCounts.valid = YES;
+    if (!_searchResults.count) {
+        _cachedCounts.count = 0;
+        _cachedCounts.index = 0;
+        return;
+    }
+
+    if (_searchResults.lastObject.absEndY >= _cachedCounts.overflowAdjustment) {
+        // All search results are valid.
+        _cachedCounts.count = _searchResults.count;
+    } else {
+        // Some search results at the end of the list have been lost to scrollback. Find where the
+        // valid ones end. Because search results are sorted descending, a prefix of _searchResults
+        // will contain the valid ones.
+        const NSInteger index = [_searchResults indexOfObject:temp inSortedRange:NSMakeRange(0, _searchResults.count) options:NSBinarySearchingInsertionIndex usingComparator:^NSComparisonResult(SearchResult *_Nonnull obj1, SearchResult *_Nonnull obj2) {
+            return [@(-obj1.absEndY) compare:@(-obj2.absEndY)];
+        }];
+        if (index == NSNotFound) {
+            _cachedCounts.count = 0;
+            _cachedCounts.index = 0;
+            return;
+        }
+        _cachedCounts.count = index + 1;
+    }
+    
+    if (self.selectedResult == nil) {
+        _cachedCounts.index = 0;
+        return;
+    }
+
+    // Do a binary search to find the current result.
+    _cachedCounts.index = [_searchResults indexOfObject:self.selectedResult inSortedRange:NSMakeRange(0, _searchResults.count) options:NSBinarySearchingFirstEqual usingComparator:^NSComparisonResult(SearchResult *_Nonnull obj1, SearchResult *_Nonnull obj2) {
+        const NSComparisonResult result = [obj1 compare:obj2];
+        // Swap ascending and descending because the values or ordered descending.
+        switch (result) {
+        case NSOrderedSame:
+            return result;
+        case NSOrderedAscending:
+            return NSOrderedDescending;
+        case NSOrderedDescending:
+            return NSOrderedAscending;
+        }
+    }];
+
+    // Rewrite the index to be 1-based for valid results and 0 if none is selected.
+    if (_cachedCounts.index == NSNotFound) {
+        _cachedCounts.index = 0;
+    } else {
+        _cachedCounts.index += 1;
+    }
+}
+
+#pragma mark - iTermSearchResultsMinimapViewDelegate
+
+- (NSIndexSet *)searchResultsMinimapViewLocations:(iTermSearchResultsMinimapView *)view NS_AVAILABLE_MAC(10_14) {
+    return _locations;
+}
+
+- (NSRange)searchResultsMinimapViewRangeOfVisibleLines:(iTermSearchResultsMinimapView *)view NS_AVAILABLE_MAC(10_14) {
+    return [_delegate findOnPageRangeOfVisibleLines];
 }
 
 @end

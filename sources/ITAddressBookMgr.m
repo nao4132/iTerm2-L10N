@@ -29,10 +29,11 @@
 
 #import "DebugLogging.h"
 #import "iTermDynamicProfileManager.h"
+#import "iTermExpressionEvaluator.h"
 #import "iTermHotKeyController.h"
-#import "iTermKeyBindingMgr.h"
 #import "iTermHotKeyMigrationHelper.h"
 #import "iTermHotKeyProfileBindingController.h"
+#import "iTermKeyMappings.h"
 #import "iTermMigrationHelper.h"
 #import "iTermPreferences.h"
 #import "iTermProfilesMenuController.h"
@@ -619,8 +620,33 @@ iTermWindowType iTermThemedWindowType(iTermWindowType windowType) {
             userName];
 }
 
-+ (NSString *)bookmarkCommand:(Profile *)bookmark
-                forObjectType:(iTermObjectType)objectType {
++ (void)computeCommandForProfile:(Profile *)profile
+                      objectType:(iTermObjectType)objectType
+                           scope:(iTermVariableScope *)scope
+                      completion:(void (^)(NSString *command))completion {
+    BOOL custom = [profile[KEY_CUSTOM_COMMAND] isEqualToString:kProfilePreferenceCommandTypeCustomValue];
+    NSString *swifty = [self bookmarkCommandSwiftyString:profile forObjectType:objectType];
+    if (!custom) {
+        completion(swifty);
+        return;
+    }
+
+    iTermExpressionEvaluator *evaluator =
+    [[iTermExpressionEvaluator alloc] initWithStrictInterpolatedString:swifty
+                                                                 scope:scope];
+    [evaluator evaluateWithTimeout:5 completion:^(iTermExpressionEvaluator * _Nonnull evaluator) {
+        NSString *string = [NSString castFrom:evaluator.value];
+        string = [string stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if (!string.length) {
+            string = [ITAddressBookMgr loginShellCommandForBookmark:profile
+                                                      forObjectType:objectType];
+        }
+        completion(string);
+    }];
+}
+
++ (NSString *)bookmarkCommandSwiftyString:(Profile *)bookmark
+                            forObjectType:(iTermObjectType)objectType {
     BOOL custom = [bookmark[KEY_CUSTOM_COMMAND] isEqualToString:kProfilePreferenceCommandTypeCustomValue];
     if (custom) {
         NSString *command = bookmark[KEY_COMMAND_LINE];
@@ -701,19 +727,19 @@ iTermWindowType iTermThemedWindowType(iTermWindowType windowType) {
 + (void)removeKeyMappingsReferringToGuid:(NSString *)badRef {
     for (NSString* guid in [[ProfileModel sharedInstance] guids]) {
         Profile *profile = [[ProfileModel sharedInstance] bookmarkWithGuid:guid];
-        profile = [iTermKeyBindingMgr removeMappingsReferencingGuid:badRef fromBookmark:profile];
+        profile = [iTermKeyMappings removeKeyMappingsReferencingGuid:badRef fromProfile:profile];
         if (profile) {
             [[ProfileModel sharedInstance] setBookmark:profile withGuid:guid];
         }
     }
     for (NSString* guid in [[ProfileModel sessionsInstance] guids]) {
         Profile* profile = [[ProfileModel sessionsInstance] bookmarkWithGuid:guid];
-        profile = [iTermKeyBindingMgr removeMappingsReferencingGuid:badRef fromBookmark:profile];
+        profile = [iTermKeyMappings removeKeyMappingsReferencingGuid:badRef fromProfile:profile];
         if (profile) {
             [[ProfileModel sessionsInstance] setBookmark:profile withGuid:guid];
         }
     }
-    [iTermKeyBindingMgr removeMappingsReferencingGuid:badRef fromBookmark:nil];
+    [iTermKeyMappings removeKeyMappingsReferencingGuid:badRef fromProfile:nil];
     [self postNotificationName:kKeyBindingsChangedNotification object:nil userInfo:nil];
 }
 

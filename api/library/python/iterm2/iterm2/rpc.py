@@ -222,12 +222,14 @@ async def async_get_screen_contents(
     return await _async_call(connection, request)
 
 
-async def async_get_prompt(connection, session=None):
+async def async_get_prompt(
+    connection, session=None, prompt_id=None):
     """
     Gets info about the last prompt in a session
 
     connection: A connected iterm2.Connection.
     session: Session ID
+    prompt_id: Optional prompt ID
 
     Returns: iterm2.api_pb2.ServerOriginatedMessage
     """
@@ -235,6 +237,30 @@ async def async_get_prompt(connection, session=None):
     request.get_prompt_request.SetInParent()
     if session is not None:
         request.get_prompt_request.session = session
+    if prompt_id:
+        request.get_prompt_request.unique_prompt_id = prompt_id
+    return await _async_call(connection, request)
+
+
+async def async_list_prompts(
+    connection, session, first, last):
+    """
+    Fetches a list of prompts in a session.
+
+    connection: A connected iterm2.Connection.
+    session: Session ID
+    first: First prompt ID or None
+    lats: Last prompt ID or none
+
+    Returns: iterm2.api_pb2.ServerOriginatedMessage
+    """
+    request = _alloc_request()
+    request.list_prompts_request.SetInParent()
+    request.list_prompts_request.session = session
+    if first:
+        request.list_prompts_request.first_unique_id = first
+    if last:
+        request.list_prompts_request.last_unique_id = last
     return await _async_call(connection, request)
 
 
@@ -498,6 +524,14 @@ async def async_restore_arrangement(connection, name, window_id=None):
         request.saved_arrangement_request.window_id = window_id
     return await _async_call(connection, request)
 
+async def async_list_arrangements(connection):
+    """
+    Fetch a list of window arrangement names.
+    """
+    request = _alloc_request()
+    request.saved_arrangement_request.action = (
+        iterm2.api_pb2.SavedArrangementRequest.Action.Value("LIST"))
+    return await _async_call(connection, request)
 
 async def async_get_focus_info(connection):
     """

@@ -15,16 +15,18 @@
 @implementation iTermSocket {
     iTermSocketAddress *_boundAddress;
     dispatch_queue_t _acceptQueue;
+    int _addressFamily;
 }
 
-+ (instancetype)tcpIPV4Socket {
-    return [[self alloc] initWithAddressFamily:AF_INET socketType:SOCK_STREAM];
++ (instancetype)unixDomainSocket {
+    return [[self alloc] initWithAddressFamily:AF_UNIX socketType:SOCK_STREAM];
 }
 
 - (instancetype)initWithAddressFamily:(int)addressFamily
                            socketType:(int)socketType {
     self = [super init];
     if (self) {
+        _addressFamily = addressFamily;
         _fd = socket(addressFamily, socketType, 0);
         if (_fd < 0) {
             XLog(@"socket failed with %s", strerror(errno));
@@ -41,6 +43,9 @@
 }
 
 - (void)setReuseAddr:(BOOL)reuse {
+    if (_addressFamily == AF_UNIX) {
+        return;
+    }
     int optionValue = reuse ? 1 : 0;
     int rc = setsockopt(_fd,
                         SOL_SOCKET,
@@ -62,7 +67,7 @@
     return NO;
 }
 
-- (BOOL)listenWithBacklog:(int)backlog accept:(void (^)(int, iTermSocketAddress *))acceptBlock {
+- (BOOL)listenWithBacklog:(int)backlog accept:(void (^)(int, iTermSocketAddress *, NSNumber *))acceptBlock {
     if (!_boundAddress) {
         return NO;
     }
@@ -80,9 +85,11 @@
     dispatch_async(_acceptQueue, ^{
         while (1) {
             @autoreleasepool {
+                uid_t euid = (uid_t)-1;
+                gid_t egid = (gid_t)-1;
                 struct sockaddr sockaddr;
                 socklen_t clientAddressLength = sizeof(sockaddr);
-                int acceptFd = accept(fd, &sockaddr, &clientAddressLength);
+                const int acceptFd = accept(fd, &sockaddr, &clientAddressLength);
                 if (acceptFd < 0) {
                     if (errno == EINTR || errno == EWOULDBLOCK) {
                         continue;
@@ -91,7 +98,18 @@
                         return;
                     }
                 }
-                acceptBlock(acceptFd, [iTermSocketAddress socketAddressWithSockaddr:sockaddr]);
+
+                // The man page for getpeereid appears to contain a lie.
+                //   "The argument s must be a UNIX-domain socket (unix(4)) of type SOCK_STREAM on
+                //    which either connect(2) or listen(2) have been called"
+                // Well, we called listen on `fd`, but `getpeereid` gives "Socket is not connected"
+                // when you pass that to it. If you give it `acceptFd`, it works fine.
+                // ¯\_(ツ)_/¯
+                NSNumber *uidNumber = nil;
+                if (getpeereid(acceptFd, &euid, &egid) == 0) {
+                    uidNumber = @(euid);
+                }
+                acceptBlock(acceptFd, [iTermSocketAddress socketAddressWithSockaddr:sockaddr], uidNumber);
             }
         }
     });

@@ -29,8 +29,9 @@
 #import "DebugLogging.h"
 #import "iTermAdvancedSettingsModel.h"
 #import "iTermController.h"
+#import "iTermEventTap.h"
+#import "iTermFlagsChangedNotification.h"
 #import "iTermHotKeyController.h"
-#import "iTermKeyBindingMgr.h"
 #import "iTermModifierRemapper.h"
 #import "iTermNotificationCenter.h"
 #import "iTermPreferences.h"
@@ -75,6 +76,11 @@ static const char *iTermApplicationKVOKey = "iTermApplicationKVOKey";
 @implementation iTermApplication {
     BOOL _it_characterPanelIsOpen;
     BOOL _it_characterPanelShouldOpenSoon;
+    // Are we within one spin of didBecomeActive?
+    BOOL _it_justBecameActive;
+    // Have we received didBecomeActive without a subsequent didResignActive?
+    BOOL _it_active;
+    BOOL _it_restorableStateInvalid;
 }
 
 - (void)dealloc {
@@ -102,6 +108,14 @@ static const char *iTermApplicationKVOKey = "iTermApplicationKVOKey";
                                                  selector:@selector(it_windowDidOrderOffScreen:)
                                                      name:@"NSWindowDidOrderOffScreenAndFinishAnimatingNotification"
                                                    object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:sharedApplication
+                                                 selector:@selector(it_applicationDidBecomeActive:)
+                                                     name:NSApplicationDidBecomeActiveNotification
+                                                   object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:sharedApplication
+                                                 selector:@selector(it_applicationDidResignActive:)
+                                                     name:NSApplicationDidResignActiveNotification
+                                                   object:nil];
 
     });
     return sharedApplication;
@@ -124,6 +138,27 @@ static const char *iTermApplicationKVOKey = "iTermApplicationKVOKey";
         _it_imeOpen = NO;
         [[NSNotificationCenter defaultCenter] postNotificationName:iTermApplicationInputMethodEditorDidClose object:nil];
     }
+}
+
+- (void)it_applicationDidResignActive:(NSNotification *)notification {
+    _it_active = NO;
+}
+
+- (void)it_applicationDidBecomeActive:(NSNotification *)notification {
+    _it_active = YES;
+    _it_justBecameActive = YES;
+    __weak __typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [weakSelf it_resetJustBecameActive];
+    });
+}
+
+- (BOOL)it_justBecameActive {
+    return _it_justBecameActive || (self.isActive && !_it_active);
+}
+
+- (void)it_resetJustBecameActive {
+    _it_justBecameActive = NO;
 }
 
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary<NSKeyValueChangeKey,id> *)change context:(void *)context {
@@ -179,14 +214,22 @@ static const char *iTermApplicationKVOKey = "iTermApplicationKVOKey";
         // The event tap is not working, but we can still remap modifiers for non-system
         // keys. Only things like cmd-tab will not be remapped in this case. Otherwise,
         // the event tap performs the remapping.
-        event = [iTermKeyBindingMgr remapModifiers:event];
+        event = [iTermModifierRemapper remapModifiers:event];
         DLog(@"Remapped modifiers to %@", event);
     }
     return event;
 }
 
+- (NSWindow *)it_keyWindow {
+    NSWindow *window = self.keyWindow;
+    while (window.sheets.count) {
+        window = window.sheets.lastObject;
+    }
+    return window;
+}
+
 - (BOOL)routeEventToShortcutInputView:(NSEvent *)event {
-    NSResponder *firstResponder = [[NSApp keyWindow] firstResponder];
+    NSResponder *firstResponder = [[NSApp it_keyWindow] firstResponder];
     if ([firstResponder isKindOfClass:[iTermShortcutInputView class]]) {
         iTermShortcutInputView *shortcutView = (iTermShortcutInputView *)firstResponder;
         if (shortcutView) {
@@ -400,8 +443,10 @@ static const char *iTermApplicationKVOKey = "iTermApplicationKVOKey";
 
 - (BOOL)handleFlagsChangedEvent:(NSEvent *)event {
     if ([self routeEventToShortcutInputView:event]) {
+        [[iTermFlagsChangedEventTap sharedInstance] resetCount];
         return YES;
     }
+    DLog(@"Posting flags-changed notification for event %@", event);
     [[iTermFlagsChangedNotification notificationWithEvent:event] post];
     return NO;
 }
@@ -514,10 +559,10 @@ static const char *iTermApplicationKVOKey = "iTermApplicationKVOKey";
         if ([iTermAdvancedSettingsModel statusBarIcon]) {
             NSImage *image = [NSImage it_imageNamed:@"StatusItem" forClass:self.class];
             self.statusBarItem = [[NSStatusBar systemStatusBar] statusItemWithLength:image.size.width];
-            _statusBarItem.title = @"";
-            _statusBarItem.image = image;
-            _statusBarItem.alternateImage = [NSImage it_imageNamed:@"StatusItemAlt" forClass:self.class];
-            _statusBarItem.highlightMode = YES;
+            _statusBarItem.button.title = @"";
+            _statusBarItem.button.image = image;
+            _statusBarItem.button.alternateImage = [NSImage it_imageNamed:@"StatusItemAlt" forClass:self.class];
+            ((NSButtonCell *)_statusBarItem.button.cell).highlightsBy = NSChangeBackgroundCellMask;
 
             _statusBarItem.menu = [[self delegate] statusBarMenu];
         }
@@ -591,6 +636,11 @@ static const char *iTermApplicationKVOKey = "iTermApplicationKVOKey";
     self.it_windowBecomingKey = window;
     [window makeKeyAndOrderFront:nil];
     self.it_windowBecomingKey = [saved autorelease];
+}
+
+- (void)invalidateRestorableState {
+    [super invalidateRestorableState];
+    _it_restorableStateInvalid = YES;
 }
 
 @end

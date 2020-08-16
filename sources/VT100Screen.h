@@ -1,4 +1,6 @@
 #import <Cocoa/Cocoa.h>
+#import "iTermEncoderAdapter.h"
+#import "iTermIntervalTreeObserver.h"
 #import "PTYNoteViewController.h"
 #import "PTYTextViewDataSource.h"
 #import "SCPPath.h"
@@ -50,6 +52,7 @@ extern const NSInteger VT100ScreenBigFileDownloadThreshold;
 @property(nonatomic, assign) BOOL showBellIndicator;
 @property(nonatomic, assign) BOOL flashBell;
 @property(nonatomic, assign) id<VT100ScreenDelegate> delegate;
+@property(nonatomic, weak) id<iTermIntervalTreeObserver> intervalTreeObserver;
 @property(nonatomic, assign) BOOL postUserNotifications;
 @property(nonatomic, assign) BOOL cursorBlinks;
 @property(nonatomic, assign) BOOL allowTitleReporting;
@@ -67,6 +70,14 @@ extern const NSInteger VT100ScreenBigFileDownloadThreshold;
 @property(nonatomic, readonly) VT100GridAbsCoord startOfRunningCommandOutput;
 @property(nonatomic, readonly) int lineNumberOfCursor;
 @property(nonatomic, readonly) NSSize viewSize;
+
+// Valid while at the command prompt only. Gives the range of the current prompt. Meaningful
+// only if the end is not equal to the start.
+@property(nonatomic, readonly) VT100GridAbsCoordRange currentPromptRange;
+
+// Valid only if its x component is nonnegative.
+// Gives the coordinate where the current command begins.
+@property(nonatomic, readonly) VT100GridAbsCoord commandStartCoord;
 
 // Assigning to `size` resizes the session and tty. Its contents are reflowed. The alternate grid's
 // contents are reflowed, and the selection is updated. It is a little slow so be judicious.
@@ -96,6 +107,7 @@ extern const NSInteger VT100ScreenBigFileDownloadThreshold;
 - (void)appendScreenChars:(screen_char_t *)line
                    length:(int)length
              continuation:(screen_char_t)continuation;
+- (void)appendLinesMatchingQuery:(NSString *)query from:(VT100Screen *)source mode:(iTermFindMode)mode;
 
 // Append a string to the screen at the current cursor position. The terminal's insert and wrap-
 // around modes are respected, the cursor is advanced, the screen may be scrolled, and the line
@@ -152,17 +164,7 @@ extern const NSInteger VT100ScreenBigFileDownloadThreshold;
 - (void)activateBell;
 
 // Show an inline image. image and data are mutually exclusive.
-- (void)appendImageAtCursorWithName:(NSString *)name
-                              width:(int)width
-                              units:(VT100TerminalUnits)widthUnits
-                             height:(int)height
-                              units:(VT100TerminalUnits)heightUnits
-                preserveAspectRatio:(BOOL)preserveAspectRatio
-                            roundUp:(BOOL)roundUp
-                              inset:(NSEdgeInsets)inset
-                              image:(NSImage *)image
-                               data:(NSData *)data
-                            isSixel:(BOOL)isSixel;
+- (void)appendNativeImageAtCursorWithName:(NSString *)name width:(int)width;
 
 - (void)resetAnimatedLines;
 
@@ -176,12 +178,15 @@ extern const NSInteger VT100ScreenBigFileDownloadThreshold;
 - (VT100ScreenMark *)lastMark;
 - (VT100ScreenMark *)lastPromptMark;
 - (VT100RemoteHost *)lastRemoteHost;
+- (VT100ScreenMark *)promptMarkWithGUID:(NSString *)guid;
 - (BOOL)markIsValid:(iTermMark *)mark;
 - (id<iTermMark>)addMarkStartingAtAbsoluteLine:(long long)line
                                        oneLine:(BOOL)oneLine
                                        ofClass:(Class)markClass;
 - (VT100GridRange)lineNumberRangeOfInterval:(Interval *)interval;
-
+- (void)enumeratePromptsFrom:(NSString *)maybeFirst
+                          to:(NSString *)maybeLast
+                       block:(void (^ NS_NOESCAPE)(VT100ScreenMark *mark))block;
 // These methods normally only return one object, but if there is a tie, all of the equally-positioned marks/notes are returned.
 - (NSArray *)lastMarksOrNotes;
 - (NSArray *)firstMarksOrNotes;
@@ -207,7 +212,8 @@ extern const NSInteger VT100ScreenBigFileDownloadThreshold;
 - (VT100RemoteHost *)remoteHostOnLine:(int)line;
 - (VT100ScreenMark *)lastCommandMark;  // last mark representing a command
 
-- (NSDictionary *)contentsDictionary;
+- (BOOL)encodeContents:(id<iTermEncoderAdapter>)encoder
+          linesDropped:(int *)linesDroppedOut;
 
 // WARNING: This may change the screen size! Use -restoreInitialSize to restore it.
 // This is useful for restoring other stuff that depends on the screen having its original size
@@ -235,6 +241,7 @@ extern const NSInteger VT100ScreenBigFileDownloadThreshold;
 - (BOOL)confirmBigDownloadWithBeforeSize:(NSInteger)sizeBefore
                                afterSize:(NSInteger)afterSize
                                     name:(NSString *)name;
+- (void)enumerateObservableMarks:(void (^ NS_NOESCAPE)(iTermIntervalTreeObjectType, NSInteger))block;
 
 @end
 

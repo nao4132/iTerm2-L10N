@@ -130,6 +130,13 @@
     }
 }
 
++ (instancetype)forceCastFrom:(id)object {
+    assert(object);
+    id result = [self castFrom:object];
+    assert(result);
+    return result;
+}
+
 - (void)performSelectorWithObjects:(NSArray *)tuple {
     SEL selector = NSSelectorFromString(tuple[0]);
     NSArray *objects = tuple[1];
@@ -174,21 +181,21 @@
     }
 }
 
-- (void)it_setAssociatedObject:(id)associatedObject forKey:(void *)key {
+- (void)it_setAssociatedObject:(id)associatedObject forKey:(const void *)key {
     objc_setAssociatedObject(self,
                              key,
                              associatedObject,
                              OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
-- (void)it_setWeakAssociatedObject:(id)associatedObject forKey:(void *)key {
+- (void)it_setWeakAssociatedObject:(id)associatedObject forKey:(const void *)key {
     objc_setAssociatedObject(self,
                              key,
                              associatedObject,
                              OBJC_ASSOCIATION_ASSIGN);
 }
 
-- (id)it_associatedObjectForKey:(void *)key {
+- (id)it_associatedObjectForKey:(const void *)key {
     return objc_getAssociatedObject(self, key);
 }
 
@@ -196,6 +203,12 @@
     IMP imp = [self methodForSelector:selector];
     void (*func)(id, SEL, id) = (void *)imp;
     func(self, selector, object);
+}
+
+- (void)it_performNonObjectReturningSelector:(SEL)selector withObject:(id)object1 object:(id)object2 object:(id)object3 {
+    IMP imp = [self methodForSelector:selector];
+    void (*func)(id, SEL, id, id, id) = (void *)imp;
+    func(self, selector, object1, object2, object3);
 }
 
 - (id)it_performAutoreleasedObjectReturningSelector:(SEL)selector withObject:(id)object {
@@ -294,6 +307,10 @@
 
 - (instancetype)it_weakProxy {
     return (id)[[iTermWeakProxy alloc] initWithObject:self];
+}
+
+- (NSString *)tastefulDescription {
+    return [self description];
 }
 
 @end

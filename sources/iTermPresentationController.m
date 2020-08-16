@@ -8,12 +8,48 @@
 #import "iTermPresentationController.h"
 
 #import "DebugLogging.h"
+#import "iTermApplication.h"
 #import "iTermPreferences.h"
 #import "NSArray+iTerm.h"
 #import "NSScreen+iTerm.h"
 
+// macOS sends a *LOT* of screenParametersDidChange notifications for all kinds of unexpected reasons.
+// For example, changing desktops will do it. So will miniaturizing. I've even seen it simply because
+// the app got activated. We need to destroy and re-create metal views when a display is detached
+// and re-attached. That is rare compared to all the other stuff. This is an attempt to detect
+// screen removal/additions. There are still a lot of false positives, but maybe it will help.
+// This doesn't really belong in this file but I don't have a better place for it yet.
+NSNotificationName const iTermScreenParametersDidChangeNontrivally = @"iTermScreenParametersDidChangeNontrivally";
+static _Atomic int gShouldPostNontrivialScreenParametersChange;
+static void iTermDisplayReconfigurationCallback(CGDirectDisplayID display,
+                                                CGDisplayChangeSummaryFlags flags,
+                                                void *userInfo) {
+    DLog(@"iTermDisplayReconfigurationCallback display=%@ flags=%@", @(display), @(flags));
+    if (gShouldPostNontrivialScreenParametersChange) {
+        return;
+    }
+    const CGDisplayChangeSummaryFlags mask = kCGDisplayAddFlag;
+    if (flags & mask) {
+        gShouldPostNontrivialScreenParametersChange = YES;
+        DLog(@"Set needs iTermScreenParametersDidChangeNontrivally");
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (gShouldPostNontrivialScreenParametersChange) {
+                gShouldPostNontrivialScreenParametersChange = NO;
+                DLog(@"Post iTermScreenParametersDidChangeNontrivally");
+                [[NSNotificationCenter defaultCenter] postNotificationName:iTermScreenParametersDidChangeNontrivally
+                                                                    object:nil];
+            }
+        });
+    }
+}
 
-@implementation iTermPresentationController
+@implementation iTermPresentationController {
+    NSScreen *_lastScreen;
+
+    // Remembers the last screen frames so we can ignore
+    // screenParametersDidChange: calls that don't affect the screens' frames.
+    NSArray<NSValue *> *_screenFrames;
+}
 
 + (instancetype)sharedInstance {
     static iTermPresentationController *instance;
@@ -22,6 +58,34 @@
         instance = [[self alloc] init];
     });
     return instance;
+}
+
+- (instancetype)init {
+    self = [super init];
+    if (self) {
+        _screenFrames = [self currentScreenFrames];
+        [[[NSWorkspace sharedWorkspace] notificationCenter] addObserver:self
+                                                               selector:@selector(activeSpaceDidChange:)
+                                                                   name:NSWorkspaceActiveSpaceDidChangeNotification
+                                                                 object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(screenParametersDidChange:)
+                                                     name:NSApplicationDidChangeScreenParametersNotification
+                                                   object:nil];
+        static dispatch_once_t onceToken;
+        dispatch_once(&onceToken, ^{
+            CGDisplayRegisterReconfigurationCallback(iTermDisplayReconfigurationCallback, nil);
+        });
+    }
+    return self;
+}
+
+- (void)activeSpaceDidChange:(NSNotification *)notification {
+    [self update];
+}
+
+- (void)dealloc {
+    [[[NSWorkspace sharedWorkspace] notificationCenter] removeObserver:self];
 }
 
 - (void)update {
@@ -50,7 +114,14 @@
     }
 
     const BOOL shouldHideMenuBar = [self anyScreenHasMenuBar:screensToHideMenu];
-    const BOOL shouldHideDock = [self anyScreenHasDock:screensToHideDock];
+    NSScreen *currentScreenWithDock = [self screenWithDockFromScreens:screensToHideDock];
+
+    const BOOL shouldHideDock = currentScreenWithDock != nil || [self haveFullScreenWindowOnSameScreenWhereDockWasLastHidden];
+    // If hiding the sock, set screenWithDock to the best guess of the screen that has the dock.
+    // It could be that currentScreenWithDock is nil because our presentation is hiding the dock.
+    // In that case, carry forward our best guess from _lastScreen.
+    // This value becomes the new _lastScreen, provided shouldHideDock is true.
+    NSScreen *screenWithDock = shouldHideDock ? (currentScreenWithDock ?: _lastScreen) : nil;
 
     if (sanityCheck &&
         !shouldHideDock &&
@@ -66,7 +137,8 @@
     }
 
     [self setApplicationPresentationFlagsWithHiddenDock:shouldHideDock
-                                                menuBar:shouldHideMenuBar];
+                                                menuBar:shouldHideMenuBar
+                                         screenWithDock:screenWithDock];
     DLog(@"END update");
 }
 
@@ -81,6 +153,40 @@
     }
 }
 
+// When the dock is hidden because we have set the auto-hide dock presentation option, we can't
+// figure out which screen *would* have the dock because their frames equal their visibleFrames.
+// Instead, try to figure out which of the current screens is like the last screen where we saw
+// the dock, just before hiding it. This can go wrong if the screen configuration changes. That is
+// mitigated by resetting everything when screen parameters change.
+- (BOOL)haveFullScreenWindowOnSameScreenWhereDockWasLastHidden {
+    DLog(@"Checking if there's still a full screen window on the same screen where we last saw the dock. The last such screen had frame %@",
+         NSStringFromRect(_lastScreen.frame));
+    if (!_lastScreen) {
+        DLog(@"  Don't have a lastScreen, so no");
+        return NO;
+    }
+    if (!self.dockIsCurrentlyHidden) {
+        DLog(@"  Dock isn't currently hidden, so no");
+        return NO;
+    }
+    NSArray<id<iTermPresentationControllerManagedWindowController>> *windowControllers =
+        [self.delegate presentationControllerManagedWindows];
+    for (id<iTermPresentationControllerManagedWindowController> windowController in windowControllers) {
+        NSScreen *screen = nil;
+        if (![self windowControllerIsWorthyOfConsideration:windowController screen:&screen]) {
+            continue;
+        }
+        NSWindow *window = [windowController presentationControllerManagedWindowControllerWindow];
+        DLog(@"  Considering fullscreen window controller %@ whose screen has frame %@", windowController,
+             NSStringFromRect(window.screen.frame));
+        if (window.screen && NSIntersectsRect(window.screen.frame, _lastScreen.frame)) {
+            DLog(@"  > Yup");
+            return YES;
+        }
+    }
+    DLog(@"  > Nope");
+    return NO;
+}
 - (BOOL)dockIsCurrentlyHidden {
     return (NSApp.presentationOptions & NSApplicationPresentationAutoHideDock) != 0;
 }
@@ -95,11 +201,12 @@
 }
 
 - (void)forceShowMenuBarAndDock {
-    [self setApplicationPresentationFlagsWithHiddenDock:NO menuBar:NO];
+    [self setApplicationPresentationFlagsWithHiddenDock:NO menuBar:NO screenWithDock:nil];
 }
 
 - (void)setApplicationPresentationFlagsWithHiddenDock:(BOOL)shouldHideDock
-                                              menuBar:(BOOL)shouldHideMenuBar {
+                                              menuBar:(BOOL)shouldHideMenuBar
+                                       screenWithDock:(NSScreen *)screenWithDock {
     DLog(@"setting options: hide dock=%@ hide menu bar=%@", @(shouldHideDock), @(shouldHideMenuBar));
 
     const NSApplicationPresentationOptions mask = (NSApplicationPresentationAutoHideMenuBar |
@@ -107,6 +214,15 @@
     NSApplicationPresentationOptions presentationOptions = (NSApp.presentationOptions & ~mask);
     if (shouldHideDock) {
         presentationOptions |= NSApplicationPresentationAutoHideDock;
+        DLog(@"Set lastScreen to %@", NSStringFromRect(screenWithDock.frame));
+        _lastScreen = screenWithDock;
+    } else {
+        // Forget _lastScreen. It records the screen that had the dock last
+        // time we were able to see it. Since we're hiding the dock now, we can
+        // expect to compute a more accurate version of it next time we go to
+        // hide the dock.
+        DLog(@"Set lastScreen to nil");
+        _lastScreen = nil;
     }
     if (shouldHideMenuBar) {
         presentationOptions |= NSApplicationPresentationAutoHideMenuBar;
@@ -123,6 +239,11 @@
     for (id<iTermPresentationControllerManagedWindowController> windowController in windowControllers) {
         NSScreen *screen = nil;
         if (![self windowControllerIsWorthyOfConsideration:windowController screen:&screen]) {
+            continue;
+        }
+        screen = [NSScreen screenWithFrame:screen.frame];
+        if (!screen) {
+            DLog(@"No screen has frame %@", NSStringFromRect(screen.frame));
             continue;
         }
         [screensToHideDock addObject:screen];
@@ -183,13 +304,31 @@
     }];
 }
 
-- (BOOL)anyScreenHasDock:(NSArray<NSScreen *> *)screens {
+// This method lies to you when you do this:
+// 1. Put window on screen 2
+// 2. Cause dock to be hidden
+// 3. Move dock to screen 1
+// 4. Resign active
+// 5. Become actgive
+//
+// For some reason the screen visibleFrame is wrong at this point. Another cycle of resign & become
+// active fixes it.
+- (NSScreen *)screenWithDockFromScreens:(NSArray<NSScreen *> *)screens {
     DLog(@"Checking if any screen has dock in %@", screens);
-    const BOOL result = [screens anyWithBlock:^BOOL(NSScreen *screen) {
+    return [screens objectPassingTest:^BOOL(NSScreen *screen, NSUInteger index, BOOL *stop) {
         // We need to check both the screen we were given as well as the current "real" screen,
         // because they can have different visibleFrames. My theory is that NSScreen is immutable
         // and copies of it proliferate with different attributes.
-        const BOOL result = [screen hasDock] || [[NSScreen screenWithFrame:screen.frame] hasDock];
+        BOOL result = NO;
+        if ([screen hasDock]) {
+            DLog(@"Screen %@ hasDock", screen);
+            result = YES;
+        }
+        if ([[NSScreen screenWithFrame:screen.frame] hasDock]) {
+            DLog(@"Screen with frame %@ - %@ - hasDock",
+                 NSStringFromRect(screen.frame), [NSScreen screenWithFrame:screen.frame]);
+            result = YES;
+        }
         DLog(@"  Screen %@ with frame %@ and visible frame %@ hasdock=%@",
              screen,
              NSStringFromRect(screen.frame),
@@ -197,12 +336,11 @@
              @(result));
         return result;
     }];
-    return result;
 }
 
 - (BOOL)shouldHideMenuForWindowController:(id<iTermPresentationControllerManagedWindowController>)windowController {
     DLog(@"Checking if the menu bar should be hidden for this window");
-    if ([iTermPreferences boolForKey:kPreferenceKeyUIElement]) {
+    if ([[iTermApplication sharedApplication] isUIElement]) {
         DLog(@"  NO because I am a UIElement");
         // I can't affect the menu bar
         return NO;
@@ -217,6 +355,32 @@
         return YES;
     }
     return currentScreen != nil && currentScreen == [[NSScreen screens] firstObject];
+}
+
+- (NSArray<NSValue *> *)currentScreenFrames {
+    return [[NSScreen screens] mapWithBlock:^id(NSScreen *screen) {
+        return [NSValue valueWithRect:screen.frame];
+    }];
+}
+
+- (BOOL)screenParametersReallyDidChange {
+    NSArray<NSValue *> *frames = [self currentScreenFrames];
+    if ([frames isEqualToArray:_screenFrames]) {
+        return NO;
+    }
+    _screenFrames = frames;
+    return YES;
+}
+
+- (void)screenParametersDidChange:(NSNotification *)notification {
+    DLog(@"screenParametersDidChange");
+    if (![self screenParametersReallyDidChange]) {
+        DLog(@"That was a lie. Frames are still %@", _screenFrames);
+        return;
+    }
+    DLog(@"screen parameters did change. Set lastScreen to nil and update. This could cause the dock to spuriously appear.");
+    _lastScreen = nil;
+    [self update];
 }
 
 @end

@@ -9,7 +9,6 @@
 
 #import "DebugLogging.h"
 #import "iTermStatusBarAutoRainbowController.h"
-#import "iTermStatusBarContainerView.h"
 #import "iTermStatusBarFixedSpacerComponent.h"
 #import "iTermStatusBarLayout.h"
 #import "iTermStatusBarLayoutAlgorithm.h"
@@ -28,9 +27,6 @@
 NS_ASSUME_NONNULL_BEGIN
 
 static const CGFloat iTermStatusBarViewControllerBottomMargin = 0;
-static const CGFloat iTermStatusBarViewControllerContainerHeight = 21;
-
-const CGFloat iTermStatusBarHeight = 21;
 
 @interface iTermStatusBarViewController ()<
     iTermStatusBarComponentDelegate,
@@ -91,7 +87,8 @@ const CGFloat iTermStatusBarHeight = 21;
     return [iTermStatusBarLayoutAlgorithm layoutAlgorithmWithContainerViews:_containerViews
                                                               mandatoryView:self.mandatoryView
                                                              statusBarWidth:self.view.frame.size.width
-                                                                    setting:_layout.advancedConfiguration.layoutAlgorithm];
+                                                                    setting:_layout.advancedConfiguration.layoutAlgorithm
+                                                      removeEmptyComponents:_layout.advancedConfiguration.removeEmptyComponents];
 }
 
 - (NSArray<NSNumber *> *)desiredSeparatorOffsets {
@@ -161,7 +158,7 @@ const CGFloat iTermStatusBarHeight = 21;
          view.frame = NSMakeRect(round(view.desiredOrigin),
                                  iTermStatusBarViewControllerBottomMargin,
                                  ceil(view.desiredWidth),
-                                 iTermStatusBarViewControllerContainerHeight);
+                                 iTermGetStatusBarHeight() - iTermStatusBarViewControllerBottomMargin);
          [view.component statusBarComponentWidthDidChangeTo:view.desiredWidth];
          [view layoutSubviews];
          view.rightSeparatorOffset = -1;
@@ -302,6 +299,12 @@ const CGFloat iTermStatusBarHeight = 21;
     }].component;
 }
 
+- (nullable __kindof id<iTermStatusBarComponent>)visibleComponentWithIdentifier:(NSString *)identifier {
+    return [_visibleContainerViews objectPassingTest:^BOOL(iTermStatusBarContainerView *element, NSUInteger index, BOOL *stop) {
+        return [element.component.statusBarComponentIdentifier isEqual:identifier];
+    }].component;
+}
+
 #pragma mark - iTermStatusBarLayoutDelegate
 
 - (void)statusBarLayoutDidChange:(iTermStatusBarLayout *)layout {
@@ -357,6 +360,10 @@ const CGFloat iTermStatusBarHeight = 21;
 
 - (void)statusBarComponentRevealActionsTool:(id<iTermStatusBarComponent>)component {
     [self.delegate statusBarRevealActionsTool];
+}
+
+- (void)statusBarComponentResignFirstResponder:(id<iTermStatusBarComponent>)component {
+    [self.delegate statusBarResignFirstResponder];
 }
 
 #pragma mark - iTermStatusBarContainerViewDelegate

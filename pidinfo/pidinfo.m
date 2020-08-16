@@ -6,6 +6,8 @@
 //
 
 #import "pidinfo.h"
+
+#import "iTermFileDescriptorServerShared.h"
 #include <libproc.h>
 #include <stdatomic.h>
 #include <stdlib.h>
@@ -34,12 +36,176 @@
     return self;
 }
 
+- (void)runShellScript:(NSString *)script
+                 shell:(NSString *)shell
+             withReply:(void (^)(NSData * _Nullable, NSData * _Nullable, int))reply {
+    [self performRiskyBlock:^(BOOL shouldPerform, BOOL (^ _Nullable completion)(void)) {
+        if (!shouldPerform) {
+            reply(nil, nil, 0);
+            syslog(LOG_WARNING, "pidinfo wedged");
+            return;
+        }
+        [self reallyRunShellScript:script shell:shell completion:^(NSData *output,
+                                                                   NSData *error,
+                                                                   int status) {
+            if (!completion()) {
+                syslog(LOG_INFO, "runShellScript finished after timing out");
+                return;
+            }
+            reply(output, error, status);
+        }];
+    }];
+}
+
+- (NSString *)temporaryFileNameWithPrefix:(NSString *)prefix suffix:(NSString *)suffix {
+    assert(strlen(suffix.UTF8String) < INT_MAX);
+    NSString *template = [NSString stringWithFormat:@"%@XXXXXX%@", prefix ?: @"", suffix ?: @""];
+    NSString *tempFileTemplate =
+        [NSTemporaryDirectory() stringByAppendingPathComponent:template];
+    const char *tempFileTemplateCString =
+        [tempFileTemplate fileSystemRepresentation];
+    char *tempFileNameCString = strdup(tempFileTemplateCString);
+    int fileDescriptor = mkstemps(tempFileNameCString, (int)strlen(suffix.UTF8String));
+
+    if (fileDescriptor == -1) {
+        free(tempFileNameCString);
+        return nil;
+    }
+    close(fileDescriptor);
+    NSString *filename = [[NSFileManager defaultManager] stringWithFileSystemRepresentation:tempFileNameCString
+                                                                                     length:strlen(tempFileNameCString)];
+    free(tempFileNameCString);
+    return filename;
+}
+
+static int MakeNonBlocking(int fd) {
+    int flags = fcntl(fd, F_GETFL);
+    int rc = 0;
+    do {
+        rc = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+    } while (rc == -1 && errno == EINTR);
+    return rc == -1;
+}
+
+- (void)reallyRunShellScript:(NSString *)script shell:(NSString *)shell completion:(void (^)(NSData * _Nullable, NSData * _Nullable, int))completion {
+    @try {
+        NSTask *task = [[NSTask alloc] init];
+        task.launchPath = shell;
+
+        NSString *tempfile = [self temporaryFileNameWithPrefix:@"iTerm2-script" suffix:@"sh"];
+        NSError *error = nil;
+        [script writeToFile:tempfile atomically:YES encoding:NSUTF8StringEncoding error:&error];
+        if (error) {
+            completion(nil, nil, 0);
+            return;
+        }
+        chmod(tempfile.UTF8String, 0700);
+        task.arguments = @[ @"-c", tempfile ];
+
+        NSPipe *stdinPipe = [[NSPipe alloc] init];
+        NSPipe *outputPipe = [[NSPipe alloc] init];
+        NSPipe *errorPipe = [[NSPipe alloc] init];
+        task.standardInput = stdinPipe;
+        task.standardOutput = outputPipe;
+        task.standardError = errorPipe;
+
+        [task launch];
+
+        NSFileHandle *outputHandle = outputPipe.fileHandleForReading;
+        NSFileHandle *errorHandle = errorPipe.fileHandleForReading;
+        NSMutableData *accumulatedOutput = [[NSMutableData alloc] init];
+        NSMutableData *accumulatedError = [[NSMutableData alloc] init];
+
+        MakeNonBlocking(outputHandle.fileDescriptor);
+        MakeNonBlocking(errorHandle.fileDescriptor);
+
+        while (1) {
+            int fds[2] = { outputHandle.fileDescriptor, errorHandle.fileDescriptor };
+            int results[2] = { 0, 0 };
+            iTermSelect(fds, sizeof(fds) / sizeof(*fds), results, 0);
+            if (results[0]) {
+                NSData *data = outputHandle.availableData;
+                if (data.length == 0) {
+                    break;
+                }
+                [accumulatedOutput appendData:data];
+            }
+            if (results[1]) {
+                NSData *data = errorHandle.availableData;
+                if (data.length == 0) {
+                    break;
+                }
+                [accumulatedError appendData:data];
+            }
+            if (accumulatedOutput.length > 1048576 ||
+                accumulatedError.length > 1048576) {
+                [task terminate];
+                break;
+            }
+        }
+
+        [task waitUntilExit];
+        completion(accumulatedOutput, accumulatedError, task.terminationStatus);
+    } @catch (NSException *exception) {
+        completion(nil, nil, 0);
+    }
+
+}
+
 - (void)getProcessInfoForProcessID:(NSNumber *)pid
                             flavor:(NSNumber *)flavor
                                arg:(NSNumber *)arg
                               size:(NSNumber *)size
                              reqid:(int)reqid
                          withReply:(void (^)(NSNumber *, NSData *))reply {
+    [self performRiskyBlock:^(BOOL shouldPerform, BOOL (^completion)(void)) {
+        if (!shouldPerform) {
+            reply(@-1, [NSData data]);
+            syslog(LOG_WARNING,
+                   "pidinfo %d detected wedged proc_pidinfo for process ID %d, flavor %d. Count is %d.",
+                   reqid, pid.intValue, flavor.intValue, self->_numWedged);
+            return;
+        }
+        [self reallyGetProcessInfoForProcessID:pid flavor:flavor arg:arg size:size reqid:reqid withReply:^(NSNumber *number, NSData *data) {
+            if (!completion()) {
+                syslog(LOG_INFO, "pidinfo reqid %d finished after timing out", reqid);
+                return;
+            }
+            reply(number, data);
+        }];
+    }];
+}
+
+- (void)checkIfDirectoryExists:(NSString *)directory withReply:(void (^)(NSNumber * _Nullable))reply {
+    [self performRiskyBlock:^(BOOL shouldPerform, BOOL (^ _Nullable completion)(void)) {
+        if (!shouldPerform) {
+            reply(nil);
+            return;
+        }
+        BOOL isDirectory = NO;
+        const BOOL exists = [[NSFileManager defaultManager] fileExistsAtPath:directory isDirectory:&isDirectory];
+        if (!completion()) {
+            return;
+        }
+        NSNumber *result = @(exists && isDirectory);
+        reply(result);
+    }];
+}
+
+// Usage:
+// [self performRiskyBlock:^(BOOL shouldPerform, BOOL (^completion)(void)) {
+//   if (!shouldPerform) {
+//     reply(FAILURE);
+//     return;
+//   }
+//   [self doSlowOperationWithCompletion:^{
+//     if (!completion()) {
+//       return;
+//     }
+//     reply(SUCCESS);
+//   }];
+// }];
+- (void)performRiskyBlock:(void (^)(BOOL shouldPerform, BOOL (^ _Nullable completion)(void)))block {
     const NSTimeInterval timeout = 10;
     __block _Atomic BOOL done = NO;
     __block _Atomic BOOL wedged = NO;
@@ -51,31 +217,28 @@
             return;
         }
         wedged = YES;
-        reply(@-1, [NSData data]);
+        block(NO, nil);
         self->_numWedged++;
-        syslog(LOG_WARNING,
-               "pidinfo %d detected wedged proc_pidinfo for process ID %d, flavor %d. Count is %d.",
-               reqid, pid.intValue, flavor.intValue, self->_numWedged);
 
         if (self->_numWedged > 128) {
-            syslog(LOG_ERR, "pidinfo %d has more than 128 wedged threads. Restarting.", reqid);
+            syslog(LOG_ERR, "There are more than 128 wedged threads. Restarting.");
             _exit(0);
         }
     });
     dispatch_async(_queue, ^{
-        [self reallyGetProcessInfoForProcessID:pid flavor:flavor arg:arg size:size reqid:reqid withReply:^(NSNumber *number, NSData *data) {
+        block(YES, ^{
             self->_count--;
             if (wedged) {
               // Finished after timeout.
               self->_numWedged--;
               syslog(LOG_INFO,
-                     "pidinfo %d detected slow but not wedged proc_pidinfo. Count is now %d.",
-                     reqid, self->_numWedged);
-                return;
+                     "pidinfo detected slow but not wedged proc_pidinfo. Count is now %d.",
+                     self->_numWedged);
+                return NO;
             }
             done = YES;
-            reply(number, data);
-        }]; 
+            return YES;
+        });
     });
 }
 
@@ -140,6 +303,12 @@ static double TimespecToSeconds(struct timespec* ts) {
                                 arg.unsignedIntegerValue,
                                 (size.integerValue > 0) ? result.mutableBytes : NULL,
                                 safeLength);
+    if (rc <= 0) {
+        const int copyOfErrno = errno;
+        NSString *message = [NSString stringWithFormat:@"proc_pidinfo flavor=%@ pid=%@ arg=%@ size=%@ returned %@ with errno %@",
+                             flavor, pid, arg, size, @(rc), @(copyOfErrno)];
+        syslog(LOG_WARNING, "%s", message.UTF8String);
+    }
 #if ENABLE_SLOW_ROOT
     if (rc > 0) {
         [self maybeDelayWithFlavor:flavor.intValue

@@ -12,6 +12,8 @@
 #import "iTermFindDriver+Internal.h"
 #import "iTermFocusReportingTextField.h"
 #import "iTermSearchFieldCell.h"
+#import "iTermStoplightHotbox.h"
+#import "NSArray+iTerm.h"
 #import "NSColor+iTerm.h"
 #import "NSEvent+iTerm.h"
 #import "NSTextField+iTerm.h"
@@ -20,7 +22,7 @@
 
 @end
 
-@interface iTermMiniSearchField : iTermFocusReportingSearchField
+@interface iTermMiniSearchField : iTermFocusReportingSearchField<iTermHotboxSuppressing>
 @end
 
 @implementation iTermMiniSearchField
@@ -28,6 +30,12 @@
 - (BOOL)becomeFirstResponder {
     [self.window.contentView setNeedsDisplay:YES];
     return [super becomeFirstResponder];
+}
+
+#pragma mark -- iTermHotboxSuppressing
+
+- (BOOL)supressesHotbox {
+    return YES;
 }
 
 @end
@@ -104,6 +112,10 @@
 }
 
 #pragma mark - iTermFindViewController
+
+- (void)countDidChange {
+    [_searchField setNeedsDisplay:YES];
+}
 
 - (BOOL)searchBarIsFirstResponder {
     return [_searchField textFieldIsFirstResponder];
@@ -202,7 +214,7 @@
 #pragma mark - NSViewController
 
 - (BOOL)validateUserInterfaceItem:(NSMenuItem *)item {
-    item.state = (item.tag == self.driver.mode) ? NSOnState : NSOffState;
+    item.state = (item.tag == self.driver.mode) ? NSControlStateValueOn : NSControlStateValueOff;
     return YES;
 }
 
@@ -210,6 +222,14 @@
 
 - (void)focusReportingSearchFieldWillBecomeFirstResponder:(iTermFocusReportingSearchField *)sender {
     [self.driver searchFieldWillBecomeFirstResponder:sender];
+}
+
+- (NSInteger)focusReportingSearchFieldNumberOfResults:(iTermFocusReportingSearchField *)sender {
+    return [self.driver numberOfResults];
+}
+
+- (NSInteger)focusReportingSearchFieldCurrentIndex:(iTermFocusReportingSearchField *)sender {
+    return [self.driver currentIndex];
 }
 
 #pragma mark - NSControl

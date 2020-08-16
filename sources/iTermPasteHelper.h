@@ -53,11 +53,14 @@ extern const NSInteger iTermQuickPasteBytesPerCallDefaultValue;
 
 @interface iTermPasteHelper : NSObject
 
-@property(nonatomic, assign) id<iTermPasteHelperDelegate> delegate;
+@property(nonatomic, weak) id<iTermPasteHelperDelegate> delegate;
 @property(nonatomic, readonly) BOOL isPasting;
 @property(nonatomic, readonly) BOOL dropDownPasteViewIsVisible;
 @property(nonatomic, readonly) BOOL isWaitingForPrompt;
 @property(nonatomic, readonly) PasteContext *pasteContext;
+
++ (BOOL)promptToConvertTabsToSpacesWhenPasting;
++ (void)togglePromptToConvertTabsToSpacesWhenPasting;
 
 + (NSMutableCharacterSet *)unsafeControlCodeSet;
 
@@ -100,6 +103,7 @@ extern const NSInteger iTermQuickPasteBytesPerCallDefaultValue;
 - (void)unblock;
 
 - (void)showAdvancedPasteWithFlags:(PTYSessionPasteFlags)flags;
+- (void)temporaryRightStatusBarComponentDidBecomeAvailable;
 
 #pragma mark - Testing
 

@@ -50,7 +50,6 @@ extern NSString *const kProfileWasDeletedNotification;
 - (void)profileTableFilterDidChange:(ProfileListView *)profileListView;
 
 - (void)profileTableTagsVisibilityDidChange:(ProfileListView *)profileListView;
-
 @end
 
 @interface ProfileListView : NSView <
@@ -78,7 +77,7 @@ extern NSString *const kProfileWasDeletedNotification;
 - (void)setUnderlyingDatasource:(ProfileModel*)dataSource;
 - (void)focusSearchField;
 - (BOOL)searchFieldHasText;
-
+- (void)forceOverlayScroller;
 
 - (void)reloadData;
 - (void)selectRowIndex:(int)theIndex;

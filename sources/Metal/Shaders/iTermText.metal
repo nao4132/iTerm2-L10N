@@ -47,7 +47,6 @@ iTermTextVertexShader(uint vertexID [[ vertex_id ]],
     out.textureCoordinate = vertexArray[vertexID].textureCoordinate + perInstanceUniforms[iid].textureOffset;
     out.textColor = perInstanceUniforms[iid].textColor;
     out.backgroundColor = perInstanceUniforms[iid].backgroundColor;
-    out.colorModelIndex = perInstanceUniforms[iid].colorModelIndex;
     out.viewportSize = viewportSize;
 
     out.cellOffset = perInstanceUniforms[iid].offset.xy + offset[0];
@@ -242,14 +241,30 @@ iTermTextFragmentShaderWithBlendingUnderlined(iTermTextVertexFunctionOutput in [
     const float4 backgroundColor = drawable.sample(textureSampler, in.backgroundTextureCoordinate);
 
     // Underlined not emoji.
-    const float underlineWeight = ComputeWeightOfUnderlineInverted(in.underlineStyle,
+    float strikethroughWeight = 0;
+    if (in.underlineStyle & iTermMetalGlyphAttributesUnderlineStrikethroughFlag) {
+        strikethroughWeight = ComputeWeightOfUnderlineInverted(iTermMetalGlyphAttributesUnderlineStrikethrough,
+                                                              in.clipSpacePosition.xy,
+                                                              in.viewportSize,
+                                                              in.cellOffset,
+                                                              dimensions->strikethroughOffset,
+                                                              dimensions->strikethroughThickness,
+                                                              dimensions->textureSize,
+                                                              in.textureOffset,
+                                                              in.textureCoordinate,
+                                                              dimensions->glyphSize,
+                                                              dimensions->cellSize,
+                                                              texture,
+                                                              textureSampler,
+                                                              dimensions->scale,
+                                                              (in.flags & iTermTextVertexInfoFlagsSolidUnderlines) != 0);
+    }
+    const float underlineWeight = ComputeWeightOfUnderlineInverted(in.underlineStyle & iTermMetalGlyphAttributesUnderlineBitmask,
                                                                    in.clipSpacePosition.xy,
                                                                    in.viewportSize,
                                                                    in.cellOffset,
                                                                    dimensions->underlineOffset,
                                                                    dimensions->underlineThickness,
-                                                                   dimensions->strikethroughOffset,
-                                                                   dimensions->strikethroughThickness,
                                                                    dimensions->textureSize,
                                                                    in.textureOffset,
                                                                    in.textureCoordinate,
@@ -259,12 +274,13 @@ iTermTextFragmentShaderWithBlendingUnderlined(iTermTextVertexFunctionOutput in [
                                                                    textureSampler,
                                                                    dimensions->scale,
                                                                    (in.flags & iTermTextVertexInfoFlagsSolidUnderlines) != 0);
-    if (underlineWeight == 0 && bwColor.x == 1 && bwColor.y == 1 && bwColor.z == 1) {
+    const float combinedWidth = max(strikethroughWeight, underlineWeight);
+    if (combinedWidth == 0 && bwColor.x == 1 && bwColor.y == 1 && bwColor.z == 1) {
         discard_fragment();
     }
 
     float4 textColor = RemapColor(in.textColor * 17.0, backgroundColor, bwColor, colorModels);
-    return mix(textColor, in.underlineColor, underlineWeight);
+    return mix(textColor, in.underlineColor, combinedWidth);
 }
 
 #pragma mark - Monochrome

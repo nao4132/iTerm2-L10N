@@ -37,6 +37,49 @@ static NSString *kCommandIsInList = @"inList";
 static NSString *kCommandIsLastInList = @"lastInList";
 static NSString *kCommandTimestamp = @"timestamp";
 
+@interface iTermTmuxSubscriptionHandle()
+@property (nonatomic, readonly) NSString *identifier;
+@property (nonatomic, readonly) void (^block)(NSString *, NSArray<NSString *> *);
+@property (nonatomic) BOOL initialized;
+
+- (instancetype)initWithBlock:(void (^)(NSString *, NSArray<NSString *> *))block NS_DESIGNATED_INITIALIZER;
+- (instancetype)init NS_UNAVAILABLE;
+
+- (void)setValue:(NSString *)value arguments:(NSArray<NSString *> *)args;
+@end
+
+@implementation iTermTmuxSubscriptionHandle
+
+- (instancetype)initWithBlock:(void (^)(NSString *, NSArray<NSString *> *))block {
+    self = [super init];
+    if (self) {
+        static NSInteger next = 1;
+        _identifier = [[NSString stringWithFormat:@"it2_%@", @(next++)] retain];
+        _block = [block copy];
+    }
+    return self;
+}
+
+- (void)dealloc {
+    [_identifier release];
+    [_block release];
+    [super dealloc];
+}
+
+- (NSString *)description {
+    return [NSString stringWithFormat:@"<%@: %p id=%@>", NSStringFromClass(self.class), self, _identifier];
+}
+
+- (void)setValue:(NSString *)value arguments:(NSArray<NSString *> *)args {
+    self.block(value, args);
+}
+
+- (void)setValid {
+    _isValid = YES;
+}
+
+@end
+
 @implementation TmuxGateway {
     // Set to YES when the remote host closed the connection. We won't send commands when this is
     // set.
@@ -56,6 +99,7 @@ static NSString *kCommandTimestamp = @"timestamp";
     // When we get the first %begin-%{end,error} we notify the delegate. Until that happens, this is
     // set to NO.
     BOOL _initialized;
+    NSMutableDictionary<NSString *, iTermTmuxSubscriptionHandle *> *_subscriptions;
 }
 
 @synthesize delegate = delegate_;
@@ -68,6 +112,7 @@ static NSString *kCommandTimestamp = @"timestamp";
         delegate_ = delegate;
         commandQueue_ = [[NSMutableArray alloc] init];
         strayMessages_ = [[NSMutableString alloc] init];
+        _subscriptions = [[NSMutableDictionary alloc] init];
         _dcsID = [dcsID copy];
     }
     return self;
@@ -82,6 +127,7 @@ static NSString *kCommandTimestamp = @"timestamp";
     [_minimumServerVersion release];
     [_maximumServerVersion release];
     [_dcsID release];
+    [_subscriptions release];
 
     [super dealloc];
 }
@@ -138,23 +184,28 @@ static NSString *kCommandTimestamp = @"timestamp";
     return data;
 }
 
-- (void)parseOutputCommandData:(NSData *)input
-{
+// %extended-output %<pane id> <latency> [more args?] : <data...><newline>
+- (void)parseExtendedOutputCommandData:(NSData *)input {
     // Null terminate so we can do some string parsing without too much pain.
     NSMutableData *data = [NSMutableData dataWithData:input];
     [data appendBytes:"" length:1];
 
     // This one is tricky to parse because the string version of the command could have bogus UTF-8.
-    // %output %<pane id> <data...><newline>
+    // 3.1 and earlier:
+    //   %output %<pane id> <data...><newline>
+    // 3.2 and later, when pause mode is enabled:
+    //   %output %<pane id> <latency> <data...><newline>
     const char *command = [data bytes];
     char *space = strchr(command, ' ');
     if (!space) {
         goto error;
     }
-    const char *outputCommand = "%output";
+    const char *outputCommand = "%extended-output";
     if (strncmp(outputCommand, command, strlen(outputCommand))) {
         goto error;
     }
+
+    // Pane ID
     const char *paneId = space + 1;
     if (*paneId != '%') {
         goto error;
@@ -170,10 +221,83 @@ static NSString *kCommandTimestamp = @"timestamp";
         goto error;
     }
 
+    // Latency
+    const char *latency = space + 1;
+    space = strchr(latency, ' ');
+    if (!space) {
+        goto error;
+    }
+    endptr = NULL;
+    NSNumber *ms = @(strtoll(latency, &endptr, 10));
+    ms = @(ms.doubleValue / 1000.0);
+    if (endptr != space) {
+        goto error;
+    }
+
+    // Skip unknown params
+    const char *colon = strchr(space + 1, ':');
+    if (!colon) {
+        goto error;
+    }
+    if (colon[1] != ' ') {
+        goto error;
+    }
+
+    const char *encodedData = colon + 2;
+
+    // Payload
+    NSData *decodedData = [self decodeEscapedOutput:encodedData];
+
+    TmuxLog(@"Run tmux command: \"%%extended-output \"%%%d\" %@ %.*s",
+            windowPane, ms, (int)[decodedData length], [decodedData bytes]);
+
+    [delegate_ tmuxReadTask:decodedData windowPane:windowPane latency:ms];
+
+    return;
+error:
+    [self abortWithErrorMessage:[NSString stringWithFormat:@"Malformed command (expected %%num data): \"%s\"", command]];
+}
+
+// %output %<pane id> <data...><newline>
+- (void)parseOutputCommandData:(NSData *)input {
+    // Null terminate so we can do some string parsing without too much pain.
+    NSMutableData *data = [NSMutableData dataWithData:input];
+    [data appendBytes:"" length:1];
+
+    // This one is tricky to parse because the string version of the command could have bogus UTF-8.
+    const char *command = [data bytes];
+    char *space = strchr(command, ' ');
+    if (!space) {
+        goto error;
+    }
+    const char *outputCommand = "%output";
+    if (strncmp(outputCommand, command, strlen(outputCommand))) {
+        goto error;
+    }
+
+    // Pane ID
+    const char *paneId = space + 1;
+    if (*paneId != '%') {
+        goto error;
+    }
+    paneId++;
+    space = strchr(paneId, ' ');
+    if (!space) {
+        goto error;
+    }
+    char *endptr = NULL;
+    int windowPane = strtol(paneId, &endptr, 10);
+    if (windowPane < 0 || endptr != space) {
+        goto error;
+    }
+
+    // Payload
     NSData *decodedData = [self decodeEscapedOutput:space + 1];
 
-    TmuxLog(@"Run tmux command: \"%%output \"%%%d\" %.*s", windowPane, (int)[decodedData length], [decodedData bytes]);
-    [[[delegate_ tmuxController] sessionForWindowPane:windowPane] tmuxReadTask:decodedData];
+    TmuxLog(@"Run tmux command: \"%%output \"%%%d\" %.*s",
+            windowPane, (int)[decodedData length], [decodedData bytes]);
+
+    [delegate_ tmuxReadTask:decodedData windowPane:windowPane latency:nil];
 
     return;
 error:
@@ -193,7 +317,8 @@ error:
     NSString *layout = [components objectAtIndex:2];
     [delegate_ tmuxUpdateLayoutForWindow:window
                                   layout:layout
-                                  zoomed:nil];
+                                  zoomed:nil
+                                    only:YES];
 }
 
 - (void)broadcastWindowChange
@@ -264,14 +389,50 @@ error:
     [delegate_ tmuxSessionsChanged];
 }
 
+- (void)parseWindowPaneChangedCommand:(NSString *)command {
+    NSArray<NSString *> *components = [command captureComponentsMatchedByRegex:@"^%window-pane-changed @([0-9]+) %([0-9]+)$"];
+    if (components.count != 3) {
+        [self abortWithErrorMessage:[NSString stringWithFormat:@"Malformed command (expected %%window-pane-changed @window-id %%pane-id): \"%@\"", command]];
+        return;
+    }
+    [delegate_ tmuxActiveWindowPaneDidChangeInWindow:[components[1] intValue] toWindowPane:[components[2] intValue]];
+}
+
+- (void)parsePauseCommand:(NSString *)command {
+    NSArray<NSString *> *components = [command captureComponentsMatchedByRegex:@"^%pause %([0-9]+)$"];
+    if (components.count != 2) {
+        [self abortWithErrorMessage:[NSString stringWithFormat:@"Malformed command (expected %%pause %%wp): \"%@\"", command]];
+        return;
+    }
+    [delegate_ tmuxWindowPaneDidPause:components[1].intValue
+                         notification:YES];
+}
+
+// %subscription-changed name $a @b x %c : value
+// Where a = session, b = window, x = index, c = pane and any can be - if they are not appropriate
+// to that subscription (so a session subscription will not include b,x,c and a window not
+// include c.
+- (void)parseSubscriptionChangedCommand:(NSString *)command {
+    NSArray<NSString *> *components = [command captureComponentsMatchedByRegex:@"^%subscription-changed ([^:]+) : (.*)$"];
+    if (components.count != 3) {
+        [self abortWithErrorMessage:[NSString stringWithFormat:@"Malformed command (expected %%subscription-changed sid [...] : value): \"%@\"", command]];
+        return;
+    }
+    NSString *args = components[1];
+    NSString *value = components[2];
+    NSArray<NSString *> *parts = [args componentsSeparatedByString:@" "];
+    NSString *sid = parts.firstObject ?: @"";
+    [_subscriptions[sid] setValue:value arguments:parts];
+}
+
 - (void)forceDetach {
     [self hostDisconnected];
 }
 
 - (void)hostDisconnected {
+    disconnected_ = YES;
     [delegate_ tmuxHostDisconnected:[[_dcsID copy] autorelease]];
     [commandQueue_ removeAllObjects];
-    disconnected_ = YES;
 }
 
 // Accessors for objects in the current-command dictionary.
@@ -309,60 +470,101 @@ error:
                                             forKey:kCommandFlags] intValue];
 }
 
-- (void)currentCommandResponseFinishedWithError:(BOOL)withError
-{
-    id target = [self currentCommandTarget];
-    if (target) {
-        SEL selector = [self currentCommandSelector];
-        id obj = [self currentCommandObject];
-        if (withError) {
-            if ([self currentCommandFlags] & kTmuxGatewayCommandShouldTolerateErrors) {
-                [target performSelector:selector
-                             withObject:nil
-                             withObject:obj];
-            } else {
-                if ([currentCommandResponse_ hasPrefix:@"bad working directory:"] &&
-                    [currentCommand_[kCommandString] hasPrefix:@"new-window"] &&
-                    [currentCommand_[kCommandString] containsString:@"-c"] &&
-                    [self.maximumServerVersion compare:@2.1] != NSOrderedAscending) {
-                    [self abortWithErrorMessage:[NSString stringWithFormat:@"Error: %@.\n\nTmux 2.1 and earlier will refuse to create a new window pane with a nonexistent initial working directory.\n\nInfo:\n%@",
-                                                 currentCommandResponse_, currentCommand_]];
-                } else {
-                    [self abortWithErrorMessage:[NSString stringWithFormat:@"Error: %@.\n\nInfo:\n%@", currentCommandResponse_, currentCommand_]];
-                }
-                return;
-            }
-        } else {
-            if ([self currentCommandFlags] & kTmuxGatewayCommandWantsData) {
-                [target performSelector:selector
-                             withObject:currentCommandData_
-                             withObject:obj];
-            } else {
-                [target performSelector:selector
-                             withObject:currentCommandResponse_
-                             withObject:obj];
-            }
-        }
+- (BOOL)commandIsTmux21Quirk {
+    return ([currentCommandResponse_ hasPrefix:@"bad working directory:"] &&
+            [currentCommand_[kCommandString] hasPrefix:@"new-window"] &&
+            [currentCommand_[kCommandString] containsString:@"-c"] &&
+            [self.maximumServerVersion compare:@2.1] != NSOrderedAscending);
+}
+
+- (void)abortWithErrorForCurrentCommand {
+    if ([self commandIsTmux21Quirk]) {
+        [self abortWithErrorMessage:[NSString stringWithFormat:@"Error: %@.\n\nTmux 2.1 and earlier will refuse to create a new window pane with a nonexistent initial working directory.\n\nInfo:\n%@",
+                                     currentCommandResponse_, currentCommand_]];
+    } else {
+        [self abortWithErrorMessage:[NSString stringWithFormat:@"Error: %@.\n\nInfo:\n%@", currentCommandResponse_, currentCommand_]];
     }
-    if ([[currentCommand_ objectForKey:kCommandIsInitial] boolValue]) {
+}
+
+- (void)invokeCurrentCallbackWithError:(BOOL)withError {
+    id target = [self currentCommandTarget];
+    if (!target) {
+        return;
+    }
+    SEL selector = [self currentCommandSelector];
+    id obj = [self currentCommandObject];
+    if (withError) {
+        [target performSelector:selector
+                     withObject:nil
+                     withObject:obj];
+        return;
+    }
+    if (_tmuxLogging) {
+        [delegate_ tmuxPrintLine:[NSString stringWithFormat:@"[Normal response to “%@”]", currentCommand_[kCommandString]]];
+    }
+    if ([self currentCommandFlags] & kTmuxGatewayCommandWantsData) {
+        [target performSelector:selector
+                     withObject:currentCommandData_
+                     withObject:obj];
+    } else {
+        [target performSelector:selector
+                     withObject:currentCommandResponse_
+                     withObject:obj];
+    }
+}
+
+- (BOOL)shouldAutofailSubsequentCommands {
+    if (![currentCommand_[kCommandIsInList] boolValue]) {
+        return NO;
+    }
+    if ([currentCommand_[kCommandIsLastInList] boolValue]) {
+        return NO;
+    }
+    // Remove subsequent commands belonging to the same list so we can go back to life
+    // as usual.
+    DLog(@"Automatically fail the next command.");
+    return YES;
+}
+
+- (void)performInitializationOnCommandResponseWithError:(BOOL)withError {
+    if ([currentCommand_[kCommandIsInitial] boolValue]) {
         DLog(@"Begin accepting notifications");
         acceptNotifications_ = YES;
     }
-    if (!_initialized) {
-        _initialized = YES;
-        if (withError) {
-            [delegate_ tmuxInitialCommandDidFailWithError:currentCommandResponse_];
-        } else {
-            [delegate_ tmuxInitialCommandDidCompleteSuccessfully];
-        }
+    if (_initialized) {
+        return;
     }
+    _initialized = YES;
+    if (withError) {
+        [delegate_ tmuxInitialCommandDidFailWithError:currentCommandResponse_];
+    } else {
+        [delegate_ tmuxInitialCommandDidCompleteSuccessfully];
+    }
+}
 
-    [currentCommand_ release];
-    currentCommand_ = nil;
-    [currentCommandResponse_ release];
-    currentCommandResponse_ = nil;
-    [currentCommandData_ release];
-    currentCommandData_ = nil;
+- (void)currentCommandResponseFinishedWithError:(BOOL)withError {
+    while (YES) {
+        if (withError) {
+            if (_tmuxLogging) {
+                [delegate_ tmuxPrintLine:[NSString stringWithFormat:@"[Error “%@” in response to “%@”]",
+                                          currentCommandResponse_, currentCommand_[kCommandString]]];
+            }
+            const BOOL shouldTolerateError = ([self currentCommandFlags] & kTmuxGatewayCommandShouldTolerateErrors);
+            if (!shouldTolerateError) {
+                [self abortWithErrorForCurrentCommand];
+                return;
+            }
+        }
+        [self invokeCurrentCallbackWithError:withError];
+        const BOOL failNext = withError && [self shouldAutofailSubsequentCommands];
+        [self performInitializationOnCommandResponseWithError:withError];
+        [self resetCurrentCommand];
+
+        if (!failNext) {
+            return;
+        }
+        [self beginHandlingNextResponseWithID:@"n/a"];
+    };
 }
 
 - (void)parseBegin:(NSString *)command {
@@ -399,16 +601,33 @@ error:
             [self abortWithErrorMessage:@"%begin with empty command queue"];
             return;
         }
-        currentCommand_ = [commandQueue_[0] retain];
-        NSString *commandId = components[1];
-        currentCommand_[kCommandId] = commandId;
-        TmuxLog(@"Begin response to %@", [currentCommand_ objectForKey:kCommandString]);
-        [currentCommandResponse_ release];
-        [currentCommandData_ release];
-        currentCommandResponse_ = [[NSMutableString alloc] init];
-        currentCommandData_ = [[NSMutableData alloc] init];
-        [commandQueue_ removeObjectAtIndex:0];
+        [self beginHandlingNextResponseWithID:components[1]];
+        if (_tmuxLogging) {
+            TmuxLog(@"Begin response to %@", [currentCommand_ objectForKey:kCommandString]);
+            [delegate_ tmuxPrintLine:[NSString stringWithFormat:@"[Begin response for %@]", currentCommand_[kCommandString]]];
+        }
     }
+}
+
+- (void)resetCurrentCommand {
+    [currentCommand_ release];
+    currentCommand_ = nil;
+    [currentCommandResponse_ release];
+    currentCommandResponse_ = nil;
+    [currentCommandData_ release];
+    currentCommandData_ = nil;
+}
+
+- (void)beginHandlingNextResponseWithID:(NSString *)commandId {
+    assert(!currentCommand_);
+    currentCommand_ = [commandQueue_[0] retain];
+    currentCommand_[kCommandId] = commandId;
+
+    [currentCommandResponse_ release];
+    [currentCommandData_ release];
+    currentCommandResponse_ = [[NSMutableString alloc] init];
+    currentCommandData_ = [[NSMutableData alloc] init];
+    [commandQueue_ removeObjectAtIndex:0];
 }
 
 - (void)stripLastNewline {
@@ -419,6 +638,14 @@ error:
                                                withString:@""];
         [currentCommandData_ setLength:currentCommandData_.length - 1];
     }
+}
+
+- (BOOL)versionAtLeastDecimalNumberWithString:(NSString *)string {
+    NSDecimalNumber *version = [NSDecimalNumber decimalNumberWithString:string];
+    if (self.minimumServerVersion == nil) {
+        return NO;
+    }
+    return ([self.minimumServerVersion compare:version] != NSOrderedAscending);
 }
 
 - (void)executeToken:(VT100Token *)token {
@@ -467,6 +694,8 @@ error:
         [currentCommandData_ appendBytes:"\n" length:1];
     } else if ([command hasPrefix:@"%output "]) {
         if (acceptNotifications_) [self parseOutputCommandData:data];
+    } else if ([command hasPrefix:@"%extended-output "]) {
+        if (acceptNotifications_) [self parseExtendedOutputCommandData:data];
     } else if ([command hasPrefix:@"%layout-change "]) {
         if (acceptNotifications_) [self parseLayoutChangeCommand:command];
     } else if ([command hasPrefix:@"%window-add"]) {
@@ -487,6 +716,17 @@ error:
         if (acceptNotifications_) [self parseSessionsChangedCommand:command];
     } else if ([command hasPrefix:@"%noop"]) {
         TmuxLog(@"tmux noop: %@", command);
+    } else if ([command hasPrefix:@"%window-pane-changed"]) {
+        // New in tmux 2.5
+        if (acceptNotifications_) [self parseWindowPaneChangedCommand:command];
+    } else if ([command hasPrefix:@"%pause"]) {
+        // New in tmux 3.2
+        [self parsePauseCommand:command];
+    } else if ([command hasPrefix:@"%subscription-changed "]) {
+        // New in tmux 3.2
+        if (acceptNotifications_) [self parseSubscriptionChangedCommand:command];
+    } else if ([command hasPrefix:@"%continue"]) {
+        // New in tmux 3.2. Don't care.
     } else if ([command hasPrefix:@"%window-pane-changed"] ||  // active pane changed
                [command hasPrefix:@"%session-window-changed"] ||  // active window changed
                [command hasPrefix:@"%client-session-changed"] ||  // client is now attached to a new session
@@ -510,19 +750,26 @@ error:
             [delegate_ tmuxPrintLine:@"tmux exited unexpectedly."];
             [delegate_ tmuxPrintLine:command];
         }
+        if ([self versionAtLeastDecimalNumberWithString:@"3.2"]) {
+            [delegate_ tmuxWriteString:NEWLINE];
+        }
         [self hostDisconnected];
     } else if ([command hasPrefix:@"%begin"]) {
         [self parseBegin:command];
     } else {
-        if (![command hasPrefix:@"%"] && ![iTermAdvancedSettingsModel tolerateUnrecognizedTmuxCommands]) {
+        if ([command hasPrefix:@"%"]) {
+            DLog(@"Unrecognized notification: %@", command);
+            return;
+        }
+        if (![iTermAdvancedSettingsModel tolerateUnrecognizedTmuxCommands]) {
             [delegate_ tmuxPrintLine:@"Unrecognized command from tmux. Did your ssh session die? The command was:"];
             [delegate_ tmuxPrintLine:command];
             [self hostDisconnected];
-        } else {
-            // We'll be tolerant of unrecognized commands.
-            DLog(@"Unrecognized command \"%@\"", command);
-            [strayMessages_ appendFormat:@"%@\n", command];
+            return;
         }
+        // We'll be tolerant of unrecognized commands.
+        DLog(@"Unrecognized command \"%@\"", command);
+        [strayMessages_ appendFormat:@"%@\n", command];
     }
 }
 
@@ -694,13 +941,14 @@ error:
     return NO;
 }
 
-- (void)sendCommand:(NSString *)command responseTarget:(id)target responseSelector:(SEL)selector
-{
+- (void)sendCommand:(NSString *)command responseTarget:(id)target responseSelector:(SEL)selector {
+    // We tolerate errors when no target is specifed for bugward compatibility because such errors
+    // used to be ignored purely by accident.
     [self sendCommand:command
        responseTarget:target
      responseSelector:selector
        responseObject:nil
-                flags:0];
+                flags:(target == nil) ? kTmuxGatewayCommandShouldTolerateErrors : 0];
 }
 
 - (void)sendCommand:(NSString *)command
@@ -744,11 +992,11 @@ error:
         [cmd appendString:[dict objectForKey:kCommandString]];
         NSMutableDictionary *amended = [NSMutableDictionary dictionaryWithDictionary:dict];
         if (dict == [commandDicts lastObject]) {
-            [amended setObject:[NSNumber numberWithBool:YES] forKey:kCommandIsLastInList];
+            [amended setObject:@YES forKey:kCommandIsLastInList];
         }
-        [amended setObject:[NSNumber numberWithBool:YES] forKey:kCommandIsInList];
+        [amended setObject:@YES forKey:kCommandIsInList];
         if (initial && dict == [commandDicts lastObject]) {
-            [amended setObject:[NSNumber numberWithBool:YES] forKey:kCommandIsInitial];
+            [amended setObject:@YES forKey:kCommandIsInitial];
         }
         [self enqueueCommandDict:amended];
         if (disconnected_) {
@@ -766,6 +1014,52 @@ error:
 
 - (NSWindowController<iTermWindowController> *)window {
     return [delegate_ tmuxGatewayWindow];
+}
+
+- (iTermTmuxSubscriptionHandle *)subscribeToFormat:(NSString *)format
+                                            target:(NSString *)target
+                                             block:(void (^)(NSString *,
+                                                             NSArray<NSString *> *))block {
+    iTermTmuxSubscriptionHandle *handle = [[[iTermTmuxSubscriptionHandle alloc] initWithBlock:block] autorelease];
+    NSString *subscribe = [NSString stringWithFormat:@"refresh-client -B '%@:%@:%@'",
+                           handle.identifier,
+                           target ?: @"",
+                           format];
+    _subscriptions[handle.identifier] = handle;
+    [self sendCommand:subscribe
+       responseTarget:self
+     responseSelector:@selector(didSubscribe:handleID:)
+       responseObject:handle.identifier
+                flags:kTmuxGatewayCommandShouldTolerateErrors];
+    return handle;
+}
+
+- (void)didSubscribe:(NSString *)result handleID:(NSString *)handleID {
+    [_subscriptions[handleID] setInitialized:YES];
+    if (result) {
+        [_subscriptions[handleID] setValid];
+    }
+}
+
+- (void)unsubscribe:(iTermTmuxSubscriptionHandle *)handle {
+    if (!handle) {
+        return;
+    }
+    if (!handle.isValid && handle.initialized) {
+        // This tmux doesn't support subscriptions.
+        return;
+    }
+    // Regardless of whether it was initialized, unsubscribe. That allows us to
+    // unsubscribe before we get the response to subscribing in case it will
+    // succeed.
+    NSString *subscribe = [NSString stringWithFormat:@"refresh-client -B '%@'",
+                           handle.identifier];
+    [_subscriptions removeObjectForKey:handle.identifier];
+    [self sendCommand:subscribe
+       responseTarget:nil
+     responseSelector:nil
+       responseObject:nil
+                flags:kTmuxGatewayCommandShouldTolerateErrors];
 }
 
 @end

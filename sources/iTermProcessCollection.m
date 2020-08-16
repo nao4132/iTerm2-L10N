@@ -34,6 +34,7 @@
     BOOL _initialized;
     NSNumber *_testValueForForegroundJob;
     BOOL _computingTreeString;
+    NSDate *_startTime;
 }
 
 - (instancetype)initWithPid:(pid_t)processID
@@ -97,6 +98,13 @@
 
 - (void)addChildWithProcessID:(pid_t)pid {
     [_childProcessIDs addIndex:pid];
+}
+
+- (NSDate *)startTime {
+    if (!_startTime) {
+        _startTime = [iTermLSOF startTimeForProcess:self.processID];
+    }
+    return _startTime;
 }
 
 - (iTermProcessInfo *)deepestForegroundJob {
@@ -202,7 +210,7 @@
         BOOL fg = NO;
         // This is the "real" name, not the hacked one with a leading hyphen.
         self.nameValue = [iTermLSOF nameOfProcessWithPid:self->_processID isForeground:&fg];
-        if (fg) {
+        if (fg || [self.parent.name isEqualToString:@"login"] || !self.parent) {
             // Full command line with hacked command name.
             self.commandLineValue = [iTermLSOF commandForProcess:self->_processID execName:nil];
         }

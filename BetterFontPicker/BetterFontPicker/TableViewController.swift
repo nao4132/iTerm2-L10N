@@ -94,14 +94,21 @@ public class TableViewController: NSViewController, FavoritesDataSourceDelegate,
                                                queue: nil) { [weak self] (notification) in
                                                 self?.layOutTableView()
         }
-        NotificationCenter.default.addObserver(forName: NSFont.fontSetChangedNotification,
+        NotificationCenter.default.addObserver(forName: SystemFontClassifier.didUpdateNotificationName,
                                                object: nil,
                                                queue: nil) { [weak self] (notification) in
-                                                self?.fontSetDidChange()
+                                                self?.systemFontsDidChange()
         }
         layOutTableView()
 
-        typicalHeight = newFontNameCell("X").fittingSize.height + 2
+        let fudgeFactor: CGFloat
+        if #available(macOS 10.16, *) {
+            fudgeFactor = 5
+        } else {
+            fudgeFactor = 2
+        }
+        
+        typicalHeight = newFontNameCell("X").fittingSize.height + fudgeFactor
         tableView.delegate = self
         tableView.dataSource = self
     }
@@ -110,8 +117,9 @@ public class TableViewController: NSViewController, FavoritesDataSourceDelegate,
         fatalError("init(coder:) has not been implemented")
     }
 
-    private func fontSetDidChange() {
-        for dataSource in dataSources {
+    private func systemFontsDidChange() {
+        dirty = true
+        for dataSource in systemFontDataSources {
             dataSource.reload()
         }
         tableView.reloadData()
@@ -133,10 +141,17 @@ public class TableViewController: NSViewController, FavoritesDataSourceDelegate,
         tableView.frame = frame
         let starWidth = CGFloat(StarTableViewCell.width)
         let checkmarkWidth = starWidth - 10
+        let fudgeFactor: CGFloat
+        if #available(macOS 10.16, *) {
+            // NSTableView has an .inset style but no way to ask what the inset is, so I guess this is what I'm supposed to do? sigh
+            fudgeFactor = 32
+        } else {
+            fudgeFactor = 0
+        }
         let desiredWidths = [
             starColumnIdentifier: starWidth,
             checkmarkColumnIdentifier: checkmarkWidth,
-            fontnameColumnIdentifier: frame.size.width - starWidth - checkmarkWidth
+            fontnameColumnIdentifier: frame.size.width - starWidth - checkmarkWidth - fudgeFactor
         ]
         for (identifier, width) in desiredWidths {
             if let column = tableView.tableColumn(withIdentifier: identifier) {

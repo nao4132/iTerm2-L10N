@@ -19,6 +19,9 @@ NS_ASSUME_NONNULL_BEGIN
 // Used to remember the last time the cursor moved to avoid drawing a blinked-out
 // cursor while it's moving.
 @property (nonatomic) NSTimeInterval lastTimeCursorMoved;
+@property (nonatomic, readonly) NSImage *backgroundImage;
+@property (nonatomic, readonly) iTermBackgroundImageMode backroundImageMode;
+@property (nonatomic, readonly) CGFloat backgroundImageBlend;
 @end
 
 @interface iTermMetalPerFrameState : NSObject<

@@ -225,36 +225,43 @@
                    windowController:(PseudoTerminal *)windowController
                          completion:(void (^)(PTYSession *, BOOL willCallCompletionBlock))completion {
     DLog(@"Creating a new session by URL: %@", _url);
-    PTYSession *session = [windowController.sessionFactory newSessionWithProfile:profile];
+    PTYSession *session = [windowController.sessionFactory newSessionWithProfile:profile
+                                                                          parent:nil];
     [windowController addSessionInNewTab:session];
     __weak __typeof(self) weakSelf = self;
-    const BOOL ok = [windowController.sessionFactory attachOrLaunchCommandInSession:session
-                                                                          canPrompt:YES
-                                                                         objectType:self.objectType
-                                                                   serverConnection:nil
-                                                                          urlString:_url
-                                                                       allowURLSubs:YES
-                                                                        environment:@{}
-                                                                        customShell:[ITAddressBookMgr customShellForProfile:profile]
-                                                                             oldCWD:nil
-                                                                     forceUseOldCWD:NO
-                                                                            command:nil
-                                                                             isUTF8:nil
-                                                                      substitutions:nil
-                                                                   windowController:windowController
-                                                                         completion:
-                     ^(PTYSession *newSession, BOOL ok) {
-                         DLog(@"launch by url finished with ok=%@", @(ok));
-                         [weakSelf setFinishedWithSuccess:ok];
-                     }];
-    if (ok) {
-        DLog(@"success");
-        completion(session, YES);
-    } else {
-        DLog(@"failure");
-        [self setFinishedWithSuccess:NO];
-        completion(nil, YES);
+
+    iTermSessionAttachOrLaunchRequest *launchRequest =
+    [iTermSessionAttachOrLaunchRequest launchRequestWithSession:session
+                                                      canPrompt:YES
+                                                     objectType:self.objectType
+                                            hasServerConnection:NO
+                                               serverConnection:(iTermGeneralServerConnection){}
+                                                      urlString:_url
+                                                   allowURLSubs:YES
+                                                    environment:@{}
+                                                    customShell:[ITAddressBookMgr customShellForProfile:profile]
+                                                         oldCWD:nil
+                                                 forceUseOldCWD:NO
+                                                        command:nil
+                                                         isUTF8:nil
+                                                  substitutions:nil
+                                               windowController:windowController
+                                                          ready:^(BOOL ok) {
+        if (ok) {
+            DLog(@"success");
+            completion(session, YES);
+        } else {
+            DLog(@"failure");
+            [self setFinishedWithSuccess:NO];
+            completion(nil, YES);
+        }
     }
+                                                     completion:
+     ^(PTYSession *newSession, BOOL ok) {
+        DLog(@"launch by url finished with ok=%@", @(ok));
+        [weakSelf setFinishedWithSuccess:ok];
+    }];
+    [windowController.sessionFactory attachOrLaunchWithRequest:launchRequest];
 }
 
 - (void)makeSessionByCreatingTabWithProfile:(Profile *)profile
@@ -273,8 +280,8 @@
         modifiedToOpenURL:(NSString *)url
             forObjectType:(iTermObjectType)objectType {
     if (aDict == nil ||
-        [[ITAddressBookMgr bookmarkCommand:aDict
-                             forObjectType:objectType] isEqualToString:@"$$"] ||
+        [[ITAddressBookMgr bookmarkCommandSwiftyString:aDict
+                                         forObjectType:objectType] isEqualToString:@"$$"] ||
         ![[aDict objectForKey:KEY_CUSTOM_COMMAND] isEqualToString:kProfilePreferenceCommandTypeCustomValue]) {
         Profile *prototype = aDict;
         if (!prototype) {

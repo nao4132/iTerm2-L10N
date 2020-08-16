@@ -64,14 +64,17 @@ static NSString *kToolNotesSetTextNotification = @"kToolNotesSetTextNotification
 
         NSScrollView *scrollview = [[[NSScrollView alloc]
                                      initWithFrame:NSMakeRect(0, 0, frame.size.width, frame.size.height)] autorelease];
-        [scrollview setBorderType:NSBezelBorder];
+        if (@available(macOS 10.16, *)) {
+            [scrollview setBorderType:NSLineBorder];
+            scrollview.scrollerStyle = NSScrollerStyleOverlay;
+        } else {
+            [scrollview setBorderType:NSBezelBorder];
+        }
         [scrollview setHasVerticalScroller:YES];
         [scrollview setHasHorizontalScroller:NO];
         [scrollview setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
-        if (@available(macOS 10.14, *)) { } else {
-            scrollview.drawsBackground = NO;
-        }
-        
+        scrollview.drawsBackground = NO;
+
         NSSize contentSize = [scrollview contentSize];
         textView_ = [[iTermUnformattedTextView alloc] initWithFrame:NSMakeRect(0, 0, contentSize.width, contentSize.height)];
         [textView_ setAllowsUndo:YES];
@@ -157,7 +160,7 @@ static NSString *kToolNotesSetTextNotification = @"kToolNotesSetTextNotification
         return;
     }
     if (@available(macOS 10.14, *)) {
-        textView_.backgroundColor = [NSColor textBackgroundColor];
+        textView_.drawsBackground = NO;
         textView_.textColor = [NSColor textColor];
     } else {
         if ([self.window.appearance.name isEqual:NSAppearanceNameVibrantDark]) {

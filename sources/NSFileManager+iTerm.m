@@ -28,6 +28,7 @@
 #import "DebugLogging.h"
 #import "iTermAdvancedSettingsModel.h"
 #import "iTermAutoMasterParser.h"
+#import "RegexKitLite.h"
 #include <sys/param.h>
 #include <sys/mount.h>
 
@@ -59,8 +60,9 @@ NSString * const DirectoryLocationDomain = @"DirectoryLocationDomain";
     NSArray *paths = NSSearchPathForDirectoriesInDomains(searchPathDirectory,
                                                          domainMask,
                                                          YES);
+    DLog(@"Search paths are %@", paths);
     if (!paths.count) {
-        if (errorOut)         {
+        if (errorOut) {
             NSDictionary *userInfo = @{ NSLocalizedDescriptionKey: @"No path found for directory in domain.",
                                         @"NSSearchPathDirectory": @(searchPathDirectory),
                                         @"NSSearchPathDomainMask": @(domainMask) };
@@ -68,6 +70,7 @@ NSString * const DirectoryLocationDomain = @"DirectoryLocationDomain";
                                             code:DirectoryLocationErrorNoPathFound
                                         userInfo:userInfo];
         }
+        DLog(@"Fail, no paths");
         return nil;
     }
 
@@ -75,6 +78,7 @@ NSString * const DirectoryLocationDomain = @"DirectoryLocationDomain";
     NSString *resolvedPath = paths[0];
     if (appendComponent) {
         resolvedPath = [resolvedPath stringByAppendingPathComponent:appendComponent];
+        DLog(@"After appending %@, have %@", appendComponent, resolvedPath);
     }
 
     // Create if needed.
@@ -87,12 +91,14 @@ NSString * const DirectoryLocationDomain = @"DirectoryLocationDomain";
         if (errorOut) {
             *errorOut = error;
         }
+        DLog(@"Create dir of %@ failed with %@, return nil", resolvedPath, error);
         return nil;
     }
 
     if (errorOut) {
         *errorOut = nil;
     }
+    DLog(@"Return %@", resolvedPath);
     return resolvedPath;
 }
 
@@ -106,28 +112,15 @@ NSString * const DirectoryLocationDomain = @"DirectoryLocationDomain";
     NSString *executableName =
         [[[NSBundle mainBundle] infoDictionary] objectForKey:(id)kCFBundleExecutableKey];
     NSError *error;
+    DLog(@"Want app support directory");
     NSString *result = [self findOrCreateDirectory:NSApplicationSupportDirectory
                                           inDomain:NSUserDomainMask
                                appendPathComponent:executableName
                                              error:&error];
     if (!result) {
-        ELog(@"Unable to find or create application support directory:\n%@", error);
+        DLog(@"Unable to find or create application support directory:\n%@", error);
     }
     return result;
-}
-
-- (NSString *)applicationSupportDirectoryWithoutSpacesWithoutCreatingSymlink {
-    NSError *error;
-    NSString *realAppSupport = [self findOrCreateDirectory:NSApplicationSupportDirectory
-                                                  inDomain:NSUserDomainMask
-                                       appendPathComponent:nil
-                                                     error:&error];
-    NSString *nospaces = [realAppSupport stringByReplacingOccurrencesOfString:@"Application Support"
-                                                                   withString:[iTermAdvancedSettingsModel spacelessApplicationSupport]];
-    NSString *executableName =
-        [[[NSBundle mainBundle] infoDictionary] objectForKey:(id)kCFBundleExecutableKey];
-    return [nospaces stringByAppendingPathComponent:executableName];
-    return nospaces;
 }
 
 - (NSString *)libraryDirectoryFor:(NSString *)app {
@@ -140,24 +133,6 @@ NSString * const DirectoryLocationDomain = @"DirectoryLocationDomain";
         ELog(@"Unable to find or create application support directory:\n%@", error);
     }
     return result;
-}
-
-- (NSString *)applicationSupportDirectoryWithoutSpaces {
-    NSError *error;
-    NSString *realAppSupport = [self findOrCreateDirectory:NSApplicationSupportDirectory
-                                                  inDomain:NSUserDomainMask
-                                       appendPathComponent:nil
-                                                     error:&error];
-    NSString *linkName = [iTermAdvancedSettingsModel spacelessApplicationSupport];
-    NSString *nospaces = [realAppSupport stringByReplacingOccurrencesOfString:@"Application Support"
-                                                                   withString:linkName];
-    if (linkName.length) {
-        [[NSFileManager defaultManager] createSymbolicLinkAtPath:nospaces withDestinationPath:realAppSupport error:nil];
-    }
-
-    NSString *executableName =
-        [[[NSBundle mainBundle] infoDictionary] objectForKey:(id)kCFBundleExecutableKey];
-    return [nospaces stringByAppendingPathComponent:executableName];
 }
 
 - (NSString *)legacyApplicationSupportDirectory {
@@ -180,17 +155,12 @@ NSString * const DirectoryLocationDomain = @"DirectoryLocationDomain";
     return [[self applicationSupportDirectory] stringByAppendingPathComponent:@"Scripts"];
 }
 
-- (NSString *)scriptsPathWithoutSpaces {
-    NSString *modernPath = [[self applicationSupportDirectoryWithoutSpaces] stringByAppendingPathComponent:@"Scripts"];
-    return modernPath;
-}
-
 - (NSString *)legacyAutolaunchScriptPath {
     return [[self scriptsPath] stringByAppendingPathComponent:@"AutoLaunch.scpt"];
 }
 
 - (NSString *)autolaunchScriptPath {
-    return [[self scriptsPathWithoutSpaces] stringByAppendingPathComponent:@"AutoLaunch"];
+    return [[self scriptsPath] stringByAppendingPathComponent:@"AutoLaunch"];
 }
 
 - (NSString *)quietFilePath {
@@ -343,6 +313,42 @@ additionalNetworkPaths:(NSArray<NSString *> *)additionalNetworkPaths {
         ++retries;
     } while ([[NSFileManager defaultManager] fileExistsAtPath:finalDestination]);
     return finalDestination;
+}
+
+- (id)monitorFile:(NSString *)path block:(void (^)(long))block {
+    DLog(@"monitor %@", path);
+    const int fileDescriptor = open(path.UTF8String, O_EVTONLY);
+    if (fileDescriptor < 0) {
+        DLog(@"Failed to open %@", path);
+        return nil;
+    }
+
+    dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
+    const unsigned long mask = (DISPATCH_VNODE_DELETE | DISPATCH_VNODE_WRITE | DISPATCH_VNODE_EXTEND |
+                                DISPATCH_VNODE_ATTRIB | DISPATCH_VNODE_LINK | DISPATCH_VNODE_RENAME |
+                                DISPATCH_VNODE_REVOKE);
+    __block dispatch_source_t source =
+    dispatch_source_create(DISPATCH_SOURCE_TYPE_VNODE, fileDescriptor, mask, queue);
+    dispatch_source_set_event_handler(source, ^{
+        unsigned long flags = dispatch_source_get_data(source);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            block(flags);
+        });
+    });
+    dispatch_source_set_cancel_handler(source, ^(void) {
+        close(fileDescriptor);
+    });
+    dispatch_resume(source);
+
+    return source;
+}
+
+- (void)stopMonitoringFileWithToken:(id)token {
+    if (!token) {
+        return;
+    }
+    dispatch_source_t source = token;
+    dispatch_source_cancel(source);
 }
 
 @end

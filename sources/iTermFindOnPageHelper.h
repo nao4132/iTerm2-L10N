@@ -8,6 +8,7 @@
 
 #import <Cocoa/Cocoa.h>
 #import "iTermFindDriver.h"
+#import "iTermSearchResultsMinimapView.h"
 #import "VT100GridTypes.h"
 
 @class FindContext;
@@ -45,9 +46,14 @@
 // Indicate that the search failed.
 - (void)findOnPageFailed;
 
+- (long long)findOnPageOverflowAdjustment;
+- (NSRange)findOnPageRangeOfVisibleLines;
+- (void)findOnPageLocationsDidChange;
+- (void)findOnPageSelectedResultDidChange;
+
 @end
 
-@interface iTermFindOnPageHelper : NSObject
+@interface iTermFindOnPageHelper : NSObject<iTermSearchResultsMinimapViewDelegate>
 
 @property(nonatomic, readonly) BOOL findInProgress;
 @property(nonatomic, assign) NSView<iTermFindOnPageHelperDelegate> *delegate;
@@ -56,6 +62,8 @@
 @property(nonatomic, readonly) VT100GridAbsCoord findCursorAbsCoord;
 @property(nonatomic, readonly) FindContext *copiedContext;
 @property(nonatomic, readonly) NSOrderedSet<SearchResult *> *searchResults;
+@property(nonatomic, readonly) NSInteger numberOfSearchResults;
+@property(nonatomic, readonly) NSInteger currentIndex;
 
 // Begin a new search.
 //
@@ -107,5 +115,6 @@ scrollToFirstResult:(BOOL)scrollToFirstResult;
 - (void)setStartPoint:(VT100GridAbsCoord)startPoint;
 
 - (NSRange)rangeOfSearchResultsInRangeOfLines:(NSRange)range;
+- (void)overflowAdjustmentDidChange;
 
 @end

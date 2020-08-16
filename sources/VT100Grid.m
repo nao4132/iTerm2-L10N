@@ -910,7 +910,7 @@ static NSString *const kGridSizeKey = @"Size";
         if (aLine[cursor_.x].code == DWC_RIGHT) {
 #ifdef VERBOSE_STRING
             NSLog(@"Wiping out the right-half DWC at the cursor before writing to screen");
-            ITUpgradedNSAssert(cursor_.x > 0, @"DWC split");  // there should never be the second half of a DWC at x=0
+            ITAssertWithMessage(cursor_.x > 0, @"DWC split");  // there should never be the second half of a DWC at x=0
 #endif
             aLine[cursor_.x].code = 0;
             aLine[cursor_.x].complexChar = NO;
@@ -1671,6 +1671,23 @@ static NSString *const kGridSizeKey = @"Size";
     }
 }
 
+- (VT100GridSize)sizeRespectingRegionConditionally {
+    if (self.cursor.x >= self.leftMargin &&
+        self.cursor.x <= self.rightMargin &&
+        self.cursor.y >= self.topMargin &&
+        self.cursor.y <= self.bottomMargin) {
+        return VT100GridSizeMake(self.rightMargin - self.leftMargin + 1,
+                                 self.bottomMargin - self.topMargin + 1);
+    }
+    return self.size;
+}
+
+- (void)setContinuationMarkOnLine:(int)line to:(unichar)code {
+    screen_char_t *chars = [self screenCharsAtLineNumber:line];
+    assert(chars);
+    chars[size_.width].code = code;
+}
+
 #pragma mark - Private
 
 - (NSMutableArray *)linesWithSize:(VT100GridSize)size {
@@ -1702,6 +1719,7 @@ static NSString *const kGridSizeKey = @"Size";
 
     c.underline = NO;
     c.strikethrough = NO;
+    c.underlineStyle = VT100UnderlineStyleSingle;
     c.urlCode = 0;
     c.image = 0;
 

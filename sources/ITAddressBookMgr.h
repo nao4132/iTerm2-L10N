@@ -126,6 +126,8 @@
 #define KEY_WINDOW_TYPE            @"Window Type"
 #define KEY_USE_CUSTOM_WINDOW_TITLE           @"Use Custom Window Title"
 #define KEY_CUSTOM_WINDOW_TITLE               @"Custom Window Title"
+#define KEY_USE_CUSTOM_TAB_TITLE   @"Use Custom Tab Title"
+#define KEY_CUSTOM_TAB_TITLE       @"Custom Tab Title"
 #define KEY_SCREEN                 @"Screen"
 #define KEY_SPACE                  @"Space"  // integer, iTermProfileSpaceSetting
 #define KEY_NORMAL_FONT            @"Normal Font"
@@ -172,6 +174,7 @@
 #define KEY_FLASHING_BELL                     @"Flashing Bell"
 #define KEY_XTERM_MOUSE_REPORTING             @"Mouse Reporting"
 #define KEY_XTERM_MOUSE_REPORTING_ALLOW_MOUSE_WHEEL @"Mouse Reporting allow mouse wheel"
+#define KEY_XTERM_MOUSE_REPORTING_ALLOW_CLICKS_AND_DRAGS @"Mouse Reporting allow clicks and drags"
 #define KEY_UNICODE_VERSION                   @"Unicode Version"
 #define KEY_DISABLE_SMCUP_RMCUP               @"Disable Smcup Rmcup"
 #define KEY_ALLOW_TITLE_REPORTING             @"Allow Title Reporting"
@@ -399,8 +402,15 @@ typedef NS_ENUM(NSUInteger, iTermProfileIcon) {
 
 // This is deprecated in favor of -[NSString fontValue] and -[NSFont stringValue].
 + (NSString *)descFromFont:(NSFont*)font __attribute__((deprecated));
-+ (NSString *)bookmarkCommand:(Profile*)bookmark
-                forObjectType:(iTermObjectType)objectType;
++ (void)computeCommandForProfile:(Profile *)profile
+                      objectType:(iTermObjectType)objectType
+                           scope:(iTermVariableScope *)scope
+                      completion:(void (^)(NSString *command))completion;
+
+// Like computeCommandForProfile:objectType:scope:completion: but does not evaluate it.
++ (NSString *)bookmarkCommandSwiftyString:(Profile *)bookmark
+                            forObjectType:(iTermObjectType)objectType;
+
 + (NSString *)customShellForProfile:(Profile *)profile;
 
 // Indicates if it is safe to remove the profile from the model.

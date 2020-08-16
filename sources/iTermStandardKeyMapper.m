@@ -27,6 +27,10 @@
     return nil;
 }
 
+- (BOOL)keyMapperWantsKeyEquivalent:(NSEvent *)event {
+    return NO;
+}
+
 #pragma mark - Pre-Cocoa
 
 - (NSString *)preCocoaString {
@@ -251,7 +255,7 @@
     NSString *const characters = _event.characters;
     const NSEventModifierFlags modifiers = _event.it_modifierFlags;
     const unichar unicode = [characters length] > 0 ? [characters characterAtIndex:0] : 0;
-    DLog(@"PTYSession keyDown is a function key");
+    DLog(@"PTYSession keyDown is a function key. unicode=%@", @(unicode));
 
     // Handle all "special" keys (arrows, etc.)
     switch (unicode) {

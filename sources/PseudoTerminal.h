@@ -27,6 +27,7 @@
 @class iTermToolbeltView;
 @protocol iTermWindowScope;
 @class iTermController;
+@class PseudoTerminalState;
 @class TmuxController;
 
 // Posted when a new window controller is created. It's not ready to use at this point, though.
@@ -266,6 +267,12 @@ extern NSString *const iTermDidCreateTerminalWindowNotification;
 + (NSDictionary *)repairedArrangement:(NSDictionary *)arrangement
              replacingProfileWithGUID:(NSString *)badGuid
                           withProfile:(Profile *)goodProfile;
++ (NSDictionary *)repairedArrangement:(NSDictionary *)arrangement
+     replacingOldCWDOfSessionWithGUID:(NSString *)guid
+                           withOldCWD:(NSString *)replacementOldCWD;
+
++ (NSDictionary *)arrangementForSessionWithGUID:(NSString *)sessionGUID
+                            inWindowArrangement:(NSDictionary *)arrangement;
 
 // Load an arrangement into an empty window.
 - (BOOL)loadArrangement:(NSDictionary *)arrangement named:(NSString *)arrangementName;
@@ -372,6 +379,8 @@ extern NSString *const iTermDidCreateTerminalWindowNotification;
 - (void)moveTabAtIndex:(NSInteger)selectedIndex toIndex:(NSInteger)destinationIndex;
 
 - (PseudoTerminal *)it_moveTabToNewWindow:(PTYTab *)aTab;
+- (BOOL)getAndResetRestorableState;
+- (void)restoreState:(PseudoTerminalState *)state;
 
 @end
 

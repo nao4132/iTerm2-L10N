@@ -22,8 +22,11 @@
 // Update window title, tab colors, and redraw view.
 - (void)screenUpdateDisplay:(BOOL)redraw;
 
+// Redraw the find on page view because search results may have been lost.
+- (void)screenRefreshFindOnPageView;
+
 // Called when the screen's size changes.
-- (void)screenSizeDidChange;
+- (void)screenSizeDidChangeWithNewTopLineAt:(int)newTop;
 
 // A change was made to the screen's contents which could cause a trigger to fire.
 - (void)screenTriggerableChangeDidOccur;
@@ -42,6 +45,12 @@
 // Change the cursor's appearance.
 - (void)screenSetCursorBlinking:(BOOL)blink;
 - (void)screenSetCursorType:(ITermCursorType)type;
+
+- (void)screenGetCursorType:(ITermCursorType *)cursorTypeOut
+                   blinking:(BOOL *)blinking;
+
+- (void)screenResetCursorTypeAndBlink;
+
 
 // Returns if the screen is permitted to resize the window.
 - (BOOL)screenShouldInitiateWindowResize;
@@ -236,7 +245,7 @@
 // FinalTerm stuff
 - (void)screenCommandDidChangeWithRange:(VT100GridCoordRange)range;
 - (void)screenCommandDidEndWithRange:(VT100GridCoordRange)range;
-- (void)screenCommandDidExitWithCode:(int)code;
+- (void)screenCommandDidExitWithCode:(int)code mark:(VT100ScreenMark *)maybeMark;
 - (BOOL)screenShouldPlacePromptAtFirstColumn;
 
 - (NSString *)screenProfileName;
@@ -263,12 +272,17 @@
 - (void)screenTerminalAttemptedPasteboardAccess;
 - (NSString *)screenValueOfVariableNamed:(NSString *)name;
 - (void)screenReportFocusWillChangeTo:(BOOL)reportFocus;
+- (void)screenReportPasteBracketingWillChangeTo:(BOOL)bracket;
 - (void)screenDidReceiveLineFeed;
 - (void)screenSoftAlternateScreenModeDidChange;
 - (void)screenReportKeyUpDidChange:(BOOL)reportKeyUp;
 - (BOOL)screenConfirmDownloadNamed:(NSString *)name canExceedSize:(NSInteger)limit;
 - (BOOL)screenConfirmDownloadAllowed:(NSString *)name
                                 size:(NSInteger)size
+                       displayInline:(BOOL)displayInline
                          promptIfBig:(BOOL *)promptIfBig;
+- (BOOL)screenShouldClearScrollbackBuffer;
+- (void)screenSetUseCSIu:(int)terminalSetting;
+- (VT100GridRange)screenRangeOfVisibleLines;
 
 @end

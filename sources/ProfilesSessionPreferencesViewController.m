@@ -169,7 +169,7 @@
         if (!strongSelf) {
             return;
         }
-        BOOL isOn = [sender state] == NSOnState;
+        BOOL isOn = [sender state] == NSControlStateValueOn;
         if (isOn) {
             static NSString *const kWarnAboutSendCodeWhenIdle = @"NoSyncWarnAboutSendCodeWhenIdle";
             // This stupid feature was inherited from iTerm 0.1. It doesn't work because people
@@ -213,7 +213,7 @@
 
     [self defineControl:_idlePeriod
                     key:KEY_IDLE_PERIOD
-            displayName:@"Time between sending charactesr when idle"
+            displayName:@"Time between sending characters when idle"
                    type:kPreferenceInfoTypeDoubleTextField];
 
     [self updateRemoveJobButtonEnabled];
@@ -228,13 +228,9 @@
                    relatedView:nil
                           type:kPreferenceInfoTypeCheckbox];
     info.observer = ^{
-        __strong __typeof(weakSelf) strongSelf = weakSelf;
-        if (!strongSelf) {
-            return;
-        }
-        strongSelf->_configureStatusBar.enabled = (![self.delegate editingTmuxSession] &&
-                                                   [strongSelf boolForKey:KEY_SHOW_STATUS_BAR]);
+        [weakSelf updateStatusBarSettingsEnabled];
     };
+    [weakSelf updateStatusBarSettingsEnabled];
     info.onChange = ^() { [weakSelf postRefreshNotification]; };
 
     [self addViewToSearchIndex:_configureStatusBar
@@ -271,7 +267,7 @@
 - (void)updateStatusBarSettingsEnabled {
     const BOOL tmux = [self.delegate editingTmuxSession];
     _statusBarEnabled.enabled = !tmux;
-    _configureStatusBar.enabled = !tmux;
+    _configureStatusBar.enabled = !tmux && [self boolForKey:KEY_SHOW_STATUS_BAR];
 }
 
 - (void)reloadProfile {
@@ -384,7 +380,7 @@
 }
 
 - (void)configureStatusBarComponentWithIdentifier:(NSString *)identifier {
-    if (_statusBarEnabled.state != NSOnState) {
+    if (_statusBarEnabled.state != NSControlStateValueOn) {
         return;
     }
     [self configureStatusBar:nil];
@@ -396,7 +392,7 @@
 - (void)promptBeforeClosingDidChange {
     int tag = 0;
     for (NSButton *button in @[_alwaysWarn, _neverWarn, _warnIfJobsBesides]) {
-        if (button.state == NSOnState) {
+        if (button.state == NSControlStateValueOn) {
             tag = button.tag;
             break;
         }
@@ -408,9 +404,9 @@
     int tag = [self intForKey:KEY_PROMPT_CLOSE];
     for (NSButton *button in @[_alwaysWarn, _neverWarn, _warnIfJobsBesides]) {
         if (button.tag == tag) {
-            button.state = NSOnState;
+            button.state = NSControlStateValueOn;
         } else {
-            button.state = NSOffState;
+            button.state = NSControlStateValueOff;
         }
     }
 }
@@ -523,7 +519,7 @@
 }
 
 - (void)updateLogDirWarning {
-    if ([_autoLog state] == NSOffState) {
+    if ([_autoLog state] == NSControlStateValueOff) {
         _logDirWarning.hidden = YES;
         return;
     }

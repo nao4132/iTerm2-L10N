@@ -28,11 +28,18 @@
 
 #import <Cocoa/Cocoa.h>
 #import "FindContext.h"
+#import "iTermEncoderAdapter.h"
 #import "iTermFindDriver.h"
 #import "ScreenChar.h"
 #import "LineBufferPosition.h"
 #import "LineBufferHelpers.h"
 #import "VT100GridTypes.h"
+
+@class LineBuffer;
+
+@protocol iTermLineBufferDelegate<NSObject>
+- (void)lineBufferDidDropLines:(LineBuffer *)lineBuffer;
+@end
 
 // A LineBuffer represents an ordered collection of strings of screen_char_t. Each string forms a
 // logical line of text plus color information. Logic is provided for the following major functions:
@@ -49,6 +56,7 @@
 
 // Absolute block number of last block.
 @property(nonatomic, readonly) int largestAbsoluteBlockNumber;
+@property(nonatomic, weak) id<iTermLineBufferDelegate> delegate;
 
 - (LineBuffer*)initWithBlockSize:(int)bs;
 - (LineBuffer *)initWithDictionary:(NSDictionary *)dictionary;
@@ -180,7 +188,8 @@
 // Returns a dictionary with the contents of the line buffer. If it is more than 10k lines @ 80 columns
 // then it is truncated. The data is a weak reference and will be invalid if the line buffer is
 // changed.
-- (NSDictionary *)dictionary;
+//- (NSDictionary *)dictionary;
+- (void)encode:(id<iTermEncoderAdapter>)encoder;
 
 // Append text in reverse video to the end of the line buffer.
 - (void)appendMessage:(NSString *)message;
@@ -192,5 +201,7 @@
 
 - (void)beginResizing;
 - (void)endResizing;
+
+- (void)setPartial:(BOOL)partial;
 
 @end

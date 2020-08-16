@@ -25,6 +25,7 @@
 #import "ProfileListView.h"
 
 #import "DebugLogging.h"
+#import "iTermSplitViewAnimation.h"
 #import "ITAddressBookMgr.h"
 #import "NSArray+iTerm.h"
 #import "NSMutableAttributedString+iTerm.h"
@@ -208,6 +209,11 @@ const CGFloat kDefaultTagsWidth = 80;
                                     scrollerStyle:scrollView_.verticalScroller.scrollerStyle];
 
         tableView_ = [[ProfileTableView alloc] initWithFrame:tableViewFrame];
+#ifdef MAC_OS_X_VERSION_10_16
+        if (@available(macOS 10.16, *)) {
+            tableView_.style = NSTableViewStyleInset;
+        }
+#endif
         [tableView_ setMenuHandler:self];
         [tableView_ registerForDraggedTypes:[NSArray arrayWithObject:kProfileTableViewDataType]];
         [tableView_ setSelectionHighlightStyle:NSTableViewSelectionHighlightStyleRegular];
@@ -224,7 +230,11 @@ const CGFloat kDefaultTagsWidth = 80;
         [tableView_ addTableColumn:tableColumn_];
 
         [scrollView_ setDocumentView:tableView_];
-        [scrollView_ setBorderType:NSBezelBorder];
+        if (@available(macOS 10.16, *)) {
+            scrollView_.borderType = NSLineBorder;
+        } else {
+            [scrollView_ setBorderType:NSBezelBorder];
+        }
 
         selectedGuids_ = [[NSMutableSet alloc] init];
 
@@ -287,6 +297,11 @@ const CGFloat kDefaultTagsWidth = 80;
     return result;
 }
 
+- (void)forceOverlayScroller {
+    scrollView_.scrollerStyle = NSScrollerStyleOverlay;
+    tagsView_.scrollView.scrollerStyle = NSScrollerStyleOverlay;
+}
+
 - (void)focusSearchField
 {
     [[self window] makeFirstResponder:searchField_];
@@ -311,7 +326,9 @@ const CGFloat kDefaultTagsWidth = 80;
         rowIndex = [rowIndexes indexGreaterThanIndex:rowIndex];
     }
 
-    NSData *data = [NSKeyedArchiver archivedDataWithRootObject:guids];
+    NSData *data = [NSKeyedArchiver archivedDataWithRootObject:guids
+                                         requiringSecureCoding:NO
+                                                         error:nil];
     [pboard declareTypes:[NSArray arrayWithObject:kProfileTableViewDataType] owner:self];
     [pboard setData:data forType:kProfileTableViewDataType];
     return YES;
@@ -347,7 +364,16 @@ const CGFloat kDefaultTagsWidth = 80;
                                         object:[self rowOrder]];
     NSPasteboard* pboard = [info draggingPasteboard];
     NSData* rowData = [pboard dataForType:kProfileTableViewDataType];
-    NSSet* guids = [NSKeyedUnarchiver unarchiveObjectWithData:rowData];
+
+    NSError *error = nil;
+    NSKeyedUnarchiver *unarchiver = [[[NSKeyedUnarchiver alloc] initForReadingFromData:rowData error:&error] autorelease];
+    if (error) {
+        return NO;
+    }
+    NSSet<NSString *> *guids = [unarchiver decodeObjectOfClass:[NSSet class] forKey:NSKeyedArchiveRootObjectKey];
+    if (!guids) {
+        return NO;
+    }
     NSMutableDictionary* map = [[[NSMutableDictionary alloc] init] autorelease];
 
     for (NSString* guid in guids) {
@@ -1039,9 +1065,17 @@ const CGFloat kDefaultTagsWidth = 80;
         dataSource_.lockedGuid = nil;
         [self updateResultsForSearch];
         return YES;
-    } else {
-        return NO;
     }
+    if (commandSelector == @selector(insertNewline:) &&
+        (self.numberOfRows == 1 || tableView_.selectedRow != -1) &&
+        [self.delegate respondsToSelector:@selector(profileTableRowSelected:)]) {
+        if (tableView_.selectedRow == -1) {
+            [tableView_ selectRowIndexes:[NSIndexSet indexSetWithIndex:0] byExtendingSelection:NO];
+        }
+        [self.delegate profileTableRowSelected:self];
+        return YES;
+    }
+    return NO;
 }
 
 
@@ -1178,8 +1212,6 @@ const CGFloat kDefaultTagsWidth = 80;
     if (open == self.tagsVisible) {
         return;
     }
-    NSRect newTableFrame = tableView_.frame;
-    NSRect newTagsFrame = tagsView_.frame;
     CGFloat newTagsWidth;
     if (open) {
         newTagsWidth = lastTagsWidth_;
@@ -1187,14 +1219,16 @@ const CGFloat kDefaultTagsWidth = 80;
         lastTagsWidth_ = tagsView_.frame.size.width;
         newTagsWidth = 0;
     }
-    newTableFrame.size.width =  self.frame.size.width - newTagsWidth;
-    newTagsFrame.size.width = newTagsWidth;
+    const CGFloat oldDividerPosition = NSWidth(tagsView_.frame);
     if (animated) {
-        [tagsView_.animator setFrame:newTagsFrame];
-        [tableView_.animator setFrame:newTableFrame];
+        [[[[iTermSplitViewAnimation alloc] initWithSplitView:splitView_
+                                              dividerAtIndex:0
+                                                        from:oldDividerPosition
+                                                          to:newTagsWidth
+                                                    duration:0.125
+                                                  completion:nil] autorelease] startAnimation];
     } else {
-        tagsView_.frame = newTagsFrame;
-        tableView_.frame = newTableFrame;
+        [splitView_.animator setPosition:newTagsWidth ofDividerAtIndex:0];
     }
 }
 

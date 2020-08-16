@@ -23,8 +23,7 @@
 // Runs in the same background task as -threadedReadTask:length:.
 - (void)threadedTaskBrokenPipe;
 - (void)brokenPipe;  // Called in main thread
-- (void)taskWasDeregistered;
-- (void)writeForCoprocessOnlyTask:(NSData *)data;
+- (void)tmuxClientWrite:(NSData *)data;
 
 // Called on main thread from within launchWithPath:arguments:environment:customShell:gridSize:viewSize:isUTF8:.
 - (void)taskDiedImmediately;
@@ -56,7 +55,7 @@ typedef struct {
 
 typedef NS_ENUM(NSUInteger, iTermGeneralServerConnectionType) {
     iTermGeneralServerConnectionTypeMono,
-    iTermGeneralServerConnectionTypeMulti,
+    iTermGeneralServerConnectionTypeMulti
 };
 
 typedef struct {
@@ -78,22 +77,37 @@ typedef struct {
 @property (atomic, readonly) BOOL isSessionRestorationPossible;
 @property (atomic, readonly) BOOL ioAllowed;
 @property (atomic, readonly) dispatch_queue_t queue;
+@property (atomic, readonly) BOOL isReadOnly;
 
 - (instancetype)initWithQueue:(dispatch_queue_t)queue;
 
-- (void)forkAndExecWithTtyState:(iTermTTYState *)ttyStatePtr
-                        argpath:(const char *)argpath
-                           argv:(const char **)argv
-                     initialPwd:(const char *)initialPwd
-                     newEnviron:(const char **)newEnviron
+- (void)forkAndExecWithTtyState:(iTermTTYState)ttyState
+                        argpath:(NSString *)argpath
+                           argv:(NSArray<NSString *> *)argv
+                     initialPwd:(NSString *)initialPwd
+                     newEnviron:(NSArray<NSString *> *)newEnviron
                            task:(id<iTermTask>)task
                      completion:(void (^)(iTermJobManagerForkAndExecStatus))completion;
 
-- (BOOL)attachToServer:(iTermGeneralServerConnection)serverConnection
+typedef NS_OPTIONS(NSUInteger, iTermJobManagerAttachResults) {
+    iTermJobManagerAttachResultsAttached = (1 << 0),
+    iTermJobManagerAttachResultsRegistered = (1 << 1)
+};
+
+// Completion block will be invoked on the main thread. ok gives whether it succeeded.
+- (void)attachToServer:(iTermGeneralServerConnection)serverConnection
          withProcessID:(NSNumber *)thePid
-                  task:(id<iTermTask>)task;
+                  task:(id<iTermTask>)task
+            completion:(void (^)(iTermJobManagerAttachResults results))completion;
+
+- (iTermJobManagerAttachResults)attachToServer:(iTermGeneralServerConnection)serverConnection
+                                 withProcessID:(NSNumber *)thePid
+                                          task:(id<iTermTask>)task;
 
 - (void)killWithMode:(iTermJobManagerKillingMode)mode;
+
+// Atomic. Only closes it once. Returns YES if close() called, NO if already closed.
+- (BOOL)closeFileDescriptor;
 
 @end
 
@@ -106,11 +120,6 @@ typedef struct {
 @property(atomic, assign) BOOL paused;
 @property(nonatomic, readonly) BOOL isSessionRestorationPossible;
 @property(nonatomic, readonly) id sessionRestorationIdentifier;
-
-// Tmux sessions are coprocess-only tasks. They have no file descriptor or pid,
-// but they may have a coprocess that needs TaskNotifier to read, write, and wait on.
-@property(atomic, assign) BOOL isCoprocessOnly;
-@property(atomic, readonly) BOOL coprocessOnlyTaskIsDead;
 
 @property(atomic, readonly) int fd;
 @property(atomic, readonly) pid_t pid;
@@ -127,6 +136,9 @@ typedef struct {
 @property(nonatomic, readonly) BOOL passwordInput;
 @property(nonatomic) unichar pendingHighSurrogate;
 @property(nonatomic, copy) NSNumber *tmuxClientProcessID;
+// This is used by tmux clients as a way to route data from %output in to the taskNotifier. Like
+// the name says you can't write to it.
+@property(atomic) int readOnlyFileDescriptor;
 
 - (instancetype)init;
 
@@ -151,7 +163,7 @@ typedef struct {
 
 // Cause the slave to receive a SIGWINCH and change the tty's window size. If `size` equals the
 // tty's current window size then no action is taken.
-- (void)setSize:(VT100GridSize)size viewSize:(NSSize)viewSize;
+- (void)setSize:(VT100GridSize)size viewSize:(NSSize)viewSize scaleFactor:(CGFloat)scaleFactor;
 
 - (void)stop;
 
@@ -169,19 +181,22 @@ typedef struct {
 - (BOOL)tryToAttachToServerWithProcessId:(pid_t)thePid tty:(NSString *)tty;
 
 // Multiserver
-// Synchronously attaches. Returns whether it succeeded.
-- (BOOL)tryToAttachToMultiserverWithRestorationIdentifier:(NSDictionary *)restorationIdentifier;
+- (iTermJobManagerAttachResults)tryToAttachToMultiserverWithRestorationIdentifier:(NSDictionary *)restorationIdentifier;
 
 // Wire up the server as the task's file descriptor and process. The caller
 // will have connected to the server to get this info. Requires
 // [iTermAdvancedSettingsModel runJobsInServers]. Multiservers may return failure (NO) here
 // if the pid is not known.
-- (BOOL)attachToServer:(iTermGeneralServerConnection)serverConnection;
+- (void)attachToServer:(iTermGeneralServerConnection)serverConnection
+            completion:(void (^)(iTermJobManagerAttachResults results))completion;
+
+// Synchronous version of attachToServer:completion:
+- (iTermJobManagerAttachResults)attachToServer:(iTermGeneralServerConnection)serverConnection;
 
 - (void)killWithMode:(iTermJobManagerKillingMode)mode;
 
-- (void)registerAsCoprocessOnlyTask;
-- (void)writeToCoprocessOnlyTask:(NSData *)data;
+- (void)registerTmuxTask;
+
 - (void)getWorkingDirectoryWithCompletion:(void (^)(NSString *pwd))completion;
 
 @end

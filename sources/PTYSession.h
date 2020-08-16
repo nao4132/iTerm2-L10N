@@ -4,6 +4,7 @@
 #import "DVR.h"
 #import "iTermAPIHelper.h"
 #import "iTermEchoProbe.h"
+#import "iTermEncoderAdapter.h"
 #import "iTermFindDriver.h"
 #import "iTermFileDescriptorClient.h"
 #import "iTermMetalUnavailableReason.h"
@@ -44,6 +45,7 @@ extern NSString *const iTermSessionWillTerminateNotification;
 @class iTermAnnouncementViewController;
 @class iTermEchoProbe;
 @class iTermExpect;
+@class iTermKeyBindingAction;
 @class iTermScriptHistoryEntry;
 @class iTermStatusBarViewController;
 @class iTermSwiftyStringGraph;
@@ -95,6 +97,7 @@ typedef enum {
 // live views so it will be kept alive. Use -showLiveSession:inPlaceOf: to
 // remove a view from this list.
 - (void)addHiddenLiveView:(SessionView *)hiddenLiveView;
+- (void)session:(PTYSession *)synthetic setLiveSession:(PTYSession *)live;
 
 // Provides a tab number for the ITERM_SESSION_ID environment variable. This
 // may not correspond to the physical tab number because it's immutable for a
@@ -246,7 +249,16 @@ typedef enum {
 - (void)sessionDidSetWindowTitle:(NSString *)title;
 - (void)sessionJobDidChange:(PTYSession *)session;
 - (void)sessionRevealActionsTool;
-
+- (void)session:(PTYSession *)session
+setBackgroundImage:(NSImage *)image
+           mode:(iTermBackgroundImageMode)imageMode
+backgroundColor:(NSColor *)backgroundColor;
+- (NSImage *)sessionBackgroundImage;
+- (iTermBackgroundImageMode)sessionBackgroundImageMode;
+- (CGFloat)sessionBlend;
+- (void)sessionDidUpdatePreferencesFromProfile:(PTYSession *)session;
+- (id<iTermSwipeHandler>)sessionSwipeHandler;
+- (BOOL)sessionIsInSelectedTab:(PTYSession *)session;
 @end
 
 @class SessionView;
@@ -254,6 +266,8 @@ typedef enum {
     iTermEchoProbeDelegate,
     iTermFindDriverDelegate,
     iTermSubscribable,
+    iTermTmuxControllerSession,
+    iTermUniquelyIdentifiable,
     iTermWeaklyReferenceable,
     PopupDelegate,
     PTYTaskDelegate,
@@ -357,6 +371,7 @@ typedef enum {
 
 // True if the mouse wheel movements are sent to the host.
 @property(nonatomic, assign) BOOL xtermMouseReportingAllowMouseWheel;
+@property(nonatomic, assign) BOOL xtermMouseReportingAllowClicksAndDrags;
 
 // Profile for this session
 @property(nonatomic, copy) Profile *profile;
@@ -369,13 +384,15 @@ typedef enum {
 
 @property(nonatomic, assign) iTermBackgroundImageMode backgroundImageMode;
 
+// Blend level as specified in this session's profile.
+@property(nonatomic, readonly) CGFloat desiredBlend;
+
 // Filename of background image.
 @property(nonatomic, copy) NSString *backgroundImagePath;  // Used by scripting
 @property(nonatomic, retain) NSImage *backgroundImage;
 
 @property(nonatomic, retain) iTermColorMap *colorMap;
 @property(nonatomic, assign) float transparency;
-@property(nonatomic, assign) float blend;
 @property(nonatomic, assign) BOOL useBoldFont;
 @property(nonatomic, assign) iTermThinStrokesSetting thinStrokes;
 @property(nonatomic, assign) BOOL asciiLigatures;
@@ -387,8 +404,6 @@ typedef enum {
 
 // Is bell currently in ringing state?
 @property(nonatomic, assign) BOOL bell;
-
-@property(nonatomic, readonly) NSDictionary *arrangement;
 
 @property(nonatomic, readonly) int columns;
 @property(nonatomic, readonly) int rows;
@@ -514,6 +529,7 @@ typedef enum {
 @property(nonatomic) BOOL overrideGlobalDisableMetalWhenIdleSetting;
 @property(nonatomic, readonly) BOOL canProduceMetalFramecap;
 @property(nonatomic, readonly) NSColor *textColorForStatusBar;
+@property(nonatomic, readonly) NSColor *processedBackgroundColor;
 @property(nonatomic, readonly) NSImage *tabGraphic;
 @property(nonatomic, readonly) iTermStatusBarViewController *statusBarViewController;
 @property(nonatomic, readonly) BOOL shouldShowTabGraphic;
@@ -527,12 +543,16 @@ typedef enum {
 @property(nonatomic, readonly) NSDictionary *environment;
 @property(nonatomic, readonly) BOOL hasNontrivialJob;
 @property(nonatomic, readonly) iTermExpect *expect;
+@property(nonatomic, readonly) BOOL tmuxPaused;
 
 #pragma mark - methods
 
 + (NSDictionary *)repairedArrangement:(NSDictionary *)arrangement
              replacingProfileWithGUID:(NSString *)badGuid
                           withProfile:(Profile *)goodProfile;
++ (NSDictionary *)repairedArrangement:(NSDictionary *)arrangement
+     replacingOldCWDOfSessionWithGUID:(NSString *)guid
+                           withOldCWD:(NSString *)replacementOldCWD;
 
 + (BOOL)handleShortcutWithoutTerminal:(NSEvent*)event;
 + (void)selectMenuItem:(NSString*)theName;
@@ -562,6 +582,7 @@ typedef enum {
 // Append a bunch of lines from this (presumably synthetic) session from another (presumably live)
 // session.
 - (void)appendLinesInRange:(NSRange)rangeOfLines fromSession:(PTYSession *)source;
+- (void)appendLinesMatchingQuery:(NSString *)query fromSession:(PTYSession *)source;
 
 // Go forward/back in time. Must call setDvr:liveSession: first.
 - (void)irAdvance:(int)dir;
@@ -586,6 +607,7 @@ typedef enum {
                                    tmuxController:(TmuxController *)tmuxController
                                            window:(int)window;
 + (NSString *)guidInArrangement:(NSDictionary *)arrangement;
++ (NSString *)initialWorkingDirectoryFromArrangement:(NSDictionary *)arrangement;
 
 - (void)textViewFontDidChange;
 
@@ -597,12 +619,14 @@ typedef enum {
          customShell:(NSString *)customShell
               isUTF8:(BOOL)isUTF8
        substitutions:(NSDictionary *)substitutions
+         arrangement:(NSString *)arrangement
           completion:(void (^)(BOOL))completion;
 
 // This is an alternative to runCommandWithOldCwd and startProgram. It attaches
 // to an existing server. Use only if [iTermAdvancedSettingsModel runJobsInServers]
 // is YES.
-- (void)attachToServer:(iTermGeneralServerConnection)serverConnection;
+- (void)attachToServer:(iTermGeneralServerConnection)serverConnection
+            completion:(void (^)(void))completion;
 
 - (void)softTerminate;
 - (void)terminate;
@@ -621,7 +645,7 @@ typedef enum {
 // overriddenFields.
 - (BOOL)reloadProfile;
 
-- (void)setIsDivorced:(BOOL)isDivorced withDecree:(NSString *)decree;
+- (void)inheritDivorceFrom:(PTYSession *)parent decree:(NSString *)decree;
 
 - (BOOL)shouldSendEscPrefixForModifier:(unsigned int)modmask;
 
@@ -638,6 +662,9 @@ typedef enum {
                forceEncoding:(BOOL)forceEncoding;
 
 - (void)writeLatin1EncodedData:(NSData *)data broadcastAllowed:(BOOL)broadcast;
+
+- (void)updateViewBackgroundImage;
+- (void)invalidateBlend;
 
 // PTYTextView
 - (BOOL)hasTextSendingKeyMappingForEvent:(NSEvent*)event;
@@ -694,7 +721,6 @@ typedef enum {
 - (void)updateDisplayBecause:(NSString *)reason;
 - (void)doAntiIdle;
 - (NSString*)ansiColorsMatchingForeground:(NSDictionary*)fg andBackground:(NSDictionary*)bg inBookmark:(Profile*)aDict;
-- (void)updateScroll;
 
 - (void)changeFontSizeDirection:(int)dir;
 - (void)setFont:(NSFont*)font
@@ -748,6 +774,10 @@ typedef enum {
 // impose this restriction because they must belong to the same controller.
 - (BOOL)isCompatibleWith:(PTYSession *)otherSession;
 - (void)setTmuxPane:(int)windowPane;
+- (void)setTmuxHistory:(NSArray<NSData *> *)history
+            altHistory:(NSArray<NSData *> *)altHistory
+                 state:(NSDictionary *)state;
+- (void)toggleTmuxPausePane;
 
 - (void)addNoteAtCursor;
 - (void)addNoteWithText:(NSString *)text inAbsoluteRange:(VT100GridAbsCoordRange)range;
@@ -773,10 +803,12 @@ typedef enum {
 
 - (void)tryToRunShellIntegrationInstallerWithPromptCheck:(BOOL)promptCheck;
 
-- (NSDictionary *)arrangementWithContents:(BOOL)includeContents;
+- (BOOL)encodeArrangementWithContents:(BOOL)includeContents
+                              encoder:(id<iTermEncoderAdapter>)encoder;
 
 - (void)toggleTmuxZoom;
 - (void)forceTmuxDetach;
+- (void)tmuxDidDisconnect;
 
 // This is to work around a macOS bug where setNeedsDisplay: on the root view controller does not
 // cause the TextViewWrapper to be redrawn in its entirety.
@@ -805,7 +837,7 @@ typedef enum {
 
 - (void)useTransparencyDidChange;
 
-- (void)performKeyBindingAction:(int)keyBindingAction parameter:(NSString *)keyBindingText event:(NSEvent *)event;
+- (void)performKeyBindingAction:(iTermKeyBindingAction *)action event:(NSEvent *)event;
 
 - (void)setColorsFromPresetNamed:(NSString *)presetName;
 
@@ -841,12 +873,15 @@ typedef enum {
 - (void)didUpdatePromptLocation;
 - (BOOL)copyModeConsumesEvent:(NSEvent *)event;
 - (Profile *)profileForSplit;
+- (void)compose;
 
 #pragma mark - API
 
 - (ITMGetBufferResponse *)handleGetBufferRequest:(ITMGetBufferRequest *)request;
 - (void)handleGetPromptRequest:(ITMGetPromptRequest *)request
                     completion:(void (^)(ITMGetPromptResponse *response))completion;
+- (void)handleListPromptsRequest:(ITMListPromptsRequest *)request
+                      completion:(void (^)(ITMListPromptsResponse *response))completion;
 - (ITMNotificationResponse *)handleAPINotificationRequest:(ITMNotificationRequest *)request
                                             connectionKey:(NSString *)connectionKey;
 
@@ -860,6 +895,7 @@ typedef enum {
 - (void)invokeFunctionCall:(NSString *)invocation
                      scope:(iTermVariableScope *)scope
                     origin:(NSString *)origin;
+- (void)setParentScope:(iTermVariableScope *)parentScope;
 
 #pragma mark - Testing utilities
 

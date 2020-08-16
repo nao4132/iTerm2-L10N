@@ -57,6 +57,13 @@
 
 - (NSColor *)bottomLineColorSelected:(BOOL)selected {
     if (@available(macOS 10.14, *)) {
+        if (@available(macOS 10.16, *)) {
+            const BOOL attachedToTitleBar = [[self.tabBar.delegate tabView:self.tabBar valueOfOption:PSMTabBarControlOptionAttachedToTitleBar] boolValue];
+            if (!attachedToTitleBar || self.tabBar.tabLocation != PSMTab_TopTab) {
+                NSColor *color = [self topLineColorSelected:NO];
+                return [color colorWithAlphaComponent:color.alphaComponent * 0.3];
+            }
+        }
         return [NSColor colorWithWhite:0 alpha:0.1];
     } else {
         return [NSColor colorWithCalibratedWhite:0.00 alpha:1.00];
@@ -139,7 +146,12 @@
 
 - (NSEdgeInsets)backgroundInsetsWithHorizontalOrientation:(BOOL)horizontal {
     NSEdgeInsets insets = NSEdgeInsetsZero;
-    if (@available(macOS 10.14, *)) {
+    if (@available(macOS 10.16, *)) {
+        insets.top = 0;
+        insets.bottom = 0;
+        insets.left = 0;
+        insets.right = 0;
+    } else if (@available(macOS 10.14, *)) {
         insets.top = 1;
         insets.bottom = 0;
         insets.left = 1;

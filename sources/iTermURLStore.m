@@ -10,6 +10,8 @@
 
 #import "DebugLogging.h"
 
+#import <Cocoa/Cocoa.h>
+
 @implementation iTermURLStore {
     // { "url": NSURL.absoluteString, "params": NSString } -> @(NSInteger)
     NSMutableDictionary<NSDictionary *, NSNumber *> *_store;
@@ -48,10 +50,14 @@
 }
 
 - (void)retainCode:(unsigned short)code {
+    _generation++;
+    [NSApp invalidateRestorableState];
     [_referenceCounts addObject:@(code)];
 }
 
 - (void)releaseCode:(unsigned short)code {
+    _generation++;
+    [NSApp invalidateRestorableState];
     [_referenceCounts removeObject:@(code)];
     if (![_referenceCounts containsObject:@(code)]) {
         NSDictionary *dict = _reverseStore[@(code)];
@@ -85,6 +91,8 @@
         _store[key] = number;
         truncatedCode = [iTermURLStore truncatedCodeForCode:number.integerValue];
         _reverseStore[@(truncatedCode)] = @{ @"url": url, @"params": params };
+        [NSApp invalidateRestorableState];
+        _generation++;
         return truncatedCode;
     } else {
         return [iTermURLStore truncatedCodeForCode:number.integerValue];
@@ -127,14 +135,13 @@
 }
 
 - (NSDictionary *)dictionaryValue {
-    NSMutableData *data = [NSMutableData data];
-    NSKeyedArchiver *coder = [[NSKeyedArchiver alloc] initForWritingWithMutableData:data];
+    NSKeyedArchiver *coder = [[NSKeyedArchiver alloc] initRequiringSecureCoding:YES];
     coder.outputFormat = NSPropertyListBinaryFormat_v1_0;
     [_referenceCounts encodeWithCoder:coder];
     [coder finishEncoding];
 
     return @{ @"store": _store,
-              @"refcounts": data };
+              @"refcounts": coder.encodedData };
 }
 
 - (void)loadFromDictionary:(NSDictionary *)dictionary {
@@ -164,14 +171,14 @@
         self->_reverseStore[@(truncated)] = @{ @"url": url, @"params": key[@"params"] ?: @"" };
         self->_nextCode = MAX(self->_nextCode, obj.integerValue + 1);
     }];
-
-    @try {
-        NSKeyedUnarchiver *decoder = [[NSKeyedUnarchiver alloc] initForReadingWithData:refcounts];
-        _referenceCounts = [[NSCountedSet alloc] initWithCoder:decoder];
-    }
-    @catch (NSException *exception) {
+    
+    NSError *error = nil;
+    NSKeyedUnarchiver *decoder = [[NSKeyedUnarchiver alloc] initForReadingFromData:refcounts error:&error];
+    if (error) {
         NSLog(@"Failed to decode refcounts from data %@", refcounts);
+        return;
     }
+    _referenceCounts = [[NSCountedSet alloc] initWithCoder:decoder];
 }
 
 @end

@@ -26,8 +26,8 @@ typedef NS_ENUM(NSUInteger, iTermMouseReportingFrustrationDetectorState) {
     if (state == _state) {
         return;
     }
-    NSLog(@"Enter state %@", @(state));
-    NSLog(@"%@", [NSThread callStackSymbols]);
+    DLog(@"Enter state %@", @(state));
+    DLog(@"%@", [NSThread callStackSymbols]);
     _state = state;
 }
 
@@ -126,6 +126,21 @@ typedef NS_ENUM(NSUInteger, iTermMouseReportingFrustrationDetectorState) {
         case iTermMouseReportingFrustrationDetectorStateGround:
         case iTermMouseReportingFrustrationDetectorStateMouseDown:
             self.state = iTermMouseReportingFrustrationDetectorStateGround;
+            break;
+    }
+}
+
+- (void)didCopyToPasteboardWithControlSequence {
+    switch (_state) {
+        case iTermMouseReportingFrustrationDetectorStatePrimed:
+        case iTermMouseReportingFrustrationDetectorStatePrimedMultiple:
+        case iTermMouseReportingFrustrationDetectorStateMouseDownMultiple:
+        case iTermMouseReportingFrustrationDetectorStateMouseDragged:
+            self.state = iTermMouseReportingFrustrationDetectorStateGround;
+            return;
+
+        case iTermMouseReportingFrustrationDetectorStateGround:
+        case iTermMouseReportingFrustrationDetectorStateMouseDown:
             break;
     }
 }

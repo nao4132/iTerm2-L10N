@@ -56,6 +56,9 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionColoredDrawBottomLineForHorizont
     @"PSMTabBarControlOptionColoredDrawBottomLineForHorizontalTabBar";
 PSMTabBarControlOptionKey PSMTabBarControlOptionFontSizeOverride =
     @"PSMTabBarControlOptionFontSizeOverride";
+PSMTabBarControlOptionKey PSMTabBarControlOptionMinimalSelectedTabUnderlineProminence = @"PSMTabBarControlOptionMinimalSelectedTabUnderlineProminence";
+PSMTabBarControlOptionKey PSMTabBarControlOptionDragEdgeHeight = @"PSMTabBarControlOptionDragEdgeHeight";
+PSMTabBarControlOptionKey PSMTabBarControlOptionAttachedToTitleBar = @"PSMTabBarControlOptionAttachedToTitleBar";
 
 @interface PSMTabBarControl ()<PSMTabBarControlProtocol>
 @end
@@ -183,9 +186,9 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionFontSizeOverride =
                 [_addTabButton setRolloverImage:newButtonImage];
             [_addTabButton setTitle:@""];
             [_addTabButton setImagePosition:NSImageOnly];
-            [_addTabButton setButtonType:NSMomentaryChangeButton];
+            [_addTabButton setButtonType:NSButtonTypeMomentaryChange];
             [_addTabButton setBordered:NO];
-            [_addTabButton setBezelStyle:NSShadowlessSquareBezelStyle];
+            [_addTabButton setBezelStyle:NSBezelStyleShadowlessSquare];
             if (_showAddTabButton){
                 [_addTabButton setHidden:NO];
             } else {
@@ -925,7 +928,7 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionFontSizeOverride =
         [self finishUpdateWithRegularWidths:newOrigins widthsWithOverflow:newOrigins];
     }
 
-    [self setNeedsDisplay];
+    [self setNeedsDisplay:YES];
 }
 
 // Tab widths may vary. Calculate the widths and see if this will work. Only allow sizes to
@@ -1072,7 +1075,7 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionFontSizeOverride =
         _animationTimer = nil;
     }
 
-    [self setNeedsDisplay];
+    [self setNeedsDisplay:YES];
 }
 
 - (void)finishUpdateWithRegularWidths:(NSArray *)regularWidths
@@ -1178,7 +1181,7 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionFontSizeOverride =
 
             // selected? set tab states...
             if ([[cell representedObject] isEqualTo:[_tabView selectedTabViewItem]]) {
-                [cell setState:NSOnState];
+                [cell setState:NSControlStateValueOn];
                 tabState |= PSMTab_SelectedMask;
                 // previous cell
                 if (i > 0) {
@@ -1186,10 +1189,10 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionFontSizeOverride =
                 }
                 // next cell - see below
             } else {
-                [cell setState:NSOffState];
+                [cell setState:NSControlStateValueOff];
                 // see if prev cell was selected
                 if (i > 0) {
-                    if ([[_cells objectAtIndex:i-1] state] == NSOnState){
+                    if ([[_cells objectAtIndex:i-1] state] == NSControlStateValueOn){
                         tabState |= PSMTab_LeftIsSelectedMask;
                     }
                 }
@@ -1231,7 +1234,7 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionFontSizeOverride =
             [cell setIsInOverflowMenu:YES];
             [[cell indicator] removeFromSuperview];
             if ([[cell representedObject] isEqualTo:[_tabView selectedTabViewItem]]) {
-                [menuItem setState:NSOnState];
+                [menuItem setState:NSControlStateValueOn];
             }
 
             if ([cell hasIcon]) {
@@ -1359,7 +1362,7 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionFontSizeOverride =
                 }
             }
         }
-        [self setNeedsDisplay];
+        [self setNeedsDisplay:YES];
     }
 }
 
@@ -1398,8 +1401,8 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionFontSizeOverride =
         return;
     }
 
-    if ([self.delegate respondsToSelector:@selector(tabViewShouldDragWindow:)] &&
-        [self.delegate tabViewShouldDragWindow:_tabView]) {
+    if ([self.delegate respondsToSelector:@selector(tabViewShouldDragWindow:event:)] &&
+        [self.delegate tabViewShouldDragWindow:_tabView event:theEvent]) {
         [self.window performWindowDragWithEvent:theEvent];
         return;
     }
@@ -1415,7 +1418,7 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionFontSizeOverride =
         if (_closeClicked && NSMouseInRect(trackingStartPoint, iconRect, [self isFlipped]) &&
                 ([self allowsBackgroundTabClosing] || [[cell representedObject] isEqualTo:[_tabView selectedTabViewItem]])) {
             [cell setCloseButtonPressed:NSMouseInRect(currentPoint, iconRect, [self isFlipped])];
-            [self setNeedsDisplay];
+            [self setNeedsDisplay:YES];
             return;
         }
 
@@ -1537,6 +1540,27 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionFontSizeOverride =
     if ([self orientation] == PSMTabBarVerticalOrientation) {
         NSRect frame = [self frame];
         [self addCursorRect:NSMakeRect(frame.size.width - 2, 0, 2, frame.size.height) cursor:[NSCursor resizeLeftRightCursor]];
+    } else {
+        const CGFloat edgeDragHeight = self.style.edgeDragHeight;
+        if (edgeDragHeight == 0) {
+            return;
+        }
+        switch (_tabLocation) {
+            case PSMTab_TopTab:
+                [self addCursorRect:NSMakeRect(0, 0, self.bounds.size.width, edgeDragHeight)
+                             cursor:[NSCursor openHandCursor]];
+                break;
+            case PSMTab_BottomTab:
+                [self addCursorRect:NSMakeRect(0,
+                                               self.bounds.size.height - edgeDragHeight,
+                                               self.bounds.size.width,
+                                               edgeDragHeight)
+                             cursor:[NSCursor openHandCursor]];
+                break;
+
+            case PSMTab_LeftTab:
+                break;
+        }
     }
 }
 
@@ -1741,25 +1765,25 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionFontSizeOverride =
         [[cell indicator] setAnimate:NO];
         [[cell indicator] setAnimate:YES];
     }
-    [self setNeedsDisplay];
+    [self setNeedsDisplay:YES];
 }
 
 - (void)viewWillStartLiveResize {
     for (PSMTabBarCell *cell in _cells) {
         [[cell indicator] setAnimate:NO];
     }
-    [self setNeedsDisplay];
+    [self setNeedsDisplay:YES];
 }
 
 -(void)viewDidEndLiveResize {
     for (PSMTabBarCell *cell in _cells) {
         [[cell indicator] setAnimate:YES];
     }
-    [self setNeedsDisplay];
+    [self setNeedsDisplay:YES];
 }
 
 - (void)windowDidMove:(NSNotification *)aNotification {
-    [self setNeedsDisplay];
+    [self setNeedsDisplay:YES];
 }
 
 - (void)windowStatusDidChange:(NSNotification *)notification {
@@ -1782,7 +1806,7 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionFontSizeOverride =
                     [partnerView setFrame:NSMakeRect(partnerFrame.origin.x, partnerFrame.origin.y - 21, partnerFrame.size.width, partnerFrame.size.height + 21)];
                 }
                 [partnerView setNeedsDisplay:YES];
-                [self setNeedsDisplay];
+                [self setNeedsDisplay:YES];
             } else {
                 // for window movement
                 NSRect windowFrame = [[self window] frame];
@@ -1804,7 +1828,7 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionFontSizeOverride =
                 }
                 _tabBarWidth = myFrame.size.width;
                 [partnerView setNeedsDisplay:YES];
-                [self setNeedsDisplay];
+                [self setNeedsDisplay:YES];
             } else {
                 // for window movement
                 NSRect windowFrame = [[self window] frame];
@@ -1820,7 +1844,7 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionFontSizeOverride =
         }
     }
 
-    [self setNeedsDisplay];
+    [self setNeedsDisplay:YES];
      _awakenedFromNib = YES;
     [self update];
 }
@@ -2241,7 +2265,7 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionFontSizeOverride =
     for (PSMTabBarCell *cell in _cells) {
         [cell setModifierString:str];
     }
-    [self setNeedsDisplay];
+    [self setNeedsDisplay:YES];
 }
 
 - (void)fillPath:(NSBezierPath*)path {

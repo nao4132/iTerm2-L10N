@@ -32,6 +32,7 @@
 @protocol PSMTabStyle;
 @class PTYTab;
 @class PTYSession;
+@protocol PTYWindow;
 
 // The key used for a window's arrangement in encoding restorable state.
 extern NSString *const kTerminalWindowStateRestorationWindowArrangementKey;
@@ -65,6 +66,8 @@ typedef NS_ENUM(NSUInteger, PTYWindowTitleBarFlavor) {
 };
 
 - (PTYWindowTitleBarFlavor)ptyWindowTitleBarFlavor;
+
+- (BOOL)ptyWindowIsDraggable:(id<PTYWindow>)window;
 @end
 
 // Common methods implemented by terminal windows of both kinds.
@@ -78,6 +81,8 @@ typedef NS_ENUM(NSUInteger, PTYWindowTitleBarFlavor) {
 @property(nonatomic, readonly) BOOL isCompact;
 @property(nonatomic) NSInteger it_openingSheet;
 @property (nonatomic) BOOL it_becomingKey;
+@property (nonatomic) NSInteger it_accessibilityResizing;
+@property(nonatomic) BOOL it_restorableStateInvalid;
 
 - (NSColor *)it_terminalWindowDecorationBackgroundColor;
 - (NSColor *)it_terminalWindowDecorationTextColorForBackgroundColor:(NSColor *)backgroundColor;
@@ -119,6 +124,9 @@ typedef NSWindow<iTermWeaklyReferenceable, PTYWindow> iTermTerminalWindow;
 
 // Private NSWindow method, needed to avoid ghosting when using transparency.
 - (BOOL)_setContentHasShadow:(BOOL)contentHasShadow;
+
+// Called when a window gets resized via accessibility.
+- (void)accessibilitySetSizeAttribute:(id)arg1;
 
 @end
 

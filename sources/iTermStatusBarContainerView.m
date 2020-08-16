@@ -8,6 +8,7 @@
 #import "iTermStatusBarContainerView.h"
 
 #import "DebugLogging.h"
+#import "iTermAdvancedSettingsModel.h"
 #import "iTermUnreadCountView.h"
 #import "NSDictionary+iTerm.h"
 #import "NSEvent+iTerm.h"
@@ -19,6 +20,15 @@
 const CGFloat iTermStatusBarViewControllerIconWidth = 17;
 
 NS_ASSUME_NONNULL_BEGIN
+
+const CGFloat iTermGetStatusBarHeight() {
+    static CGFloat height;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        height = [iTermAdvancedSettingsModel statusBarHeight];
+    });
+    return height;
+}
 
 @implementation iTermStatusBarContainerView {
     NSTimer *_timer;
@@ -33,7 +43,7 @@ NS_ASSUME_NONNULL_BEGIN
     if (icon) {
         preferredWidth += iTermStatusBarViewControllerIconWidth;
     }
-    self = [super initWithFrame:NSMakeRect(0, 0, preferredWidth, 21)];
+    self = [super initWithFrame:NSMakeRect(0, 0, preferredWidth, iTermGetStatusBarHeight())];
     if (self) {
         self.wantsLayer = YES;
         if (@available(macOS 10.14, *)) {
@@ -84,7 +94,7 @@ NS_ASSUME_NONNULL_BEGIN
         [_iconImageView it_setTintColor:tintColor];
         [_iconImageView sizeToFit];
         [self addSubview:_iconImageView];
-        NSRect area = NSMakeRect(0, 0, iTermStatusBarViewControllerIconWidth, 21);
+        NSRect area = NSMakeRect(0, 0, iTermStatusBarViewControllerIconWidth, iTermGetStatusBarHeight());
         NSRect frame;
         frame.size = NSMakeSize(icon.size.width, icon.size.height);
         frame.origin.x = 0;
@@ -239,6 +249,13 @@ NS_ASSUME_NONNULL_BEGIN
     [self showContextMenuForEvent:event];
 }
 
+- (void)mouseDragged:(NSEvent *)event {
+    if (![_component statusBarComponentHandlesMouseDown]) {
+        [self.window performWindowDragWithEvent:event];
+    } else {
+        [super mouseDragged:event];
+    }
+}
 - (void)showContextMenuForEvent:(NSEvent *)event {
     NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Contextual Menu"];
     if (![_component statusBarComponentIsInternal]) {
@@ -267,7 +284,7 @@ NS_ASSUME_NONNULL_BEGIN
             }
             NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:knob.labelText action:@selector(toggleKnob:) keyEquivalent:@""];
             item.identifier = knob.key;
-            item.state = [[NSNumber castFrom:values[knob.key]] boolValue] ? NSOnState : NSOffState;
+            item.state = [[NSNumber castFrom:values[knob.key]] boolValue] ? NSControlStateValueOn : NSControlStateValueOff;
             [menu addItem:item];
         }
     }];

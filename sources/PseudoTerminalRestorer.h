@@ -8,15 +8,31 @@
 
 #import <Cocoa/Cocoa.h>
 
-@interface PseudoTerminalRestorer : NSObject {
+@interface PseudoTerminalState: NSObject
+@property (nonatomic, readonly) NSDictionary *arrangement;
+- (instancetype)initWithCoder:(NSCoder *)coder;
+- (instancetype)initWithDictionary:(NSDictionary *)arrangement;
+@end
 
-}
+@interface PseudoTerminalRestorer : NSObject
 
-+ (void)restoreWindowWithIdentifier:(NSString *)identifier state:(NSCoder *)state completionHandler:(void (^)(NSWindow *, NSError *))completionHandler;
+@property(class, nonatomic) void (^postRestorationCompletionBlock)(void);
+
++ (void)restoreWindowWithIdentifier:(NSString *)identifier
+                              state:(NSCoder *)state
+                  completionHandler:(void (^)(NSWindow *, NSError *))completionHandler;
 
 + (BOOL)willOpenWindows;
 
 // Block is run when all windows are restored. It may be run immediately.
 + (void)setRestorationCompletionBlock:(void(^)(void))completion;
+
++ (void)runQueuedBlocks;
+
++ (void)restoreWindowWithIdentifier:(NSString *)identifier
+                pseudoTerminalState:(PseudoTerminalState *)state
+                             system:(BOOL)system
+                  completionHandler:(void (^)(NSWindow *, NSError *))completionHandler;
++ (BOOL)shouldIgnoreOpenUntitledFile;
 
 @end

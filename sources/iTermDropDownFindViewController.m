@@ -92,6 +92,10 @@ static const float kAnimationDuration = 0.2;
 
 #pragma mark - iTermFindViewController
 
+- (void)countDidChange {
+    [findBarTextField_ setNeedsDisplay:YES];
+}
+
 - (BOOL)searchBarIsFirstResponder {
     return [findBarTextField_ textFieldIsFirstResponder];
 }
@@ -190,7 +194,7 @@ static const float kAnimationDuration = 0.2;
 #pragma mark - NSViewController
 
 - (BOOL)validateUserInterfaceItem:(NSMenuItem *)item {
-    item.state = (item.tag == self.driver.mode) ? NSOnState : NSOffState;
+    item.state = (item.tag == self.driver.mode) ? NSControlStateValueOn : NSControlStateValueOff;
     return YES;
 }
 
@@ -349,6 +353,14 @@ static const float kAnimationDuration = 0.2;
 
 - (void)focusReportingSearchFieldWillBecomeFirstResponder:(iTermFocusReportingSearchField *)sender {
     [self.driver searchFieldWillBecomeFirstResponder:findBarTextField_];
+}
+
+- (NSInteger)focusReportingSearchFieldNumberOfResults:(iTermFocusReportingSearchField *)sender {
+    return [self.driver numberOfResults];
+}
+
+- (NSInteger)focusReportingSearchFieldCurrentIndex:(iTermFocusReportingSearchField *)sender {
+    return [self.driver currentIndex];
 }
 
 @end

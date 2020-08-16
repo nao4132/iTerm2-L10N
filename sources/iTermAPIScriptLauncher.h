@@ -11,17 +11,19 @@
 
 // Launches an API script. Reads its output and waits for it to terminate.
 + (void)launchScript:(NSString *)filename
-           arguments:(NSString *)arguments
+           arguments:(NSArray<NSString *> *)arguments
   explicitUserAction:(BOOL)explicitUserAction;
 
 + (void)launchScript:(NSString *)filename
             fullPath:(NSString *)fullPath
-           arguments:(NSString *)arguments
+           arguments:(NSArray<NSString *> *)arguments
       withVirtualEnv:(NSString *)virtualenv
         setupCfgPath:(NSString *)setupCfgPath
   explicitUserAction:(BOOL)explicitUserAction;
 
-+ (NSString *)environmentForScript:(NSString *)path checkForMain:(BOOL)checkForMain;
++ (NSString *)environmentForScript:(NSString *)path
+                      checkForMain:(BOOL)checkForMain
+                     checkForSaved:(BOOL)checkForSaved;
 + (NSString *)prospectivePythonPathForPyenvScriptNamed:(NSString *)name;
 
 @end

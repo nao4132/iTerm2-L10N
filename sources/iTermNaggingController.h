@@ -10,6 +10,7 @@
 NS_ASSUME_NONNULL_BEGIN
 
 extern NSString *const kTurnOffBracketedPasteOnHostChangeUserDefaultsKey;
+extern NSString *const kTurnOffBracketedPasteOnHostChangeAnnouncementIdentifier;
 
 @protocol iTermNaggingControllerDelegate<NSObject>
 - (BOOL)naggingControllerCanShowMessageWithIdentifier:(NSString *)identifier;
@@ -32,6 +33,9 @@ extern NSString *const kTurnOffBracketedPasteOnHostChangeUserDefaultsKey;
 - (void)naggingControllerSetBackgroundImageToFileWithName:(nullable NSString *)filename;
 - (void)naggingControllerDisableMouseReportingPermanently:(BOOL)permanently;
 - (void)naggingControllerDisableBracketedPasteMode;
+- (void)naggingControllerCloseSession;
+- (void)naggingControllerRepairInitialWorkingDirectoryOfSessionWithGUID:(NSString *)guid
+                                                  inArrangementWithName:(NSString *)arrangementName;
 @end
 
 @interface iTermNaggingController : NSObject
@@ -65,6 +69,15 @@ extern NSString *const kTurnOffBracketedPasteOnHostChangeUserDefaultsKey;
 - (void)didDetectMouseReportingFrustration;
 
 - (void)offerToTurnOffBracketedPasteOnHostChange;
+
+- (BOOL)shouldAskAboutClearingScrollbackHistory;
+- (void)askAboutClearingScrollbackHistory;
+- (BOOL)terminalCanChangeProfile;
+- (BOOL)tmuxWindowsShouldCloseAfterDetach;
+- (void)arrangementWithName:(NSString *)arrangementName
+              hasInvalidPWD:(NSString *)badPWD
+         forSessionWithGuid:(NSString *)sessionGUID;
+
 
 @end
 

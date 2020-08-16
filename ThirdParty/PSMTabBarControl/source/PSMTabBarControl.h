@@ -7,6 +7,8 @@
 //
 
 #import <Cocoa/Cocoa.h>
+
+#import "PSMCachedTitle.h"
 #import "PSMProgressIndicator.h"
 
 extern NSString *const kPSMModifierChangedNotification;
@@ -52,6 +54,9 @@ extern PSMTabBarControlOptionKey PSMTabBarControlOptionMinimumSpaceForLabel;  //
 extern PSMTabBarControlOptionKey PSMTabBarControlOptionHighVisibility;  // NSNumber boolean
 extern PSMTabBarControlOptionKey PSMTabBarControlOptionColoredDrawBottomLineForHorizontalTabBar;  // NSNumber boolean
 extern PSMTabBarControlOptionKey PSMTabBarControlOptionFontSizeOverride;  // NSNumber double
+extern PSMTabBarControlOptionKey PSMTabBarControlOptionMinimalSelectedTabUnderlineProminence;  // NSNumber double in 0-1
+extern PSMTabBarControlOptionKey PSMTabBarControlOptionDragEdgeHeight;  // NSNumber CGFloat
+extern PSMTabBarControlOptionKey PSMTabBarControlOptionAttachedToTitleBar;  // NSNumber bool, 10.16+
 
 // Tab views controlled by the tab bar may expect this protocol to be conformed to by their delegate.
 @protocol PSMTabViewDelegate<NSTabViewDelegate>
@@ -136,14 +141,9 @@ extern PSMTabBarControlOptionKey PSMTabBarControlOptionFontSizeOverride;  // NSN
 - (NSTabViewItem *)tabView:(NSTabView *)tabView unknownObjectWasDropped:(id <NSDraggingInfo>)sender;
 - (id)tabView:(PSMTabBarControl *)tabView valueOfOption:(PSMTabBarControlOptionKey)option;
 - (void)tabViewDidClickAddTabButton:(PSMTabBarControl *)tabView;
-- (BOOL)tabViewShouldDragWindow:(NSTabView *)tabView;
+- (BOOL)tabViewShouldDragWindow:(NSTabView *)tabView event:(NSEvent *)event;
 
 @end
-
-typedef enum {
-    PSMTabBarHorizontalOrientation,
-    PSMTabBarVerticalOrientation
-} PSMTabBarOrientation;
 
 enum {
     PSMTab_SelectedMask = 1 << 1,

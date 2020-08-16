@@ -31,6 +31,10 @@ const double iTermStatusBarBaseComponentDefaultPriority = 5;
     // NOTE: If mutable state is added update copyWithZone:
 }
 
++ (BOOL)supportsSecureCoding {
+    return YES;
+}
+
 - (instancetype)initWithClass:(Class)theClass {
     self = [super init];
     if (self) {
@@ -119,8 +123,12 @@ const double iTermStatusBarBaseComponentDefaultPriority = 5;
     return NO;
 }
 
-- (NSString *)statusBarComponentIdentifier {
++ (NSString *)statusBarComponentIdentifier {
     return [NSString stringWithFormat:@"com.iterm2.%@", NSStringFromClass(self.class)];
+}
+
+- (NSString *)statusBarComponentIdentifier {
+    return [self.class statusBarComponentIdentifier];
 }
 
 - (nullable NSImage *)statusBarComponentIcon {
@@ -357,6 +365,10 @@ const double iTermStatusBarBaseComponentDefaultPriority = 5;
 }
 
 - (BOOL)statusBarComponentHandlesClicks {
+    return NO;
+}
+
+- (BOOL)statusBarComponentIsEmpty {
     return NO;
 }
 

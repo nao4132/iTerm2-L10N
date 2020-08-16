@@ -27,18 +27,23 @@ typedef NS_OPTIONS(int, kTmuxGatewayCommandOptions) {
 
 extern NSString * const kTmuxGatewayErrorDomain;
 
+@interface iTermTmuxSubscriptionHandle: NSObject
+@property (nonatomic, readonly) BOOL isValid;
+@end
+
 @protocol TmuxGatewayDelegate <NSObject>
 
 - (TmuxController *)tmuxController;
-- (void)tmuxUpdateLayoutForWindow:(int)windowId
+- (BOOL)tmuxUpdateLayoutForWindow:(int)windowId
                            layout:(NSString *)layout
-                           zoomed:(NSNumber *)zoomed;
+                           zoomed:(NSNumber *)zoomed
+                             only:(BOOL)only;
 - (void)tmuxWindowAddedWithId:(int)windowId;
 - (void)tmuxWindowClosedWithId:(int)windowId;
 - (void)tmuxWindowRenamedWithId:(int)windowId to:(NSString *)newName;
 - (void)tmuxHostDisconnected:(NSString *)dcsID;
 - (void)tmuxWriteString:(NSString *)string;
-- (void)tmuxReadTask:(NSData *)data;
+- (void)tmuxReadTask:(NSData *)data windowPane:(int)wp latency:(NSNumber *)latency;
 - (void)tmuxSessionChanged:(NSString *)sessionName
 				 sessionId:(int)sessionId;
 - (void)tmuxSessionsChanged;
@@ -57,6 +62,8 @@ extern NSString * const kTmuxGatewayErrorDomain;
 - (NSString *)tmuxOwningSessionGUID;
 - (BOOL)tmuxGatewayShouldForceDetach;
 - (void)tmuxGatewayDidTimeOut;
+- (void)tmuxActiveWindowPaneDidChangeInWindow:(int)windowID toWindowPane:(int)paneID;
+- (void)tmuxWindowPaneDidPause:(int)wp notification:(BOOL)notification;
 @end
 
 typedef NS_ENUM(NSInteger, ControlCommand) {
@@ -78,9 +85,12 @@ typedef NS_ENUM(NSInteger, ControlCommand) {
 @property(nonatomic, readonly) NSString *dcsID;
 @property(nonatomic, readonly) BOOL detachSent;
 @property(nonatomic, readonly) BOOL isTmuxUnresponsive;
+@property(nonatomic) BOOL pauseModeEnabled;
 
 - (instancetype)initWithDelegate:(id<TmuxGatewayDelegate>)delegate dcsID:(NSString *)dcsID NS_DESIGNATED_INITIALIZER;
 - (instancetype)init NS_UNAVAILABLE;
+
+- (BOOL)versionAtLeastDecimalNumberWithString:(NSString *)string;
 
 // Returns any unconsumed data if tmux mode is exited.
 // The token must be TMUX_xxx.
@@ -117,5 +127,10 @@ typedef NS_ENUM(NSInteger, ControlCommand) {
 - (void)forceDetach;
 - (void)doubleAttachDetectedForSessionGUID:(NSString *)sessionGuid;
 - (BOOL)havePendingCommandEqualTo:(NSString *)command;
+
+- (iTermTmuxSubscriptionHandle *)subscribeToFormat:(NSString *)format
+                                            target:(NSString *)target
+                                             block:(void (^)(NSString *, NSArray<NSString *> *))block;
+- (void)unsubscribe:(iTermTmuxSubscriptionHandle *)handle;
 
 @end

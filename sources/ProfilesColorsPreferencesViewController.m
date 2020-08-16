@@ -90,6 +90,7 @@ static NSString * const kColorGalleryURL = @"https://www.iterm2.com/colorgallery
     IBOutlet NSView *_bwWarning2;
 
     NSDictionary<NSString *, id> *_savedColors;
+    NSTimer *_timer;
 }
 
 + (NSArray<NSString *> *)presetNames {
@@ -474,10 +475,10 @@ static NSString * const kColorGalleryURL = @"https://www.iterm2.com/colorgallery
         if (item.action == @selector(loadColorPreset:)) {
             NSString *name = item.title;
             if (!found && [self currentColorsEqualPreset:allPresets[name]]) {
-                item.state = NSOnState;
+                item.state = NSControlStateValueOn;
                 found = YES;
             } else {
-                item.state = NSOffState;
+                item.state = NSControlStateValueOff;
             }
         }
     }
@@ -487,13 +488,29 @@ static NSString * const kColorGalleryURL = @"https://www.iterm2.com/colorgallery
 
 - (void)menu:(NSMenu *)menu willHighlightItem:(nullable NSMenuItem *)item {
     if (item.action == @selector(loadColorPreset:)) {
-        [self loadColorPresetWithName:item.title];
+        [self removeTimer];
+        _timer = [NSTimer scheduledTimerWithTimeInterval:0.4 target:self selector:@selector(previewColors:) userInfo:item repeats:NO];
+        [[NSRunLoop currentRunLoop] addTimer:_timer forMode:NSRunLoopCommonModes];
     } else {
+        [self removeTimer];
         [self restoreColors];
     }
 }
 
+- (void)previewColors:(NSTimer *)timer {
+    NSMenuItem *item = timer.userInfo;
+    if (_timer) {
+        [self loadColorPresetWithName:item.title];
+    }
+    [self removeTimer];
+}
+- (void)removeTimer {
+    [_timer invalidate];
+    _timer = nil;
+}
+
 - (void)menuDidClose:(NSMenu *)menu {
+    [self removeTimer];
     [self restoreColors];
     _savedColors = nil;
 }

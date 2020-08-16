@@ -27,15 +27,17 @@ NS_CLASS_AVAILABLE(10_11, NA)
 // find a better way to pass this info around. The problem is that it's needed
 // early on--before the transient state is created--in order for the text
 // renderer to be able to set its fragment function.
-@property (nonatomic, readonly) BOOL usingIntermediatePass NS_DEPRECATED_MAC(10_12, 10_14);
-
-- (instancetype)initWithViewportSize:(vector_uint2)viewportSize
-                               scale:(CGFloat)scale
-                  hasBackgroundImage:(BOOL)hasBackgroundImage NS_UNAVAILABLE;
+@property (nonatomic, readonly) BOOL usingIntermediatePass;
 
 - (instancetype)initWithViewportSize:(vector_uint2)viewportSize
                                scale:(CGFloat)scale
                   hasBackgroundImage:(BOOL)hasBackgroundImage
+                        extraMargins:(NSEdgeInsets)extraMargins NS_UNAVAILABLE;
+
+- (instancetype)initWithViewportSize:(vector_uint2)viewportSize
+                               scale:(CGFloat)scale
+                  hasBackgroundImage:(BOOL)hasBackgroundImage
+                        extraMargins:(NSEdgeInsets)extraMargins
                             cellSize:(CGSize)cellSize
                            glyphSize:(CGSize)glyphSize
               cellSizeWithoutSpacing:(CGSize)cellSizeWithoutSpacing
@@ -65,6 +67,8 @@ NS_CLASS_AVAILABLE(10_11, NA)
 @property (nonatomic, readonly) __kindof iTermCellRenderConfiguration *cellConfiguration;
 @property (nonatomic, readonly) id<MTLBuffer> offsetBuffer;
 @property (nonatomic, strong) id<MTLBuffer> pius;
+
+// NOTE: margins.top affects the bottom margin because flipped.
 @property (nonatomic, readonly) NSEdgeInsets margins;
 
 - (instancetype)init NS_UNAVAILABLE;

@@ -55,7 +55,7 @@ static const CGFloat kButtonSize = 17;
                                                                                 (frame.size.height - kButtonSize) / 2,
                                                                                 kButtonSize,
                                                                                 kButtonSize)];
-        [closeButton_ setButtonType:NSMomentaryPushInButton];
+        [closeButton_ setButtonType:NSButtonTypeMomentaryPushIn];
         [closeButton_ setImage:closeImage];
         [closeButton_ setTarget:self];
         [closeButton_ setAction:@selector(close:)];
@@ -70,7 +70,7 @@ static const CGFloat kButtonSize = 17;
         // some of it is clipped.
         menuButton_ = [[NSButton alloc] initWithFrame:NSMakeRect(0, 0, 14, 14)];
         menuButton_.bordered = NO;
-        menuButton_.image = [NSImage it_imageNamed:@"Hamburger" forClass:self.class];
+        menuButton_.image = [NSImage it_hamburgerForClass:self.class];
         menuButton_.imagePosition = NSImageOnly;
         menuButton_.target = self;
         menuButton_.action = @selector(openMenu:);
@@ -210,6 +210,10 @@ static const CGFloat kButtonSize = 17;
 
         case kPreferencesModifierTagCommandAndOption:
             prefix = [NSString stringForModifiersWithMask:(NSEventModifierFlagCommand | NSEventModifierFlagOption)];
+            break;
+
+        case kPreferencesModifierTagControl:
+            prefix = [NSString stringForModifiersWithMask:NSEventModifierFlagControl];
             break;
     }
     return [NSString stringWithFormat:@"%@%@   %@", prefix, @(_ordinal), title_];

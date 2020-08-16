@@ -34,6 +34,7 @@
 #import "iTermApplication.h"
 #import "iTermBuriedSessions.h"
 #import "iTermHotKeyController.h"
+#import "iTermMissionControlHacks.h"
 #import "iTermPresentationController.h"
 #import "iTermProfileModelJournal.h"
 #import "iTermSessionFactory.h"
@@ -60,7 +61,6 @@
 #import "iTermExpose.h"
 #import "iTermFullScreenWindowManager.h"
 #import "iTermNotificationController.h"
-#import "iTermKeyBindingMgr.h"
 #import "iTermPreferences.h"
 #import "iTermProfilePreferences.h"
 #import "iTermRestorableSession.h"
@@ -77,6 +77,8 @@
 @interface NSApplication (Undocumented)
 - (void)_cycleWindowsReversed:(BOOL)back;
 @end
+
+extern NSString *const iTermProcessTypeDidChangeNotification;
 
 // Pref keys
 static iTermController *gSharedInstance;
@@ -199,7 +201,7 @@ static iTermController *gSharedInstance;
         while ([_terminalWindows count] > 0) {
             [[_terminalWindows objectAtIndex:0] close];
         }
-        ITUpgradedNSAssert([_terminalWindows count] == 0, @"Expected terminals to be gone");
+        ITAssertWithMessage([_terminalWindows count] == 0, @"Expected terminals to be gone");
         [_terminalWindows release];
     }
 
@@ -226,6 +228,11 @@ static iTermController *gSharedInstance;
             [terminal setWindowTitle];
         }
     }
+}
+
+- (void)updateProcessType {
+    [[NSNotificationCenter defaultCenter] postNotificationName:iTermProcessTypeDidChangeNotification
+                                                        object:nil];
 }
 
 - (BOOL)haveTmuxConnection {
@@ -404,6 +411,36 @@ static iTermController *gSharedInstance;
         }
         [WindowArrangements setArrangement:repairedArrangements withName:savedArrangementName];
     }
+}
+
+- (BOOL)arrangementWithName:(NSString *)arrangementName
+         hasSessionWithGUID:(NSString *)guid
+                        pwd:(NSString *)pwd {
+    NSArray *windowArrangements = [WindowArrangements arrangementWithName:arrangementName];
+    if (!windowArrangements) {
+        return NO;
+    }
+    return [windowArrangements anyWithBlock:^BOOL(id anObject) {
+        NSDictionary *dict = [PseudoTerminal arrangementForSessionWithGUID:guid inWindowArrangement:anObject];
+        if (!dict) {
+            return NO;
+        }
+        NSString *actualPWD = [PTYSession initialWorkingDirectoryFromArrangement:dict];
+        return [actualPWD isEqual:pwd];
+    }];
+}
+
+- (void)repairSavedArrangementNamed:(NSString *)arrangementName
+replaceInitialDirectoryForSessionWithGUID:(NSString *)guid
+                               with:(NSString *)replacementOldCWD {
+    NSArray *terminalArrangements = [WindowArrangements arrangementWithName:arrangementName];
+    NSArray *repairedArrangements = [terminalArrangements mapWithBlock:^id(NSDictionary *terminalArrangement) {
+        return [PseudoTerminal repairedArrangement:terminalArrangement
+                  replacingOldCWDOfSessionWithGUID:guid
+                                        withOldCWD:replacementOldCWD];
+    }];
+    [WindowArrangements setArrangement:repairedArrangements
+                              withName:arrangementName];
 }
 
 - (void)saveWindowArrangement:(BOOL)allWindows {
@@ -941,31 +978,14 @@ static iTermController *gSharedInstance;
 }
 
 + (void)switchToSpaceInBookmark:(Profile *)aDict {
-    if (aDict[KEY_SPACE]) {
-        int spaceNum = [aDict[KEY_SPACE] intValue];
-        if (spaceNum > 0 && spaceNum < 10) {
-            // keycodes for digits 1-9. Send control-n to switch spaces.
-            // TODO: This would get remapped by the event tap. It requires universal access to be on and
-            // spaces to be configured properly. But we don't tell the users this.
-            int codes[] = { 18, 19, 20, 21, 23, 22, 26, 28, 25 };
-            CGEventRef e = CGEventCreateKeyboardEvent (NULL, (CGKeyCode)codes[spaceNum - 1], true);
-            CGEventSetFlags(e, kCGEventFlagMaskControl);
-            CGEventPost(kCGSessionEventTap, e);
-            CFRelease(e);
-
-            e = CGEventCreateKeyboardEvent (NULL, (CGKeyCode)codes[spaceNum - 1], false);
-            CGEventSetFlags(e, kCGEventFlagMaskControl);
-            CGEventPost(kCGSessionEventTap, e);
-            CFRelease(e);
-
-            // Give the space-switching animation time to get started; otherwise a window opened
-            // subsequent to this will appear in the previous space. This is short enough of a
-            // delay that it's not annoying when you're already there.
-            [NSThread sleepForTimeInterval:0.3];
-
-            [NSApp activateIgnoringOtherApps:YES];
-        }
+    if (!aDict[KEY_SPACE]) {
+        return;
     }
+    const int spaceNum = [aDict[KEY_SPACE] intValue];
+    if (spaceNum <= 0 || spaceNum >= 10) {
+        return;
+    }
+    [iTermMissionControlHacks switchToSpace:spaceNum];
 }
 
 - (iTermWindowType)windowTypeForBookmark:(Profile *)aDict {
@@ -1020,10 +1040,12 @@ static iTermController *gSharedInstance;
     if ([iTermProfilePreferences boolForKey:KEY_HIDE_AFTER_OPENING inProfile:profile]) {
         [term hideAfterOpening];
     }
-    iTermProfileHotKey *profileHotKey =
+    if (term.windowType != WINDOW_TYPE_LION_FULL_SCREEN) {
+        iTermProfileHotKey *profileHotKey =
         [[iTermHotKeyController sharedInstance] didCreateWindowController:term
                                                               withProfile:profile];
-    [profileHotKey setAllowsStateRestoration:NO];
+        [profileHotKey setAllowsStateRestoration:NO];
+    }
 
     [self addTerminalWindow:term];
     return term;
@@ -1257,6 +1279,7 @@ static iTermController *gSharedInstance;
 }
 
 - (void)killRestorableSessions {
+    DLog(@"killRestorableSessions");
     assert([iTermAdvancedSettingsModel runJobsInServers]);
     for (iTermRestorableSession *restorableSession in _restorableSessions) {
         for (PTYSession *aSession in restorableSession.sessions) {
@@ -1317,11 +1340,15 @@ static iTermController *gSharedInstance;
 
     [_terminalWindows addObject:terminalWindow];
     [self updateWindowTitles];
+    [self updateProcessType];
+    [[iTermPresentationController sharedInstance] update];
 }
 
 - (void)removeTerminalWindow:(PseudoTerminal *)terminalWindow {
     [_terminalWindows removeObject:terminalWindow];
     [self updateWindowTitles];
+    [self updateProcessType];
+    [[iTermPresentationController sharedInstance] update];
 }
 
 - (PTYSession *)sessionWithGUID:(NSString *)identifier {
@@ -1423,9 +1450,12 @@ static iTermController *gSharedInstance;
                                                 profile:windowProfile] autorelease];
     [self addTerminalWindow:term];
 
-    NSString *const command = [self shCommandLineWithCommand:rawCommand
-                                                   arguments:arguments ?: @[]
-                                             escapeArguments:!(options & iTermSingleUseWindowOptionsDoNotEscapeArguments)];
+    NSString *command = [self shCommandLineWithCommand:rawCommand
+                                             arguments:arguments ?: @[]
+                                       escapeArguments:!(options & iTermSingleUseWindowOptionsDoNotEscapeArguments)];
+    if (options & iTermSingleUseWindowOptionsCommandNotSwiftyString) {
+        command = [command stringByReplacingOccurrencesOfString:@"\\" withString:@"\\\\"];
+    }
     DLog(@"Open single-use window with command: %@", command);
     void (^makeSession)(Profile *, PseudoTerminal *, void (^)(PTYSession *)) =
     ^(Profile *profile, PseudoTerminal *term, void (^makeSessionCompletion)(PTYSession *))  {

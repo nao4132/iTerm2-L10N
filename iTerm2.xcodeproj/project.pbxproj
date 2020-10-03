@@ -14194,7 +14194,6 @@
 				A6F718D8226704920053488E /* PTYSession+ARC.m in Sources */,
 				A666D5E52219323D00D6184A /* iTermEventTap.m in Sources */,
 				A629F5A623AFF5BA00C2F16B /* iTermShellIntegrationSecondPageViewController.m in Sources */,
-				5379C59823DBE9F100314F23 /* iTermFocusFollowsMouseController.m in Sources */,
 				A6A39EC024B9A96B00A64433 /* iTermUnobtrusiveMessage.m in Sources */,
 				A6A4867D20B67F7E00493302 /* ProfilesWindowPreferencesViewController.m in Sources */,
 				53C2D3A62152CA3900FF6471 /* NSUserDefaults+iTerm.m in Sources */,

@@ -1096,7 +1096,8 @@ NS_INLINE int TotalNumberOfRawLines(LineBuffer *self) {
 }
 
 // Returns whether we truncated lines.
-- (BOOL)encodeBlocks:(id<iTermEncoderAdapter>)encoder {
+- (BOOL)encodeBlocks:(id<iTermEncoderAdapter>)encoder
+            maxLines:(NSInteger)maxLines {
     __block BOOL truncated = NO;
     __block NSInteger numLines = 0;
 
@@ -1104,6 +1105,7 @@ NS_INLINE int TotalNumberOfRawLines(LineBuffer *self) {
     [iTermOrderedDictionary byMappingEnumerator:_lineBlocks.blocks.reverseObjectEnumerator
                                           block:^id _Nonnull(NSUInteger index,
                                                              LineBlock *_Nonnull block) {
+        DLog(@"Maybe encode block %p with guid %@", block, block.stringUniqueIdentifier);
         return block.stringUniqueIdentifier;
     }];
     [encoder encodeArrayWithKey:kLineBufferBlocksKey
@@ -1112,20 +1114,21 @@ NS_INLINE int TotalNumberOfRawLines(LineBuffer *self) {
                         options:iTermGraphEncoderArrayOptionsReverse
                           block:^BOOL(id<iTermEncoderAdapter> _Nonnull encoder,
                                       NSInteger i,
-                                      NSString * _Nonnull identifier) {
+                                      NSString * _Nonnull identifier,
+                                      BOOL *stop) {
         LineBlock *block = index[identifier];
         DLog(@"Encode %@ with identifier %@ and generation %@", block, identifier, @(block.generation));
         return [encoder encodeDictionaryWithKey:kLineBufferBlockWrapperKey
                                      generation:block.generation
                                           block:^BOOL(id<iTermEncoderAdapter>  _Nonnull encoder) {
-            if (truncated) {
-                return NO;
-            }
-            [encoder mergeDictionary:block.dictionary];
+            assert(!truncated);
+            DLog(@"Really encode block %p with guid %@", block, block.stringUniqueIdentifier);
+            [encoder mergeDictionary:block.dictionary]; 
             // This caps the amount of data at a reasonable but arbitrary size.
             numLines += [block getNumLinesWithWrapWidth:80];
-            if (numLines >= 10000) {
+            if (numLines >= maxLines) {
                 truncated = YES;
+                *stop = YES;
             }
             return YES;
         }];
@@ -1134,8 +1137,8 @@ NS_INLINE int TotalNumberOfRawLines(LineBuffer *self) {
     return truncated;
 }
 
-- (void)encode:(id<iTermEncoderAdapter>)encoder {
-    const BOOL truncated = [self encodeBlocks:encoder];
+- (void)encode:(id<iTermEncoderAdapter>)encoder maxLines:(NSInteger)maxLines {
+    const BOOL truncated = [self encodeBlocks:encoder maxLines:maxLines];
 
     [encoder mergeDictionary:
      @{ kLineBufferVersionKey: @(kLineBufferVersion),

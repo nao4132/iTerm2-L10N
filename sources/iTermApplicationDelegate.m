@@ -42,11 +42,11 @@
 #import "iTermController.h"
 #import "iTermDependencyEditorWindowController.h"
 #import "iTermDisclosableView.h"
-#import "iTermExpose.h"
 #import "iTermFileDescriptorSocketPath.h"
 #import "iTermFontPanel.h"
 #import "iTermFullScreenWindowManager.h"
 #import "iTermGlobalScopeController.h"
+#import "iTermGlobalSearchWindowController.h"
 #import "iTermHotKeyController.h"
 #import "iTermHotKeyProfileBindingController.h"
 #import "iTermIntegerNumberFormatter.h"
@@ -229,6 +229,7 @@ static BOOL hasBecomeActive = NO;
     iTermGlobalScopeController *_globalScopeController;
     iTermRestorableStateController *_restorableStateController;
     iTermUntitledWindowStateMachine *_untitledWindowStateMachine;
+    iTermGlobalSearchWindowController *_globalSearchWindowController;
 }
 
 - (instancetype)init {
@@ -623,11 +624,16 @@ static BOOL hasBecomeActive = NO;
                     return YES;
                 }
 
-                bookmark[KEY_INITIAL_TEXT] = initialText;
+                // Escape it again because KEY_INITIAL_TEXT is a swifty string.
+                bookmark[KEY_INITIAL_TEXT] = [initialText stringByReplacingOccurrencesOfString:@"\\" withString:@"\\\\"];
             }
         }
 
         PseudoTerminal *windowController = [self terminalToOpenFileIn];
+        if (!windowController) {
+            bookmark[KEY_DISABLE_AUTO_FRAME] = @YES;
+            DLog(@"Disable auto frame. Profile is:\n%@", bookmark);
+        }
         DLog(@"application:openFile: launching new session in window %@", windowController);
         [iTermSessionLauncher launchBookmark:bookmark
                                   inTerminal:windowController
@@ -740,7 +746,7 @@ static BOOL hasBecomeActive = NO;
         [iTermAdvancedSettingsModel restoreWindowContents] &&
         [[iTermController sharedInstance] willRestoreWindowsAtNextLaunch]) {
         // Nothing will be lost so just restart without asking.
-        [reason addReason:[iTermPromptOnCloseReason noReason]];
+        reason = [iTermPromptOnCloseReason noReason];
     }
 
     if (reason.hasReason) {
@@ -786,6 +792,7 @@ static BOOL hasBecomeActive = NO;
     }
 
     // Last chance before windows get closed.
+    DLog(@"Post applikcationWillTerminate which triggers saving restorable state.");
     [[NSNotificationCenter defaultCenter] postNotificationName:iTermApplicationWillTerminate object:nil];
 
     // This causes all windows to be closed and all sessions to be terminated.
@@ -803,9 +810,6 @@ static BOOL hasBecomeActive = NO;
 
 - (void)applicationWillTerminate:(NSNotification *)aNotification {
     DLog(@"applicationWillTerminate called");
-    if ([iTermController sharedInstance]) {
-        [_restorableStateController saveRestorableState];
-    }
     [[iTermModifierRemapper sharedInstance] setRemapModifiers:NO];
     DLog(@"applicationWillTerminate returning");
     TurnOffDebugLoggingSilently();
@@ -829,17 +833,6 @@ static BOOL hasBecomeActive = NO;
          @([iTermPreferences boolForKey:kPreferenceKeyOpenArrangementAtStartup]),
          @([iTermPreferences boolForKey:kPreferenceKeyOpenNoWindowsAtStartup]));
 
-    if (!finishedLaunching_ &&
-        ([iTermPreferences boolForKey:kPreferenceKeyOpenArrangementAtStartup] ||
-         [iTermPreferences boolForKey:kPreferenceKeyOpenNoWindowsAtStartup] )) {
-        // There are two ways this can happen:
-        // 1. System window restoration is off in System Prefs>General, the window arrangement has
-        //    no windows, and iTerm2 is configured to restore it at startup.
-        // 2. System window restoration is off in System Prefs>General and iTerm2 is configured to
-        //    open no windows at startup.
-        DLog(@"Nope");
-        return NO;
-    }
     if (![iTermAdvancedSettingsModel openUntitledFile]) {
         DLog(@"Opening untitled files is disabled");
         return NO;
@@ -848,11 +841,13 @@ static BOOL hasBecomeActive = NO;
     return YES;
 }
 
+- (void)willRestoreWindow {
+    [_untitledWindowStateMachine didRestoreSomeWindows];
+}
+
 - (NSMenu *)applicationDockMenu:(NSApplication *)sender {
     NSMenu* aMenu = [[NSMenu alloc] initWithTitle: @"Dock Menu"];
 
-    PseudoTerminal *frontTerminal;
-    frontTerminal = [[iTermController sharedInstance] currentTerminal];
     [aMenu addItemWithTitle:@"New Window (Default Profile)"
                      action:@selector(newWindow:)
               keyEquivalent:@""];
@@ -927,17 +922,16 @@ static BOOL hasBecomeActive = NO;
 
     NSArray *hotkeyWindowsStates = nil;
     NSDictionary *legacyState = nil;
-    if ([[NSUserDefaults standardUserDefaults] boolForKey:@"NSQuitAlwaysKeepsWindows"]) {
-        hotkeyWindowsStates = [coder decodeObjectForKey:kHotkeyWindowsRestorableStates];
-        if (hotkeyWindowsStates) {
-            // We have to create the hotkey window now because we need to attach to servers before
-            // launch finishes; otherwise any running hotkey window jobs will be treated as orphans.
-            const NSInteger count = [[iTermHotKeyController sharedInstance] createHiddenWindowsFromRestorableStates:hotkeyWindowsStates];
-            if (count > 0) {
-                [_untitledWindowStateMachine didRestoreHotkeyWindows];
-            }
+    hotkeyWindowsStates = [coder decodeObjectForKey:kHotkeyWindowsRestorableStates];
+    if (hotkeyWindowsStates) {
+        // We have to create the hotkey window now because we need to attach to servers before
+        // launch finishes; otherwise any running hotkey window jobs will be treated as orphans.
+        const NSInteger count = [[iTermHotKeyController sharedInstance] createHiddenWindowsFromRestorableStates:hotkeyWindowsStates];
+        if (count > 0) {
+            [_untitledWindowStateMachine didRestoreSomeWindows];
         }
     }
+
     _buriedSessionsState = [[coder decodeObjectForKey:iTermBuriedSessionState] retain];
     if (finishedLaunching_) {
         [self restoreBuriedSessionsState];
@@ -1035,10 +1029,22 @@ static BOOL hasBecomeActive = NO;
         [[PreferencePanel sharedInstance] openToProfileWithGuid:guid
                                                             key:KEY_AUTOLOG];
     }];
-    [_untitledWindowStateMachine didBecomeSafe];
-    [_restorableStateController restoreWindows];
-}
 
+    if ([iTermPreferences boolForKey:kPreferenceKeyOpenArrangementAtStartup] ||
+        [iTermPreferences boolForKey:kPreferenceKeyOpenNoWindowsAtStartup]) {
+        [_untitledWindowStateMachine disableInitialUntitledWindow];
+    }
+
+    if (_restorableStateController) {
+        [_restorableStateController restoreWindowsWithCompletion:^{
+            DLog(@"Window restoration is totally complete");
+            [_untitledWindowStateMachine didFinishRestoringWindows];
+        }];
+    } else {
+        [_restorableStateController didSkipRestoration];
+        [_untitledWindowStateMachine didFinishRestoringWindows];
+    }
+}
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
     [iTermLaunchExperienceController applicationDidFinishLaunching];
@@ -1103,7 +1109,6 @@ static BOOL hasBecomeActive = NO;
     [self performSelector:@selector(performStartupActivities)
                withObject:nil
                afterDelay:0];
-    [PseudoTerminalRestorer runQueuedBlocks];
 
     [[[NSWorkspace sharedWorkspace] notificationCenter] addObserver:self
                                                            selector:@selector(workspaceSessionDidBecomeActive:)
@@ -1130,7 +1135,9 @@ static BOOL hasBecomeActive = NO;
 
     if ([iTermAdvancedSettingsModel runJobsInServers] &&
         !self.isAppleScriptTestApp) {
-        [PseudoTerminalRestorer setRestorationCompletionBlock:^{
+        DLog(@"Set post-retoration completion block from appDidFinishLaunching");
+        [PseudoTerminalRestorer setPostRestorationCompletionBlock:^{
+            DLog(@"Running post-retoration completion block from appDidFinishLaunching");
             [self restoreBuriedSessionsState];
             if ([[iTermController sharedInstance] numberOfDecodesPending] == 0) {
                 _orphansAdopted = YES;
@@ -1351,7 +1358,7 @@ static BOOL hasBecomeActive = NO;
     if (quiet_) {
         DLog(@"Launched in quiet mode. Return early.");
         // iTerm2 was launched with "open file" that turns off startup activities.
-        [_untitledWindowStateMachine didPerformStartupActivities];
+        [_untitledWindowStateMachine didFinishInitialization];
         return;
     }
     [[iTermController sharedInstance] setStartingUp:YES];
@@ -1379,15 +1386,18 @@ static BOOL hasBecomeActive = NO;
     } else if (!ranAutoLaunchScripts &&
                [iTermAdvancedSettingsModel openNewWindowAtStartup] &&
                ![iTermPreferences boolForKey:kPreferenceKeyOpenNoWindowsAtStartup] &&
-               ![PseudoTerminalRestorer willOpenWindows] &&
                [[[iTermController sharedInstance] terminals] count] == 0 &&
                ![self isAppleScriptTestApp] &&
                [[[iTermHotKeyController sharedInstance] profileHotKeys] count] == 0 &&
                [[[iTermBuriedSessions sharedInstance] buriedSessions] count] == 0 &&
                ![[NSApplication sharedApplication] isRunningUnitTests]) {
-        [self newWindow:nil];
+        // Over time logic has shifted into -applicationOpenUntitledFile:, and for most users I
+        // beleive this is a no-op. However, it is complex enough that there might be a baby in this
+        // bathwater so I'm disinclined to remove it until I understand when it would be used. For
+        // now I will leave it in to avoid adding risk to 3.4.0.
+        [_untitledWindowStateMachine maybeOpenUntitledFile];
     }
-    [_untitledWindowStateMachine didPerformStartupActivities];
+    [_untitledWindowStateMachine didFinishInitialization];
 
     [[iTermController sharedInstance] setStartingUp:NO];
     [PTYSession removeAllRegisteredSessions];
@@ -1574,6 +1584,13 @@ static BOOL hasBecomeActive = NO;
 }
 
 #pragma mark - Actions
+
+- (IBAction)findGlobally:(id)sender {
+    if (!_globalSearchWindowController) {
+        _globalSearchWindowController = [[iTermGlobalSearchWindowController alloc] init];
+    }
+    [_globalSearchWindowController activate];
+}
 
 - (IBAction)promptToConvertTabsToSpacesWhenPasting:(id)sender {
     [iTermPasteHelper togglePromptToConvertTabsToSpacesWhenPasting];
@@ -1834,10 +1851,6 @@ static BOOL hasBecomeActive = NO;
     [[iTermAboutWindowController sharedInstance] showWindow:self];
 }
 
-- (IBAction)exposeForTabs:(id)sender {
-    [iTermExpose toggle];
-}
-
 - (void)clearAllDownloads:(id)sender {
     [[FileTransferManager sharedInstance] removeAllDownloads];
 }
@@ -1909,10 +1922,10 @@ static BOOL hasBecomeActive = NO;
         NSString *cookie = [[iTermWebSocketCookieJar sharedInstance] randomStringForCookie];
         NSString *key = [[NSUUID UUID] UUIDString];
         NSString *identifier = [[iTermAPIConnectionIdentifierController sharedInstance] identifierForKey:key];
-        iTermScriptHistoryEntry *entry = [[iTermScriptHistoryEntry alloc] initWithName:@"REPL"
-                                                                              fullPath:nil
-                                                                            identifier:identifier
-                                                                              relaunch:nil];
+        iTermScriptHistoryEntry *entry = [[[iTermScriptHistoryEntry alloc] initWithName:@"REPL"
+                                                                               fullPath:nil
+                                                                             identifier:identifier
+                                                                              relaunch:nil] autorelease];
         [[iTermScriptHistory sharedInstance] addHistoryEntry:entry];
         NSDictionary *environment = @{ @"ITERM2_COOKIE": cookie,
                                        @"ITERM2_KEY": key };
@@ -1994,74 +2007,7 @@ static BOOL hasBecomeActive = NO;
 }
 
 - (NSString *)gpuUnavailableStringForReason:(iTermMetalUnavailableReason)reason {
-    switch (reason) {
-        case iTermMetalUnavailableReasonNone:
-            return nil;
-        case iTermMetalUnavailableReasonNoGPU:
-            return @"no usable GPU found on this machine.";
-        case iTermMetalUnavailableReasonDisabled:
-            return @"GPU Renderer is disabled in Preferences > General.";
-        case iTermMetalUnavailableReasonLigatures:
-            return @"ligatures are enabled. You can disable them in Preferences > Profiles > Text > Use ligatures.";
-        case iTermMetalUnavailableReasonInitializing:
-            return @"the GPU renderer is initializing. It should be ready soon.";
-        case iTermMetalUnavailableReasonInvalidSize:
-            return @"the session is too large or too small.";
-        case iTermMetalUnavailableReasonSessionInitializing:
-            return @"the session is initializing.";
-        case iTermMetalUnavailableReasonTransparency:
-            return @"transparent windows are not supported. They can be disabled in Preferences > Profiles > Window > Transparency.";
-        case iTermMetalUnavailableReasonVerticalSpacing:
-            return @"the font's vertical spacing set to less than 100%. You can change it in Preferences > Profiles > Text > Change Font.";
-        case iTermMetalUnavailableReasonMarginSize:
-            return @"terminal window margins are too small. You can edit them in Preferences > Advanced.";
-        case iTermMetalUnavailableReasonAnnotations:
-            return @"annotations are open. Find the session with visible annotations and close them with View > Show Annotations.";
-        case iTermMetalUnavailableReasonFindPanel:
-            return @"the find panel is open.";
-        case iTermMetalUnavailableReasonPasteIndicator:
-            return @"the paste progress indicator is open.";
-        case iTermMetalUnavailableReasonAnnouncement:
-            return @"an announcement (yellow bar) is visible.";
-        case iTermMetalUnavailableReasonURLPreview:
-            return @"a URL preview is visible.";
-        case iTermMetalUnavailableReasonWindowResizing:
-            return @"the window is being resized.";
-        case iTermMetalUnavailableReasonDisconnectedFromPower:
-            return @"the computer is not connected to power. You can enable GPU rendering while disconnected from "
-                   @"power in Preferences > General > Advanced GPU Settings.";
-        case iTermMetalUnavailableReasonIdle:
-            return @"the session is idle. You can enable Metal while idle in Preferences > Advanced.";
-        case iTermMetalUnavailableReasonTooManyPanesReason:
-            return @"This tab has too many split panes";
-        case iTermMetalUnavailableReasonNoFocus:
-            return @"the window does not have keyboard focus.";
-        case iTermMetalUnavailableReasonTabInactive:
-            return @"this tab is not active.";
-        case iTermMetalUnavailableReasonTabBarTemporarilyVisible:
-            return @"the tab bar is temporarily visible.";
-        case iTermMetalUnavailableReasonScreensChanging:
-            return @"the screen configuration has just changed.";
-        case iTermMetalUnavailableReasonWindowObscured:
-            return @"most of the window is not visible.";
-        case iTermMetalUnavailableReasonContextAllocationFailure:
-            return @"of a temporary failure to allocate a graphics context.";
-        case iTermMetalUnavailableReasonTabDragInProgress:
-            return @"a tab is being dragged.";
-        case iTermMetalUnavailableReasonSessionHasNoWindow:
-            return @"the current session has no window (this shouldn't happen).";
-        case iTermMetalUnavailableReasonDropTargetsVisible:
-            return @"secure copy drop targets are visible.";
-        case iTermMetalUnavailableReasonSharedBackgroundImage:
-#warning TODO: Try to relax this restriction. Also make sure to update metal availability when it changes.
-            return @"background images are not per-pane";
-        case iTermMetalUnavailableReasonSwipingBetweenTabs:
-            return @"swiping between tabs";
-        case iTermMetalUnavailableReasonSplitPaneBeingDragged:
-            return @"a split pane is being dragged.";
-    }
-
-    return @"of an internal error. Please file a bug report!";
+    return iTermMetalUnavailableReasonDescription(reason);
 }
 
 - (IBAction)gpuRendererAvailability:(id)sender {
@@ -2304,6 +2250,38 @@ static BOOL hasBecomeActive = NO;
                               completion:nil];
 }
 
+- (void)orphanServerAdopterOpenSessionForPartialAttachment:(id<iTermPartialAttachment>)partialAttachment
+                                                  inWindow:(id)window
+                                                completion:(void (^)(PTYSession *))completion {
+    assert([iTermAdvancedSettingsModel runJobsInServers]);
+
+    void (^makeSession)(NSDictionary * _Nonnull,
+                        PseudoTerminal * _Nonnull,
+                        void (^ _Nonnull)(PTYSession * _Nonnull)) =
+    ^(NSDictionary * _Nonnull profile,
+      PseudoTerminal * _Nonnull term,
+      void (^ _Nonnull didMakeSession)(PTYSession * _Nonnull)) {
+        [self makeSessionWithPartialAttachment:partialAttachment
+                              windowController:term
+                                    completion:didMakeSession];
+    };
+
+    [iTermSessionLauncher launchBookmark:nil
+                              inTerminal:window
+                                 withURL:nil
+                        hotkeyWindowType:iTermHotkeyWindowTypeNone
+                                 makeKey:NO
+                             canActivate:NO
+                      respectTabbingMode:NO
+                                 command:nil
+                             makeSession:makeSession
+                          didMakeSession:^(PTYSession * _Nonnull session) {
+        [session showOrphanAnnouncement];
+        completion(session);
+    }
+                              completion:nil];
+}
+
 - (void)makeSessionWithConnection:(iTermGeneralServerConnection)generalConnection
                  windowController:(PseudoTerminal *)term
                        completion:(void (^)(PTYSession *))didMakeSession {
@@ -2333,7 +2311,42 @@ static BOOL hasBecomeActive = NO;
     [term.sessionFactory attachOrLaunchWithRequest:launchRequest];
 }
 
+- (void)makeSessionWithPartialAttachment:(id<iTermPartialAttachment>)partialAttachment
+                        windowController:(PseudoTerminal *)term
+                              completion:(void (^)(PTYSession *))didMakeSession {
+    Profile *defaultProfile = [[ProfileModel sharedInstance] defaultBookmark];
+    PTYSession *session = [[term.sessionFactory newSessionWithProfile:defaultProfile
+                                                               parent:nil] autorelease];
+    [term addSessionInNewTab:session];
+    iTermSessionAttachOrLaunchRequest *launchRequest =
+    [iTermSessionAttachOrLaunchRequest launchRequestWithSession:session
+                                                      canPrompt:NO
+                                                     objectType:iTermWindowObject
+                                            hasServerConnection:NO
+                                               serverConnection:(iTermGeneralServerConnection){}
+                                                      urlString:nil
+                                                   allowURLSubs:NO
+                                                    environment:@{}
+                                                    customShell:[ITAddressBookMgr customShellForProfile:defaultProfile]
+                                                         oldCWD:nil
+                                                 forceUseOldCWD:NO
+                                                        command:nil
+                                                         isUTF8:nil
+                                                  substitutions:nil
+                                               windowController:term
+                                                          ready:^(BOOL ok) { didMakeSession(ok ? session : nil); }
+                                                     completion:nil];
+    launchRequest.partialAttachment = partialAttachment;
+    [term.sessionFactory attachOrLaunchWithRequest:launchRequest];
+}
+
 #pragma mark - iTermRestorableStateControllerDelegate
+
+- (void)restorableStateDidFinishRequestingRestorations:(iTermRestorableStateController *)sender {
+    DLog(@"All restorations requested. Set external restoration complete");
+    [PseudoTerminalRestorer runQueuedBlocks];
+    [PseudoTerminalRestorer externalRestorationDidComplete];
+}
 
 - (NSArray<NSWindow *> *)restorableStateWindows {
     return [[[iTermController sharedInstance] terminals] mapWithBlock:^id(PseudoTerminal *term) {
@@ -2355,6 +2368,8 @@ static BOOL hasBecomeActive = NO;
 - (void)restorableStateRestoreWithCoder:(NSCoder *)coder
                              identifier:(NSString *)identifier
                              completion:(void (^)(NSWindow * _Nonnull, NSError * _Nonnull))completion {
+    DLog(@"Enqueue(1) restoration for window with identifier %@", identifier);
+    [_untitledWindowStateMachine didRestoreSomeWindows];
     [PseudoTerminalRestorer restoreWindowWithIdentifier:identifier
                                     pseudoTerminalState:[[[PseudoTerminalState alloc] initWithCoder:coder] autorelease]
                                                  system:NO
@@ -2364,6 +2379,8 @@ static BOOL hasBecomeActive = NO;
 - (void)restorableStateRestoreWithRecord:(nonnull iTermEncoderGraphRecord *)record
                               identifier:(nonnull NSString *)identifier
                               completion:(nonnull void (^)(NSWindow *, NSError *))completion {
+    DLog(@"Enqueue(2) restoration for window with identifier %@", identifier);
+    [_untitledWindowStateMachine didRestoreSomeWindows];
     NSDictionary *dict = [NSDictionary castFrom:record.propertyListValue];
     if (!dict) {
         NSError *error = [[[NSError alloc] initWithDomain:@"com.iterm2.app-delegate" code:1 userInfo:nil] autorelease];
@@ -2372,10 +2389,12 @@ static BOOL hasBecomeActive = NO;
     }
 
     PseudoTerminalState *state = [[PseudoTerminalState alloc] initWithDictionary:dict];
+    DLog(@"Will restore window with state %p", state);
     [PseudoTerminalRestorer restoreWindowWithIdentifier:identifier
                                     pseudoTerminalState:state
                                                  system:NO
                                       completionHandler:^(NSWindow *window, NSError *error) {
+        DLog(@"Did restore window with state %p", state);
         [state autorelease];
         if (error || !window) {
             completion(window, error);
@@ -2386,8 +2405,13 @@ static BOOL hasBecomeActive = NO;
             completion(window, error);
             return;
         }
-        [term restoreState:state];
-        completion(window, error);
+        DLog(@"Call asyncRestoreState for identifier %@", identifier);
+        [term asyncRestoreState:state
+                        timeout: ^(NSArray *partialAttachments) { [[iTermOrphanServerAdopter sharedInstance] adoptPartialAttachments:partialAttachments]; }
+                     completion: ^{
+            DLog(@"Async restore finished for identifier %@", identifier);
+            completion(window, error);
+        }];
     }];
 }
 
@@ -2477,15 +2501,13 @@ static BOOL hasBecomeActive = NO;
         [[iTermURLStore sharedInstance] loadFromDictionary:urlStoreState];
     }
 
-    if ([[NSUserDefaults standardUserDefaults] boolForKey:@"NSQuitAlwaysKeepsWindows"]) {
-        iTermEncoderGraphRecord *hotkeyWindowsStates = [app childRecordWithKey:kHotkeyWindowsRestorableStates identifier:@""];
-        if (hotkeyWindowsStates) {
-            // We have to create the hotkey window now because we need to attach to servers before
-            // launch finishes; otherwise any running hotkey window jobs will be treated as orphans.
-            const BOOL createdAny = [[iTermHotKeyController sharedInstance] createHiddenWindowsByDecoding:hotkeyWindowsStates];
-            if (createdAny) {
-                [_untitledWindowStateMachine didRestoreHotkeyWindows];
-            }
+    iTermEncoderGraphRecord *hotkeyWindowsStates = [app childRecordWithKey:kHotkeyWindowsRestorableStates identifier:@""];
+    if (hotkeyWindowsStates) {
+        // We have to create the hotkey window now because we need to attach to servers before
+        // launch finishes; otherwise any running hotkey window jobs will be treated as orphans.
+        const BOOL createdAny = [[iTermHotKeyController sharedInstance] createHiddenWindowsByDecoding:hotkeyWindowsStates];
+        if (createdAny) {
+            [_untitledWindowStateMachine didRestoreSomeWindows];
         }
     }
 

@@ -36,8 +36,13 @@ static NSString *const iTermStatusBarSharedTextColorKey = @"shared text color";
 - (void)statusBarComponent:(id<iTermStatusBarComponent>)component writeString:(NSString *)string;
 - (void)statusBarComponentOpenStatusBarPreferences:(id<iTermStatusBarComponent>)component;
 - (void)statusBarComponentPerformAction:(iTermAction *)action;
-- (void)statusBarComponentRevealActionsTool:(id<iTermStatusBarComponent>)component;
+- (void)statusBarComponentEditActions:(id<iTermStatusBarComponent>)component;
+- (void)statusBarComponentEditSnippets:(id<iTermStatusBarComponent>)component;
 - (void)statusBarComponentResignFirstResponder:(id<iTermStatusBarComponent>)component;
+- (void)statusBarComponent:(id<iTermStatusBarComponent>)component
+      reportScriptingError:(NSError *)error
+forInvocation:(NSString *)invocation
+                    origin:(NSString *)origin;
 @end
 
 @protocol iTermStatusBarComponentFactory<NSSecureCoding, NSCopying, NSObject>
@@ -84,6 +89,9 @@ static NSString *const iTermStatusBarSharedTextColorKey = @"shared text color";
 
 // Returns the minimum width in points of this component.
 - (CGFloat)statusBarComponentMinimumWidth;
+// Returns the maximum width in points of this component. If this is smaller than the minimum
+// width, the minimum width supersedes it.
+- (CGFloat)statusBarComponentMaximumWidth;
 
 // Returns the largest useful width of this component.
 - (CGFloat)statusBarComponentPreferredWidth;

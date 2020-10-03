@@ -16,9 +16,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly) NSString *identifier;
 @property (nonatomic, readonly) NSString *key;
 @property (nonatomic, readonly, weak) iTermEncoderGraphRecord *parent;
-@property (nonatomic, readonly) id propertyListValue;
+@property (nullable, nonatomic, readonly) id propertyListValue;
 @property (nonatomic, strong) NSNumber *rowid;
 @property (nonatomic, readonly) NSData *data;  // encoded pod
+@property (nonatomic, readonly) NSString *compactDescription;
 
 + (instancetype)withPODs:(NSDictionary<NSString *, id> *)pod
                   graphs:(NSArray<iTermEncoderGraphRecord *> *)graphRecords
@@ -44,7 +45,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSInteger)integerWithKey:(NSString *)key error:(out NSError **)error;
 - (NSString *)stringWithKey:(NSString *)key;
 - (nullable id)objectWithKey:(NSString *)key class:(Class)theClass;
-
+- (void)eraseRowIDs;
 @end
 
 @interface NSObject (iTermEncoderGraphRecord)

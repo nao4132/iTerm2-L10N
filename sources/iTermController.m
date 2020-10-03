@@ -37,6 +37,7 @@
 #import "iTermMissionControlHacks.h"
 #import "iTermPresentationController.h"
 #import "iTermProfileModelJournal.h"
+#import "iTermRestorableStateController.h"
 #import "iTermSessionFactory.h"
 #import "iTermSessionLauncher.h"
 #import "iTermWebSocketCookieJar.h"
@@ -58,7 +59,6 @@
 #import "iTerm.h"
 #import "iTermApplication.h"
 #import "iTermApplicationDelegate.h"
-#import "iTermExpose.h"
 #import "iTermFullScreenWindowManager.h"
 #import "iTermNotificationController.h"
 #import "iTermPreferences.h"
@@ -161,7 +161,7 @@ static iTermController *gSharedInstance;
 - (BOOL)willRestoreWindowsAtNextLaunch {
   return (![iTermPreferences boolForKey:kPreferenceKeyOpenArrangementAtStartup] &&
           ![iTermPreferences boolForKey:kPreferenceKeyOpenNoWindowsAtStartup] &&
-          [[NSUserDefaults standardUserDefaults] boolForKey:@"NSQuitAlwaysKeepsWindows"]);
+          [iTermRestorableStateController stateRestorationEnabled]);
 }
 
 - (BOOL)shouldLeaveSessionsRunningOnQuit {
@@ -485,7 +485,10 @@ replaceInitialDirectoryForSessionWithGUID:(NSString *)guid
                      named:(NSString *)arrangementName
             asTabsInWindow:(PseudoTerminal *)term {
     if (term) {
-        [term restoreTabsFromArrangement:terminalArrangement named:arrangementName sessions:nil];
+        [term restoreTabsFromArrangement:terminalArrangement
+                                   named:arrangementName
+                                sessions:nil
+                      partialAttachments:nil];
         return;
     }
     BOOL shouldDelay = NO;
@@ -668,7 +671,6 @@ replaceInitialDirectoryForSessionWithGUID:(NSString *)guid
 
 - (void)arrangeHorizontally {
     DLog(@"Arrange horizontally");
-    [iTermExpose exitIfActive];
 
     // Un-full-screen each window. This is done in two steps because
     // toggleFullScreenMode deallocs self.
@@ -1182,6 +1184,17 @@ replaceInitialDirectoryForSessionWithGUID:(NSString *)guid
     for (PseudoTerminal *term in [self terminals]) {
         for (PTYTab *tab in term.tabs) {
             if (tab.uniqueId == numericID) {
+                return tab;
+            }
+        }
+    }
+    return nil;
+}
+
+- (PTYTab *)tabWithGUID:(NSString *)guid {
+    for (PseudoTerminal *term in self.terminals) {
+        for (PTYTab *tab in term.tabs) {
+            if ([tab.stringUniqueIdentifier isEqualToString:guid]) {
                 return tab;
             }
         }

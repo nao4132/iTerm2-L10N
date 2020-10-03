@@ -14,127 +14,285 @@
 #import "iTermGraphDeltaEncoder.h"
 #import "iTermGraphTableTransformer.h"
 #import "iTermThreadSafety.h"
+#import <stdatomic.h>
 
 @class iTermGraphDatabaseState;
 
 @interface iTermGraphDatabaseState: iTermSynchronizedState<iTermGraphDatabaseState *>
 @property (nonatomic, strong) id<iTermDatabase> db;
+// Load complete means that the initial attempt to load the DB has finished. It may have failed, leaving
+// us without any state, but it is now safe to proceed to use the graph DB as it won't change out
+// from under you after this point.
+@property (nonatomic) BOOL loadComplete;
+- (instancetype)initWithQueue:(dispatch_queue_t)queue database:(id<iTermDatabase>)db;
+- (void)addLoadCompleteBlock:(void (^)(void))block;
 @end
 
-@implementation iTermGraphDatabaseState
-@end
-
-@implementation iTermGraphDatabase {
-    id<iTermDatabaseFactory> _databaseFactory;
-    BOOL _ok;
-    NSInteger _recoveryCount;
+@implementation iTermGraphDatabaseState {
+    NSMutableArray<void (^)(void)> *_loadCompleteBlocks;
 }
-
-- (instancetype)initWithURL:(NSURL *)url databaseFactory:(id<iTermDatabaseFactory>)databaseFactory {
-    self = [super init];
+- (instancetype)initWithQueue:(dispatch_queue_t)queue database:(id<iTermDatabase>)db {
+    self = [super initWithQueue:queue];
     if (self) {
-        _thread = [[iTermThread alloc] initWithLabel:@"com.iterm2.graph-db"
-                                        stateFactory:^iTermSynchronizedState * _Nonnull(dispatch_queue_t  _Nonnull queue) {
-            return [[iTermGraphDatabaseState alloc] initWithQueue:queue];
-        }];
-
-        _url = url;
-#warning TODO: Make this async
-        [_thread dispatchSync:^(iTermGraphDatabaseState *state) {
-            _record = [self load:state factory:databaseFactory];
-        }];
-        if (!_ok) {
-            return nil;
-        }
+        _db = db;
+        _loadCompleteBlocks = [NSMutableArray array];
     }
     return self;
 }
 
-- (void)updateSynchronously:(void (^ NS_NOESCAPE)(iTermGraphEncoder * _Nonnull))block
-                 completion:(nullable iTermCallback *)completion {
-    [self updateSynchronously:YES
-                        block:block
-                   completion:completion];
+- (void)addLoadCompleteBlock:(void (^)(void))block {
+    if (self.loadComplete) {
+        dispatch_async(dispatch_get_main_queue(), block);
+    } else {
+        [_loadCompleteBlocks addObject:[block copy]];
+    }
 }
 
-- (void)update:(void (^ NS_NOESCAPE)(iTermGraphEncoder * _Nonnull))block
-    completion:(iTermCallback *)completion {
-    [self updateSynchronously:NO
-                        block:block
-                   completion:completion];
+- (void)setLoadComplete:(BOOL)loadComplete {
+    if (loadComplete == _loadComplete) {
+        return;
+    }
+    if (loadComplete && !_loadComplete) {
+        NSArray<void (^)(void)> *blocks = [_loadCompleteBlocks copy];
+        [_loadCompleteBlocks removeAllObjects];
+        [blocks enumerateObjectsUsingBlock:^(void (^ _Nonnull block)(void), NSUInteger idx, BOOL * _Nonnull stop) {
+            dispatch_async(dispatch_get_main_queue(), block);
+        }];
+    }
+    _loadComplete = loadComplete;
 }
 
-- (void)updateSynchronously:(BOOL)sync
+@end
+
+@interface iTermGraphDatabase()
+@property (atomic, readwrite) iTermEncoderGraphRecord *record;
+@end
+
+@implementation iTermGraphDatabase {
+    NSInteger _recoveryCount;
+    _Atomic int _updating;
+    _Atomic int _invalid;
+}
+
+- (instancetype)initWithDatabase:(id<iTermDatabase>)db {
+    self = [super init];
+    if (self) {
+        if (![db lock]) {
+            DLog(@"Could not acquire lock. Give up.");
+            return nil;
+        }
+        _updating = ATOMIC_VAR_INIT(0);
+        _invalid = ATOMIC_VAR_INIT(0);
+        _thread = [[iTermThread alloc] initWithLabel:@"com.iterm2.graph-db"
+                                        stateFactory:^iTermSynchronizedState * _Nonnull(dispatch_queue_t  _Nonnull queue) {
+            return [[iTermGraphDatabaseState alloc] initWithQueue:queue
+                                                         database:db];
+        }];
+
+        _url = [db url];
+        [_thread dispatchAsync:^(iTermGraphDatabaseState *state) {
+            [self finishInitialization:state];
+            state.loadComplete = YES;
+        }];
+    }
+    return self;
+}
+
+- (void)finishInitialization:(iTermGraphDatabaseState *)state {
+    if ([self reallyFinishInitialization:state]) {
+        return;
+    }
+    // Failed.
+    [state.db unlock];
+    state.db = nil;
+    _invalid = YES;
+}
+
+- (BOOL)reallyFinishInitialization:(iTermGraphDatabaseState *)state {
+    if (![self openAndInitializeDatabase:state]) {
+        DLog(@"openAndInitialize failed. Attempt recovery.");
+        return [self attemptRecovery:state encoder:nil];
+    }
+    DLog(@"Opened ok.");
+
+    NSError *error = nil;
+    self.record = [self load:state error:&error];
+    if (error) {
+        DLog(@"load failed. Attempt recovery. %@", error);
+        return [self attemptRecovery:state encoder:nil];
+    }
+    DLog(@"Loaded ok.");
+
+    return YES;
+}
+
+// NOTE: It is critical that the completion block not be called synchronously.
+- (BOOL)updateSynchronously:(BOOL)sync
                       block:(void (^ NS_NOESCAPE)(iTermGraphEncoder * _Nonnull))block
                  completion:(nullable iTermCallback *)completion {
-    iTermGraphDeltaEncoder *encoder = [[iTermGraphDeltaEncoder alloc] initWithPreviousRevision:_record];
+    DLog(@"updateSynchronously:%@", @(sync));
+    assert([NSThread isMainThread]);
+    if (_invalid) {
+        DLog(@"Invalid, so fail");
+        [completion invokeWithObject:@NO];
+        return YES;
+    }
+    if (self.updating && !sync) {
+        DLog(@"Already updating and asynchronous, do nothing.");
+        return NO;
+    }
+    DLog(@"beginUpdate");
+    [self beginUpdate];
+    iTermGraphDeltaEncoder *encoder = [[iTermGraphDeltaEncoder alloc] initWithPreviousRevision:self.record];
     block(encoder);
     __weak __typeof(self) weakSelf = self;
 
     void (^perform)(iTermGraphDatabaseState *) = ^(iTermGraphDatabaseState *state) {
-        [weakSelf trySaveEncoder:encoder state:state];
-        [completion invokeWithObject:nil];
+        DLog(@"Perform weakSelf=%@", weakSelf);
+        if (!self->_invalid) {
+            [weakSelf trySaveEncoder:encoder state:state completion:completion];
+        }
+        DLog(@"endUpdate");
+        [weakSelf endUpdate];
     };
     if (sync) {
+        DLog(@"dispatch sync");
         [_thread dispatchSync:perform];
     } else {
+        DLog(@"dispatch async");
         [_thread dispatchAsync:perform];
     }
-    _record = encoder.record;
+    return YES;
 }
 
-- (id<iTermDatabase>)db {
-    __block id<iTermDatabase> db = nil;
-    [_thread dispatchSync:^(iTermGraphDatabaseState *state) {
-        db = state.db;
+- (void)invalidateSynchronously:(BOOL)sync {
+    if (sync) {
+        [_thread dispatchSync:^(iTermGraphDatabaseState *_Nullable state) {
+            [self reallyInvalidate:state];
+        }];
+    } else {
+        [_thread dispatchAsync:^(iTermGraphDatabaseState *_Nullable state) {
+            [self reallyInvalidate:state];
+        }];
+    }
+}
+
+- (void)reallyInvalidate:(iTermGraphDatabaseState *)state {
+    _invalid = YES;
+    [state.db executeUpdate:@"delete from Node"];
+    [state.db close];
+    state.db = nil;
+}
+
+- (void)whenReady:(void (^)(void))readyBlock {
+    [_thread dispatchAsync:^(iTermGraphDatabaseState *state) {
+        [state addLoadCompleteBlock:readyBlock];
     }];
-    return db;
 }
 
 #pragma mark - Private
 
-- (void)trySaveEncoder:(iTermGraphDeltaEncoder *)encoder state:(iTermGraphDatabaseState *)state {
-    if ([self save:encoder state:state]) {
-        _recoveryCount = 0;
-        return;
-    }
-
-    DLog(@"save failed: %@ with recovery count %@", self.db.lastError, @(_recoveryCount));
-    if (_recoveryCount >= 3) {
-        DLog(@"Not attempting recovery.");
-        return;
-    }
-    _recoveryCount += 1;
-    [self attemptRecovery:state record:encoder.record];
+// any queue
+- (BOOL)updating {
+    return _updating > 0;
 }
 
-- (void)attemptRecovery:(iTermGraphDatabaseState *)state
-                 record:(iTermEncoderGraphRecord *)record {
-#warning TEST THIS
+// any queue
+- (void)beginUpdate {
+    _updating++;
+}
+
+// any queue
+- (void)endUpdate {
+    _updating--;
+}
+
+// This will mutate encoder.record.
+// NOTE: It is critical that the completion block not be called synchronously.
+- (void)trySaveEncoder:(iTermGraphDeltaEncoder *)originalEncoder
+                 state:(iTermGraphDatabaseState *)state
+            completion:(nullable iTermCallback *)completion {
+    DLog(@"trySaveEncoder");
+    iTermGraphDeltaEncoder *encoder = originalEncoder;
+    BOOL ok = YES;
+    @try {
+        if (!state.db) {
+            ok = NO;
+            DLog(@"I have no db");
+            return;
+        }
+        if ([self save:encoder state:state]) {
+            _recoveryCount = 0;
+            DLog(@"Save succeeded");
+            return;
+        }
+
+        DLog(@"save failed: %@ with recovery count %@", state.db.lastError, @(_recoveryCount));
+        if (_recoveryCount >= 3) {
+            DLog(@"Not attempting recovery.");
+            ok = NO;
+            return;
+        }
+        _recoveryCount += 1;
+        // Create a fresh encoder that's not in a partially broken state. Replace the encoder pointer
+        // so we can get its record below, as a successful recovery mutates the record by setting
+        // rowids in it.
+        encoder = [[iTermGraphDeltaEncoder alloc] initWithRecord:originalEncoder.record];
+        ok = [self attemptRecovery:state encoder:encoder];
+    } @catch (NSException *exception) {
+        ITAssertWithMessage(NO, @"%@", exception.it_compressedDescription);
+    } @finally {
+        [completion invokeWithObject:@(ok)];
+        if (ok) {
+            // If we were able to save, then use this record as the new baseline. Note that we
+            // very carefully take it from encoder, not originalEncoder, because regardless of
+            // whether a recovery was attempted `encoder.record` has the correct rowids.
+            self.record = encoder.record;
+        }
+    }
+}
+
+// On failure, the db will be closed.
+- (BOOL)attemptRecovery:(iTermGraphDatabaseState *)state
+                encoder:(iTermGraphDeltaEncoder *)encoder {
+    if (!state.db) {
+        return NO;
+    }
     [state.db close];
     [state.db unlink];
-    if (![self createDatabase:state factory:_databaseFactory]) {
-        return;
+    if (![self openAndInitializeDatabase:state]) {
+        DLog(@"Failed to open and initialize datbase after deleting it.");
+        return NO;
     }
-    iTermGraphDeltaEncoder *encoder = [[iTermGraphDeltaEncoder alloc] initWithRecord:record];
-    [self reallySave:encoder state:state];
+    if (!encoder) {
+        DLog(@"Opened database after deleting it. There is no record to save.");
+        return YES;
+    }
+    DLog(@"Save record after deleting and creating database.");
+    const BOOL ok = [self save:encoder state:state];
+    if (!ok) {
+        [state.db close];
+        return NO;
+    }
+    return YES;
 }
 
 - (BOOL)save:(iTermGraphDeltaEncoder *)encoder
        state:(iTermGraphDatabaseState *)state {
-    if (!state.db) {
-        return YES;
-    }
+    DLog(@"save");
+    assert(state.db);
 
     const BOOL ok = [state.db transaction:^BOOL{
         return [self reallySave:encoder state:state];
     }];
     if (!ok) {
-        DLog(@"Transaction commit failed: %@", state.db.lastError);
+        [encoder.record eraseRowIDs];
+        DLog(@"Commit transaction failed: %@", state.db.lastError);
     }
     return ok;
 }
 
+// Runs within a transaction.
 - (BOOL)reallySave:(iTermGraphDeltaEncoder *)encoder
              state:(iTermGraphDatabaseState *)state {
     DLog(@"Start saving");
@@ -143,9 +301,12 @@
     [encoder enumerateRecords:^(iTermEncoderGraphRecord * _Nullable before,
                                 iTermEncoderGraphRecord * _Nullable after,
                                 NSNumber *parent,
+                                NSString *path,
                                 BOOL *stop) {
-        if (before) {
-            assert(before.rowid);
+        if (before && !before.rowid) {
+            @throw [NSException exceptionWithName:@"MissingRowID"
+                                           reason:[NSString stringWithFormat:@"Before lacking a rowid: %@", before]
+                                         userInfo:nil];
         }
         if (before && !after) {
             if (![state.db executeUpdate:@"delete from Node where rowid=?", before.rowid]) {
@@ -161,11 +322,22 @@
                 return;
             }
             NSNumber *lastInsertRowID = state.db.lastInsertRowId;
+            if (parent.integerValue == 0) {
+                DLog(@"Insert root node with path %@, rowid %@", path, lastInsertRowID);
+            }
             assert(lastInsertRowID);
-            after.rowid = lastInsertRowID;
+            @try {
+                // Issue 9117
+                after.rowid = lastInsertRowID;
+            } @catch (NSException *exception) {
+                @throw [exception it_rethrowWithMessage:@"after.key=%@ after.identifier=%@", after.key, after.identifier];
+            }
             return;
         }
         if (before && after) {
+            if (before.parent == nil) {
+                DLog(@"Updating root with path %@, rowid %@", path, before.rowid);
+            }
             if (after.rowid == nil) {
                 after.rowid = before.rowid;
             } else {
@@ -197,46 +369,71 @@
     if (![state.db executeUpdate:@"create table if not exists Node (key text not null, identifier text not null, parent integer not null, data blob)"]) {
         return NO;
     }
+    [state.db executeUpdate:@"create index if not exists parent_index on Node (parent)"];
 
+    // Delete nodes without parents.
+    [state.db executeUpdate:
+     @"delete from Node where "
+     @"  rowid in ("
+     @"    select child.rowid as id "
+     @"      from "
+     @"        Node as child"
+     @"        left join "
+     @"          Node as parentNode "
+     @"          on parentNode.rowid = child.parent "
+     @"      where "
+     @"        parentNode.rowid is NULL and "
+     @"        child.parent != 0"
+     @"  )"];
     return YES;
 }
 
-- (BOOL)createDatabase:(iTermGraphDatabaseState *)state
-               factory:(id<iTermDatabaseFactory>)databaseFactory {
-    state.db = [databaseFactory withURL:_url];
+// If this returns YES, the database is open and has the expected tables.
+- (BOOL)openAndInitializeDatabase:(iTermGraphDatabaseState *)state {
     if (![state.db open]) {
         return NO;
     }
 
     if (![self createTables:state]) {
         DLog(@"Create table failed: %@", state.db.lastError);
+        [state.db close];
         return NO;
     }
     return YES;
 }
 
 - (iTermEncoderGraphRecord * _Nullable)load:(iTermGraphDatabaseState *)state
-                                    factory:(id<iTermDatabaseFactory>)databaseFactory {
-    if (![self createDatabase:state factory:databaseFactory]) {
-        return nil;
-    }
-    _ok = YES;
-
+                                      error:(out NSError **)error {
+    DLog(@"load");
     NSMutableArray<NSArray *> *nodes = [NSMutableArray array];
     {
+        DLog(@"select from Node...");
         FMResultSet *rs = [state.db executeQuery:@"select key, identifier, parent, rowid, data from Node"];
         while ([rs next]) {
+            DLog(@"Read row");
             [nodes addObject:@[ [rs stringForColumn:@"key"],
                                 [rs stringForColumn:@"identifier"],
                                 @([rs longLongIntForColumn:@"parent"]),
                                 @([rs longLongIntForColumn:@"rowid"]),
                                 [rs dataForColumn:@"data"] ?: [NSData data] ]];
         }
+        DLog(@"Select done");
         [rs close];
     }
 
+    DLog(@"Begin transforming");
     iTermGraphTableTransformer *transformer = [[iTermGraphTableTransformer alloc] initWithNodeRows:nodes];
-    return transformer.root;
+    iTermEncoderGraphRecord *record = transformer.root;
+    DLog(@"Done transforming");
+
+    if (!record) {
+        if (error) {
+            *error = transformer.lastError;
+        }
+        return nil;
+    }
+
+    return record;
 }
 
 @end

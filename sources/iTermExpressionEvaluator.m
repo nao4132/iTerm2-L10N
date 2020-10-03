@@ -19,6 +19,13 @@
 #import "NSObject+iTerm.h"
 #import "NSStringITerm.h"
 
+@interface iTermExpressionEvaluator(Private)
+- (void)didCompleteWithResult:(id)result
+                        error:(NSError *)error
+                      missing:(NSSet<NSString *> *)missing
+                   completion:(void (^)(iTermExpressionEvaluator *))completion;
+@end
+
 @implementation iTermExpressionEvaluator {
     BOOL _hasBeenEvaluated;
     BOOL _isBeingEvaluated;

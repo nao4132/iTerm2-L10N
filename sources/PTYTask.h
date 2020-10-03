@@ -37,7 +37,8 @@ typedef NS_ENUM(NSUInteger, iTermJobManagerForkAndExecStatus) {
     iTermJobManagerForkAndExecStatusTempFileError,
     iTermJobManagerForkAndExecStatusFailedToFork,
     iTermJobManagerForkAndExecStatusTaskDiedImmediately,
-    iTermJobManagerForkAndExecStatusServerError
+    iTermJobManagerForkAndExecStatusServerError,
+    iTermJobManagerForkAndExecStatusServerLaunchFailed
 };
 
 typedef NS_ENUM(NSUInteger, iTermJobManagerKillingMode) {
@@ -66,6 +67,9 @@ typedef struct {
     };
 } iTermGeneralServerConnection;
 
+@protocol iTermJobManagerPartialResult<NSObject>
+@end
+
 @protocol iTermJobManager<NSObject>
 
 @property (atomic) int fd;
@@ -78,6 +82,8 @@ typedef struct {
 @property (atomic, readonly) BOOL ioAllowed;
 @property (atomic, readonly) dispatch_queue_t queue;
 @property (atomic, readonly) BOOL isReadOnly;
+
++ (BOOL)available;
 
 - (instancetype)initWithQueue:(dispatch_queue_t)queue;
 
@@ -109,6 +115,22 @@ typedef NS_OPTIONS(NSUInteger, iTermJobManagerAttachResults) {
 // Atomic. Only closes it once. Returns YES if close() called, NO if already closed.
 - (BOOL)closeFileDescriptor;
 
+@optional
+// Attach to the server before an iTermTask exists.
+- (void)asyncPartialAttachToServer:(iTermGeneralServerConnection)serverConnection
+                     withProcessID:(NSNumber *)thePid
+                        completion:(void (^)(id<iTermJobManagerPartialResult> result))completion;
+
+// After a partial attach, call this to register (if needed) and compute the attach results.
+- (iTermJobManagerAttachResults)finishAttaching:(id<iTermJobManagerPartialResult>)result
+                                           task:(id<iTermTask>)task;
+
+@end
+
+@protocol iTermPartialAttachment
+@property (nonatomic, strong) id<iTermJobManagerPartialResult> partialResult;
+@property (nonatomic, strong) id<iTermJobManager> jobManager;
+@property (nonatomic, strong) dispatch_queue_t queue;
 @end
 
 @interface PTYTask : NSObject<iTermLogging>
@@ -199,5 +221,11 @@ typedef NS_OPTIONS(NSUInteger, iTermJobManagerAttachResults) {
 
 - (void)getWorkingDirectoryWithCompletion:(void (^)(NSString *pwd))completion;
 
-@end
+- (void)partiallyAttachToMultiserverWithRestorationIdentifier:(NSDictionary *)restorationIdentifier
+                                                   completion:(void (^)(id<iTermJobManagerPartialResult>))completion;
 
+- (iTermJobManagerAttachResults)finishAttachingToMultiserver:(id<iTermJobManagerPartialResult>)partialResult
+                                                  jobManager:(id<iTermJobManager>)jobManager
+                                                       queue:(dispatch_queue_t)queue;
+
+@end

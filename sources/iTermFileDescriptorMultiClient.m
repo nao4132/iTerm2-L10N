@@ -15,6 +15,8 @@
 #import "iTermMalloc.h"
 #import "iTermMultiServerMessage.h"
 #import "iTermMultiServerMessageBuilder.h"
+#import "iTermNotificationController.h"
+#import "iTermRateLimitedUpdate.h"
 #import "iTermResult.h"
 #import "iTermThreadSafety.h"
 #import "iTermWarning.h"
@@ -137,6 +139,7 @@ NSString *const iTermFileDescriptorMultiClientErrorDomain = @"iTermFileDescripto
                     status:(iTermFileDescriptorMultiClientAttachStatus)status
                   callback:(iTermCallback<id, NSNumber *> *)callback {
     switch (status) {
+        case iTermFileDescriptorMultiClientAttachStatusInProgress:
         case iTermFileDescriptorMultiClientAttachStatusSuccess:
             DLog(@"Attached to %@. Will handshake.", _socketPath);
             [self handshakeWithState:state callback:callback];
@@ -170,7 +173,10 @@ NSString *const iTermFileDescriptorMultiClientErrorDomain = @"iTermFileDescripto
 
     // Connect to the socket. This gets us the reading file descriptor.
     int temp = -1;
-    iTermFileDescriptorMultiClientAttachStatus status = iTermConnectToUnixDomainSocket(_socketPath.UTF8String, &temp);
+    iTermFileDescriptorMultiClientAttachStatus status =
+    iTermConnectToUnixDomainSocket(_socketPath,
+                                   &temp,
+                                   0 /* async */);
     state.readFD = temp;
     if (status != iTermFileDescriptorMultiClientAttachStatusSuccess) {
         // Server dead or already connected.
@@ -228,9 +234,16 @@ NSString *const iTermFileDescriptorMultiClientErrorDomain = @"iTermFileDescripto
     DLog(@"Handshake with %@", _socketPath);
 
     iTermCallback<id, NSNumber *> *innerCallback =
-    [_thread newCallbackWithWeakTarget:self
-                              selector:@selector(handshakeDidCompleteWithState:ok:userInfo:)
-                              userInfo:callback];
+    [_thread newCallbackWithBlock:^(iTermFileDescriptorMultiClientState *state,
+                                    NSNumber *handshakeOK) {
+        // All child reports have been read, or it failed and we're giving up.
+        DLog(@"Handshake completed for %@", self->_socketPath);
+        if (!handshakeOK.boolValue) {
+            DLog(@"HANDSHAKE FAILED FOR %@", self->_socketPath);
+            [self closeWithState:state];
+        }
+        [callback invokeWithObject:handshakeOK];
+    }];
     __weak __typeof(self) weakSelf = self;
     [self sendHandshakeRequestWithState:state
                                callback:[_thread newCallbackWithBlock:^(iTermFileDescriptorMultiClientState *state,
@@ -396,19 +409,6 @@ NSString *const iTermFileDescriptorMultiClientErrorDomain = @"iTermFileDescripto
             completion(state, NO);
         }];
     }]];
-}
-
-// Called after all children are reported during handshake.
-- (void)handshakeDidCompleteWithState:(iTermFileDescriptorMultiClientState *)state
-                                   ok:(NSNumber *)handshakeOK
-                             userInfo:(id)userInfo {
-    DLog(@"Handshake completed for %@", _socketPath);
-    iTermCallback<id, NSNumber *> *callback = [iTermCallback forceCastFrom:userInfo];
-    if (!handshakeOK.boolValue) {
-        DLog(@"HANDSHAKE FAILED FOR %@", _socketPath);
-        [self closeWithState:state];
-    }
-    [callback invokeWithObject:handshakeOK];
 }
 
 // Called during handshake as children are reported.
@@ -696,15 +696,18 @@ static unsigned long long MakeUniqueID(void) {
     return [[[NSFileManager defaultManager] applicationSupportDirectory] stringByAppendingPathComponent:filename];
 }
 
-- (void)showError:(NSError *)error message:(NSString *)message {
+- (void)showError:(NSError *)error message:(NSString *)message badURL:(NSURL *)url {
     dispatch_async(dispatch_get_main_queue(), ^{
-        [iTermWarning showWarningWithTitle:[NSString stringWithFormat:@"%@: %@", message, error.localizedDescription]
-                                   actions:@[ @"OK" ]
-                                 accessory:nil
-                                identifier:@"DaemonSetupError"
-                               silenceable:kiTermWarningTypePersistent
-                                   heading:@"Problem Initializing iTerm2 Daemon"
-                                    window:nil];
+        static iTermRateLimitedUpdate *rateLimit;
+        static dispatch_once_t onceToken;
+        dispatch_once(&onceToken, ^{
+            rateLimit = [[iTermRateLimitedUpdate alloc] init];
+            rateLimit.minimumInterval = 2;
+        });
+        [rateLimit performRateLimitedBlock:^{
+            [[iTermNotificationController sharedInstance] notify:@"Problem Starting iTerm2 Daemon"
+                                                 withDescription:message];
+        }];
     });
 }
 
@@ -722,7 +725,9 @@ static unsigned long long MakeUniqueID(void) {
                                                 toPath:desiredPath
                                                  error:&error];
         if (error) {
-            [self showError:error message:[NSString stringWithFormat:@"Could not copy %@ to %@", sourcePath, desiredPath]];
+            [self showError:error
+                    message:[NSString stringWithFormat:@"Could not copy %@ to %@", sourcePath, desiredPath]
+                     badURL:[NSURL fileURLWithPath:desiredPath]];
             return nil;
         }
     }
@@ -732,7 +737,9 @@ static unsigned long long MakeUniqueID(void) {
         NSError *error = nil;
         NSDictionary *attributes = [fileManager attributesOfItemAtPath:desiredPath error:&error];
         if (error) {
-            [self showError:error message:[NSString stringWithFormat:@"Could not check permissions on %@", desiredPath]];
+            [self showError:error
+                    message:[NSString stringWithFormat:@"Could not check permissions on %@", desiredPath]
+                     badURL:[NSURL fileURLWithPath:desiredPath]];
             return nil;
         }
         NSNumber *permissions = attributes[NSFilePosixPermissions];
@@ -748,7 +755,9 @@ static unsigned long long MakeUniqueID(void) {
                                          ofItemAtPath:desiredPath
                                                 error:&error];
         if (error) {
-            [self showError:error message:[NSString stringWithFormat:@"Could not set 0700 permissions on %@", desiredPath]];
+            [self showError:error
+                    message:[NSString stringWithFormat:@"Could not set 0700 permissions on %@", desiredPath]
+                     badURL:[NSURL fileURLWithPath:desiredPath]];
             return nil;
         }
     }

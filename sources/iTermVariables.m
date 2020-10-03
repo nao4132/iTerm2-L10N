@@ -61,6 +61,7 @@ NSString *const iTermVariableKeySessionIconName = @"terminalIconName";
 NSString *const iTermVariableKeySessionTriggerName = @"triggerName";
 NSString *const iTermVariableKeySessionWindowName = @"terminalWindowName";
 NSString *const iTermVariableKeySessionJob = @"jobName";
+NSString *const iTermVariableKeySessionProcessTitle = @"processTitle";
 NSString *const iTermVariableKeySessionCommandLine = @"commandLine";
 NSString *const iTermVariableKeySessionPresentationName = @"presentationName";
 NSString *const iTermVariableKeySessionTmuxPaneTitle = @"tmuxPaneTitle";
@@ -79,6 +80,7 @@ NSString *const iTermVariableKeySessionTab = @"tab";
 NSString *const iTermVariableKeySessionSelection = @"selection";
 NSString *const iTermVariableKeySessionSelectionLength = @"selectionLength";
 NSString *const iTermVariableKeySessionParent = @"parentSession";
+NSString *const iTermVariableKeySessionBellCount = @"bellCount";
 
 #pragma mark - Window Context
 

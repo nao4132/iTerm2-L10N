@@ -10,6 +10,7 @@
 #import "DebugLogging.h"
 #import "ITAddressBookMgr.h"
 #import "iTermOpenDirectory.h"
+#import "NSStringITerm.h"
 #import "ProfileModel.h"
 #import "pidinfo.h"
 #include <stdatomic.h>
@@ -54,10 +55,19 @@
     _connectionToService = [[NSXPCConnection alloc] initWithServiceName:@"com.iterm2.pidinfo"];
     _connectionToService.remoteObjectInterface = [NSXPCInterface interfaceWithProtocol:@protocol(pidinfoProtocol)];
     [_connectionToService resume];
-    __weak __typeof(self) weakSelf;
+
+    __weak __typeof(self) weakSelf = self;
     _connectionToService.invalidationHandler = ^{
+        // I can't manage to get this called. This project:
+        // https://github.com/brenwell/EvenBetterAuthorizationSample
+        // originally from:
+        // https://developer.apple.com/library/archive/samplecode/EvenBetterAuthorizationSample/Introduction/Intro.html
+        // seems to have been written carefully and states that you can retry creating the
+        // connection on the main thread.
         DLog(@"Invalidated");
-        [weakSelf didInvalidateConnection];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [weakSelf didInvalidateConnection];
+        });
     };
 }
 
@@ -78,7 +88,9 @@
         if (!exists) {
             return;
         }
-        completion(exists.boolValue);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            completion(exists.boolValue);
+        });
     }];
 }
 
@@ -90,7 +102,7 @@
                                                    withReply:^(NSData * _Nullable data,
                                                                NSData * _Nullable error,
                                                                int status) {
-        completion(status == 0 ? [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] : nil);
+        completion(status == 0 ? [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] stringByTrimmingTrailingCharactersFromCharacterSet:[NSCharacterSet newlineCharacterSet]] : nil);
     }];
 }
 

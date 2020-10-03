@@ -358,13 +358,25 @@ static const CGFloat iTermStatusBarViewControllerBottomMargin = 0;
     [self.delegate statusBarPerformAction:action];
 }
 
-- (void)statusBarComponentRevealActionsTool:(id<iTermStatusBarComponent>)component {
-    [self.delegate statusBarRevealActionsTool];
+- (void)statusBarComponentEditActions:(id<iTermStatusBarComponent>)component {
+    [self.delegate statusBarEditActions];
+}
+
+- (void)statusBarComponentEditSnippets:(id<iTermStatusBarComponent>)component {
+    [self.delegate statusBarEditSnippets];
 }
 
 - (void)statusBarComponentResignFirstResponder:(id<iTermStatusBarComponent>)component {
     [self.delegate statusBarResignFirstResponder];
 }
+
+- (void)statusBarComponent:(id<iTermStatusBarComponent>)component
+      reportScriptingError:(NSError *)error
+             forInvocation:(NSString *)invocation
+                    origin:(NSString *)origin {
+    [self.delegate statusBarReportScriptingError:error forInvocation:invocation origin:origin];
+}
+
 
 #pragma mark - iTermStatusBarContainerViewDelegate
 
@@ -420,7 +432,11 @@ static const CGFloat iTermStatusBarViewControllerBottomMargin = 0;
     [_autoRainbowController enumerateColorsWithCount:_visibleContainerViews.count block:^(NSInteger i, NSColor * _Nonnull color) {
         id<iTermStatusBarComponent> component = _visibleContainerViews[i].component;
         NSMutableDictionary *knobValues = [component.configuration[iTermStatusBarComponentConfigurationKeyKnobValues] mutableCopy];
-        knobValues[iTermStatusBarSharedTextColorKey] = [color dictionaryValue];
+        NSDictionary *colorDict = [color dictionaryValue];
+        if ([knobValues[iTermStatusBarSharedTextColorKey] isEqualToDictionary:colorDict]) {
+            return;
+        }
+        knobValues[iTermStatusBarSharedTextColorKey] = colorDict;
         [component statusBarComponentSetKnobValues:knobValues];
     }];
 }

@@ -22,20 +22,12 @@ NSInteger iTermGenerationAlwaysEncode = NSIntegerMax;
     NSInteger _generation;
     NSString *_key;
     NSMutableArray<iTermEncoderGraphRecord *> *_children;
-    NSNumber *_Nullable _rowid;
     iTermEncoderGraphRecord *_record;
 }
 
 - (instancetype)initWithKey:(NSString *)key
                  identifier:(NSString *)identifier
                  generation:(NSInteger)generation {
-    return [self initWithKey:key identifier:identifier generation:generation rowid:nil];
-}
-
-- (instancetype)initWithKey:(NSString *)key
-                 identifier:(NSString *)identifier
-                 generation:(NSInteger)generation
-                      rowid:(NSNumber * _Nullable)rowid {
     assert(identifier);
     self = [super init];
     if (self) {
@@ -49,7 +41,6 @@ NSInteger iTermGenerationAlwaysEncode = NSIntegerMax;
         _pod = [NSMutableDictionary dictionary];
         _children = [NSMutableArray array];
         _state = iTermGraphEncoderStateLive;
-        _rowid = rowid;
     }
     return self;
 }
@@ -57,8 +48,7 @@ NSInteger iTermGenerationAlwaysEncode = NSIntegerMax;
 - (instancetype)initWithRecord:(iTermEncoderGraphRecord *)record {
     iTermGraphEncoder *encoder = [self initWithKey:record.key
                                         identifier:record.identifier
-                                        generation:record.generation
-                                             rowid:nil];
+                                        generation:record.generation];
     if (!encoder) {
         return nil;
     }
@@ -143,7 +133,8 @@ NSInteger iTermGenerationAlwaysEncode = NSIntegerMax;
                          options:0
                            block:^BOOL (NSString * _Nonnull identifier,
                                    NSInteger index,
-                                   iTermGraphEncoder * _Nonnull subencoder) {
+                                   iTermGraphEncoder * _Nonnull subencoder,
+                                        BOOL *stop) {
             [subencoder encodeObject:array[index] key:@"__arrayValue"];
             return YES;
         }];
@@ -201,21 +192,27 @@ NSInteger iTermGenerationAlwaysEncode = NSIntegerMax;
                    options:(iTermGraphEncoderArrayOptions)options
                      block:(BOOL (^ NS_NOESCAPE)(NSString *identifier,
                                                  NSInteger index,
-                                                 iTermGraphEncoder *subencoder))block {
+                                                 iTermGraphEncoder *subencoder,
+                                                 BOOL *stop))block {
     [self encodeChildWithKey:@"__array"
                   identifier:key
                   generation:generation
                        block:^BOOL(iTermGraphEncoder * _Nonnull subencoder) {
+        NSMutableArray<NSString *> *savedIdentifiers = [NSMutableArray array];
         [identifiers enumerateObjectsUsingBlock:^(NSString * _Nonnull identifier,
                                                   NSUInteger idx,
                                                   BOOL * _Nonnull stop) {
             [subencoder transaction:^BOOL {
                 return [subencoder encodeChildWithKey:@"" identifier:identifier generation:iTermGenerationAlwaysEncode block:^BOOL(iTermGraphEncoder * _Nonnull subencoder) {
-                    return block(identifier, idx, subencoder);
+                    const BOOL result = block(identifier, idx, subencoder, stop);
+                    if (result) {
+                        [savedIdentifiers addObject:identifier];
+                    }
+                    return result;
                 }];
             }];
         }];
-        NSArray<NSString *> *orderedIdentifiers = identifiers;
+        NSArray<NSString *> *orderedIdentifiers = savedIdentifiers;
         if (options & iTermGraphEncoderArrayOptionsReverse) {
             orderedIdentifiers = orderedIdentifiers.reversed;
         }
@@ -232,7 +229,7 @@ NSInteger iTermGenerationAlwaysEncode = NSIntegerMax;
                                              generation:_generation
                                                     key:_key
                                              identifier:_identifier
-                                                  rowid:_rowid];
+                                                  rowid:nil];
             _state = iTermGraphEncoderStateCommitted;
             return _record;
 

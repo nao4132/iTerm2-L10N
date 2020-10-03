@@ -90,9 +90,6 @@ int decode_utf8_char(const unsigned char * restrict datap,
 // Replaces tab with ^V + tab.
 - (NSString *)stringWithShellEscapedTabs;
 
-// Properly escapes chars for a string to stick in a URL query param.
-- (NSString*)stringWithPercentEscape;
-
 // Convert DOS-style and \n newlines to \r newlines.
 - (NSString*)stringWithLinefeedNewlines;
 
@@ -158,10 +155,7 @@ int decode_utf8_char(const unsigned char * restrict datap,
 
 - (NSString *)stringByRemovingEnclosingBrackets;
 
-- (NSString *)stringByEscapingForURL;
 - (NSString *)stringByCapitalizingFirstLetter;
-
-- (NSArray<NSString *> *)helpfulSynonyms;
 
 // String starts with http:// or https://. Used to tell if a custom prefs
 // location is a path or URL.
@@ -252,7 +246,7 @@ int decode_utf8_char(const unsigned char * restrict datap,
 // A fast, non-crypto-quality hash.
 - (NSUInteger)hashWithDJB2;
 
-- (NSUInteger)firstCharacter;
+- (UTF32Char)firstCharacter;
 // Is this a phrase enclosed in quotation marks?
 - (BOOL)isInQuotationMarks;
 
@@ -312,6 +306,8 @@ int decode_utf8_char(const unsigned char * restrict datap,
 - (NSString *)it_twoPartVersionNumber;
 - (NSString *)stringByEscapingForSandboxLiteral;
 - (NSString *)stringByDroppingLastCharacters:(NSInteger)count;
+- (NSString *)stringByKeepingLastCharacters:(NSInteger)count;
+- (NSString *)stringByTrimmingOrphanedSurrogates;
 
 - (NSString *)stringByAppendingVariablePathComponent:(NSString *)component;
 - (NSString *)stringByAppendingPathComponents:(NSArray<NSString *> *)pathComponents;
@@ -331,6 +327,9 @@ int decode_utf8_char(const unsigned char * restrict datap,
 
 // Perform substitutions in order.
 - (NSString *)stringByPerformingOrderedSubstitutions:(iTermOrderedDictionary<NSString *, NSString *> *)substitutions;
+- (NSString *)stringByReplacingCharactersAtIndices:(NSIndexSet *)indexSet
+                               withStringFromBlock:(NSString *(^ NS_NOESCAPE)(void))replacement;
+- (BOOL)caseInsensitiveHasPrefix:(NSString *)prefix;
 @end
 
 @interface NSMutableString (iTerm)

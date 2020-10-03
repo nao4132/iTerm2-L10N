@@ -107,7 +107,9 @@ extern NSString *const PTYTabVariableTitleOverride;
                hasFlexibleView:(BOOL)hasFlexible
                        viewMap:(NSDictionary<NSNumber *, SessionView *> *)viewMap
                     sessionMap:(NSDictionary<NSString *, PTYSession *> *)sessionMap
-                tmuxController:(TmuxController *)tmuxController;
+                tmuxController:(TmuxController *)tmuxController
+            partialAttachments:(NSDictionary *)partialAttachments
+              reservedTabGUIDs:(NSSet<NSString *> *)reservedTabGUIDs;
 
 + (NSDictionary<NSString *, PTYSession *> *)sessionMapWithArrangement:(NSDictionary *)arrangement
                                                              sessions:(NSArray *)sessions;
@@ -127,6 +129,9 @@ extern NSString *const PTYTabVariableTitleOverride;
 
 + (NSDictionary *)arrangementForSessionWithGUID:(NSString *)sessionGUID
                                   inArrangement:(NSDictionary *)arrangement;
+
++ (void)openPartialAttachmentsForArrangement:(NSDictionary *)arrangement
+                                  completion:(void (^)(NSDictionary *))completion;
 
 // init/dealloc
 - (instancetype)initWithSession:(PTYSession *)session
@@ -197,7 +202,8 @@ extern NSString *const PTYTabVariableTitleOverride;
 // arrangement with matching session unique IDs will be assigned those
 // SessionView's.
 - (void)updateFlexibleViewColors;
-- (NSDictionary*)arrangement;
+- (NSDictionary *)arrangement;
+- (NSDictionary *)arrangementWithNewGUID;
 
 - (void)notifyWindowChanged;
 - (void)maximize;

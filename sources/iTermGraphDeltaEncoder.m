@@ -27,6 +27,9 @@
     assert(identifier);
     self = [super initWithKey:key identifier:identifier generation:generation];
     if (self) {
+        if (previousRevision && !previousRevision.rowid) {
+            ITBetaAssert(NO, @"Previous revision lacks a rowID: %@", previousRevision);
+        }
         _previousRevision = previousRevision;
     }
     return self;
@@ -69,21 +72,31 @@
 - (BOOL)enumerateRecords:(void (^)(iTermEncoderGraphRecord * _Nullable before,
                                    iTermEncoderGraphRecord * _Nullable after,
                                    NSNumber *parent,
+                                   NSString *path,
                                    BOOL *stop))block {
     BOOL stop = NO;
-    block(_previousRevision, self.record, @0, &stop);
+    @try {
+        block(_previousRevision, self.record, @0, @"root", &stop);
+    } @catch (NSException *exception) {
+        [exception it_rethrowWithMessage:@"(1) %@ vs %@",
+         _previousRevision.compactDescription,
+         self.record.compactDescription];
+    }
+
     if (stop) {
         return NO;
     }
-    return [self enumerateBefore:_previousRevision after:self.record parent:self.record.rowid block:block];
+    return [self enumerateBefore:_previousRevision after:self.record parent:self.record.rowid path:@"root" block:block];
 }
 
 - (BOOL)enumerateBefore:(iTermEncoderGraphRecord *)preRecord
                   after:(iTermEncoderGraphRecord *)postRecord
                  parent:(NSNumber *)parent
+                   path:(NSString *)path
                   block:(void (^)(iTermEncoderGraphRecord * _Nullable before,
                                   iTermEncoderGraphRecord * _Nullable after,
                                   NSNumber *parent,
+                                  NSString *path,
                                   BOOL *stop))block {
     iTermOrderedDictionary<NSDictionary *, iTermEncoderGraphRecord *> *beforeDict =
     [iTermOrderedDictionary byMapping:preRecord.graphRecords block:^id _Nonnull(NSUInteger index,
@@ -100,21 +113,40 @@
     __block BOOL ok = YES;
     void (^handle)(NSDictionary *,
                    iTermEncoderGraphRecord *,
+                   NSString *,
                    BOOL *) = ^(NSDictionary *key,
                                iTermEncoderGraphRecord *record,
+                               NSString *path,
                                BOOL *stop) {
         iTermEncoderGraphRecord *before = beforeDict[key];
         iTermEncoderGraphRecord *after = afterDict[key];
-        block(before, after, parent, stop);
-        // Now recurse for their descendants.
-        ok = [self enumerateBefore:before
-                             after:after
-                            parent:before ? before.rowid : after.rowid
-                             block:block];
+        @try {
+            block(before, after, parent, path, stop);
+        } @catch (NSException *exception) {
+            [exception it_rethrowWithMessage:@"(2) %@ [%@] vs %@ [%@]",
+             before.compactDescription,
+             beforeDict.debugString,
+             after.compactDescription,
+             afterDict.debugString];
+        }
+        @try {
+            // Now recurse for their descendants.
+            ok = [self enumerateBefore:before
+                                 after:after
+                                parent:before ? before.rowid : after.rowid
+                                  path:path
+                                 block:block];
+        } @catch (NSException *exception) {
+            [exception it_rethrowWithMessage:@"(3) %@ [%@] vs %@ [%@]",
+             before.compactDescription,
+             beforeDict.debugString,
+             after.compactDescription,
+             afterDict.debugString];
+        }
     };
     NSMutableSet<NSDictionary *> *seenKeys = [NSMutableSet set];
     [beforeDict.keys enumerateObjectsUsingBlock:^(NSDictionary * _Nonnull key, NSUInteger idx, BOOL * _Nonnull stop) {
-        handle(key, beforeDict[key], stop);
+        handle(key, beforeDict[key], [NSString stringWithFormat:@"%@.%@[%@]", path, key[@"key"], key[@"identifier"]], stop);
         [seenKeys addObject:key];
     }];
     if (!ok) {
@@ -124,7 +156,7 @@
         if ([seenKeys containsObject:key]) {
             return;
         }
-        handle(key, afterDict[key], stop);
+        handle(key, afterDict[key], [NSString stringWithFormat:@"%@.%@[%@]", path, key[@"key"], key[@"identifier"]], stop);
     }];
     return ok;
 }

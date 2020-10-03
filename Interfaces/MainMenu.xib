@@ -450,10 +450,24 @@ DQ
                                 </menu>
                             </menuItem>
                             <menuItem isSeparatorItem="YES" id="EC1-3K-Gyr"/>
+                            <menuItem title="Snippets" id="s0f-jP-7Pk" userLabel="Snippets">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <menu key="submenu" title="Snippets" id="sOq-3j-vtq" userLabel="Snippets"/>
+                            </menuItem>
+                            <menuItem title="Actions" id="8Ja-GB-Waf" userLabel="Snippets">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <menu key="submenu" title="Actions" id="w4F-uL-QPB" userLabel="Snippets"/>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="6Wz-M8-IFF"/>
                             <menuItem title="Open Selection" keyEquivalent="o" identifier="Open Selection" id="upW-1r-eM7">
                                 <modifierMask key="keyEquivalentModifierMask" option="YES" command="YES"/>
                                 <connections>
                                     <action selector="openSelection:" target="-1" id="iqq-zv-3ZQ"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Jump to Selection" keyEquivalent="j" identifier="Find.Jump to Selection" id="764">
+                                <connections>
+                                    <action selector="jumpToSelection:" target="-1" id="770"/>
                                 </connections>
                             </menuItem>
                             <menuItem isSeparatorItem="YES" id="ILa-Wg-F9W"/>
@@ -505,9 +519,9 @@ DQ
                                                 <action selector="performFindPanelAction:" target="-1" id="Vts-fb-OCE"/>
                                             </connections>
                                         </menuItem>
-                                        <menuItem title="Jump to Selection" keyEquivalent="j" identifier="Find.Jump to Selection" id="764">
+                                        <menuItem title="Find Globally..." keyEquivalent="F" identifier="Find.Find Globally..." id="yIL-PC-jnC">
                                             <connections>
-                                                <action selector="jumpToSelection:" target="-1" id="770"/>
+                                                <action selector="findGlobally:" target="201" id="Oyc-5J-YYw"/>
                                             </connections>
                                         </menuItem>
                                         <menuItem isSeparatorItem="YES" id="PJB-Pw-4PO">
@@ -713,6 +727,7 @@ Gw
                                 </connections>
                             </menuItem>
                             <menuItem title="Composer" keyEquivalent="." identifier="Composer" id="Bhs-45-5yR">
+                                <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
                                 <connections>
                                     <action selector="compose:" target="-1" id="dCP-co-yhy"/>
                                 </connections>
@@ -927,10 +942,35 @@ DQ
                                                 <action selector="terminalStateToggleApplicationKeypad:" target="-1" id="vqM-de-PE3"/>
                                             </connections>
                                         </menuItem>
-                                        <menuItem title="Report Modifiers with CSI u" tag="7" identifier="Reprot Modifiers with CSI u" id="NiW-ZC-qkW">
+                                        <menuItem isSeparatorItem="YES" id="Csl-Na-fLA"/>
+                                        <menuItem title="Standard Key Reporting Mode" tag="7" identifier="Terminal State.Standard Key Reporting" id="NiW-ZC-qkW">
                                             <modifierMask key="keyEquivalentModifierMask"/>
                                             <connections>
                                                 <action selector="terminalStateToggleApplicationKeypad:" target="-1" id="dEu-4i-avK"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="modifyOtherKeys Mode 1" tag="8" identifier="Terminal State.Report Modifiers like xterm 1" id="xK3-pO-8bT">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="terminalStateToggleApplicationKeypad:" target="-1" id="V3u-fZ-VC2"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="modifyOtherKeys Mode 2" tag="9" identifier="Terminal State.Report Modifiers like xterm 2" id="kN6-Ru-Vvk">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="terminalStateToggleApplicationKeypad:" target="-1" id="hFh-Cz-Vqt"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="CSI u Mode" tag="10" identifier="Terminal State.Report Modifiers with CSI u" id="Qlm-EZ-J8K">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="terminalStateToggleApplicationKeypad:" target="-1" id="kMi-Ez-WPl"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Raw Key Reporting Mode" tag="11" identifier="Terminal State.Raw Key Reporting" id="HUg-bw-Kax">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="terminalStateToggleApplicationKeypad:" target="-1" id="Io8-vc-lTj"/>
                                             </connections>
                                         </menuItem>
                                         <menuItem isSeparatorItem="YES" id="JGI-zr-cwU"/>
@@ -1094,6 +1134,80 @@ DQ
                             <menuItem isSeparatorItem="YES" id="885">
                                 <modifierMask key="keyEquivalentModifierMask" command="YES"/>
                             </menuItem>
+                            <menuItem title="Window Style" id="Va7-Bb-mhX">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <menu key="submenu" title="Window Style" id="9u2-er-NQu">
+                                    <items>
+                                        <menuItem title="Normal" state="on" identifier="Window Style.Normal" id="2GY-cf-R3u">
+                                            <connections>
+                                                <action selector="setWindowStyle:" target="-1" id="sRK-2W-In4"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem isSeparatorItem="YES" id="cm0-u9-eJW"/>
+                                        <menuItem title="Full Screen" tag="1" identifier="Window Style.Full Screen" id="7YH-d7-iVT">
+                                            <connections>
+                                                <action selector="setWindowStyle:" target="-1" id="cAM-6K-gHa"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Maximized" tag="15" identifier="Window Style.Maximized" id="yOg-Xf-9Ja">
+                                            <connections>
+                                                <action selector="setWindowStyle:" target="-1" id="TUw-ln-UTt"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem isSeparatorItem="YES" id="MSa-Cc-Jw0"/>
+                                        <menuItem title="No Title Bar" tag="12" identifier="Window Style.No Title Bar" id="c9F-P9-dcr">
+                                            <connections>
+                                                <action selector="setWindowStyle:" target="-1" id="GQA-tc-adb"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem isSeparatorItem="YES" id="xVP-RA-UyC"/>
+                                        <menuItem title="Full-Width Bottom of Screen" tag="5" identifier="Window Style.FullWidth Bottom of Screen" id="VcO-5C-gYt">
+                                            <connections>
+                                                <action selector="setWindowStyle:" target="-1" id="AoZ-YA-7dw"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Full-Width Top of Screen" tag="2" identifier="Window Style.FullWidth Top of Screen" id="xx4-Ao-jke">
+                                            <connections>
+                                                <action selector="setWindowStyle:" target="-1" id="shN-Pz-FqQ"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Full-Height Left of Screen" tag="6" identifier="Window Style..FullHeight Left of Screen" id="8Up-pV-Ad7">
+                                            <connections>
+                                                <action selector="setWindowStyle:" target="-1" id="GTz-qr-LxZ"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Full-Height Right of Screen" tag="7" identifier="Window Style.FullHeight Right of Screen" id="Nbx-zl-DQO">
+                                            <connections>
+                                                <action selector="setWindowStyle:" target="-1" id="jq8-Pr-NnW"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem isSeparatorItem="YES" id="blF-GQ-heM"/>
+                                        <menuItem title="Bottom of Screen" tag="8" identifier="Window Style.Bottom of Screen" id="GpQ-q3-0fg">
+                                            <connections>
+                                                <action selector="setWindowStyle:" target="-1" id="NHP-PY-C6A"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Top of Screen" tag="9" identifier="Window Style.Top of Screen" id="K5f-FR-QxY">
+                                            <connections>
+                                                <action selector="setWindowStyle:" target="-1" id="f2J-Yh-4Qa"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Left of Screen" tag="10" identifier="Window Style.Left of Screen" id="5VM-vY-8EI">
+                                            <connections>
+                                                <action selector="setWindowStyle:" target="-1" id="Meg-Ft-YBN"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Right of Screen" tag="11" identifier="Window Style.Right of Screen" id="Xma-aq-b5U">
+                                            <connections>
+                                                <action selector="setWindowStyle:" target="-1" id="q3g-dB-W5d"/>
+                                            </connections>
+                                        </menuItem>
+                                    </items>
+                                </menu>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="XJx-vd-H4Y">
+                                <modifierMask key="keyEquivalentModifierMask" command="YES"/>
+                            </menuItem>
                             <menuItem title="Merge All Windows" identifier="Merge All Windows" id="Kb8-2V-7Gg">
                                 <modifierMask key="keyEquivalentModifierMask"/>
                                 <connections>
@@ -1113,15 +1227,6 @@ DQ
                                 </connections>
                             </menuItem>
                             <menuItem isSeparatorItem="YES" id="1466">
-                                <modifierMask key="keyEquivalentModifierMask" command="YES"/>
-                            </menuItem>
-                            <menuItem title="Exposé all Tabs" keyEquivalent="e" identifier="Exposé all Tabs" id="1231">
-                                <modifierMask key="keyEquivalentModifierMask" option="YES" command="YES"/>
-                                <connections>
-                                    <action selector="exposeForTabs:" target="201" id="1232"/>
-                                </connections>
-                            </menuItem>
-                            <menuItem isSeparatorItem="YES" id="849">
                                 <modifierMask key="keyEquivalentModifierMask" command="YES"/>
                             </menuItem>
                             <menuItem title="Save Window Arrangement" keyEquivalent="S" identifier="Save Window Arrangement" id="1205">
@@ -1372,12 +1477,15 @@ DQ
         </customObject>
         <customObject id="266" userLabel="Font Manager" customClass="NSFontManager"/>
         <customObject id="879" userLabel="SUUpdater" customClass="SUUpdater"/>
-        <menuItem isSeparatorItem="YES" id="TYx-JS-5H0"/>
-        <menuItem title="Mouse Reporting" id="y5H-9R-t1f">
-            <modifierMask key="keyEquivalentModifierMask"/>
-        </menuItem>
-        <menuItem title="Application Keypad Mode" id="gvK-7r-3df" userLabel="Application Cursor Keys">
-            <modifierMask key="keyEquivalentModifierMask"/>
-        </menuItem>
+        <customObject id="vNk-ru-3oN" userLabel="Snippets Menu Controller" customClass="iTermSnippetsMenuController">
+            <connections>
+                <outlet property="_menuItem" destination="s0f-jP-7Pk" id="Yh8-jB-GRV"/>
+            </connections>
+        </customObject>
+        <customObject id="EJt-fO-K8I" userLabel="Actions Menu Controller" customClass="iTermActionsMenuController">
+            <connections>
+                <outlet property="_menu" destination="8Ja-GB-Waf" id="a0G-8e-2dj"/>
+            </connections>
+        </customObject>
     </objects>
 </document>

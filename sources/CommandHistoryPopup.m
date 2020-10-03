@@ -26,13 +26,16 @@
 @implementation CommandHistoryPopupWindowController {
     IBOutlet NSTableView *_tableView;
     int _partialCommandLength;
+    BOOL _autocomplete;
 }
 
-- (instancetype)init {
+- (instancetype)initForAutoComplete:(BOOL)autocomplete {
     self = [super initWithWindowNibName:@"CommandHistoryPopup"
                                tablePtr:nil
                                   model:[[[PopupModel alloc] init] autorelease]];
     if (self) {
+        _autocomplete = autocomplete;
+        [self window];
         [self setTableView:_tableView];
     }
 
@@ -90,13 +93,71 @@
     }
 }
 
-- (void)rowSelected:(id)sender
-{
+- (void)rowSelected:(id)sender {
     if ([_tableView selectedRow] >= 0) {
-        CommandHistoryPopupEntry* entry = [[self model] objectAtIndex:[self convertIndex:[_tableView selectedRow]]];
-        [self.delegate popupInsertText:[entry.command substringFromIndex:_partialCommandLength]];
-        [super rowSelected:sender];
+        const NSEventModifierFlags flags = [[NSApp currentEvent] modifierFlags];
+        CommandHistoryPopupEntry *entry = [[self model] objectAtIndex:[self convertIndex:[_tableView selectedRow]]];
+        const NSEventModifierFlags mask = NSEventModifierFlagShift | NSEventModifierFlagOption;
+        NSString *const string = [entry.command substringFromIndex:_partialCommandLength];
+        if (!_autocomplete || (flags & mask) == NSEventModifierFlagShift) {
+            [self.delegate popupInsertText:string];
+            [super rowSelected:sender];
+            return;
+        } else if (_autocomplete && (flags & mask) == NSEventModifierFlagOption) {
+            [self.delegate popupInsertText:[string stringByAppendingString:@"\n"]];
+            [super rowSelected:sender];
+            return;
+        }
     }
+    [self.delegate popupInsertText:@"\n"];
+    [super rowSelected:sender];
+}
+
+// Called for option+return
+- (void)insertNewlineIgnoringFieldEditor:(id)sender {
+    [self rowSelected:sender];
+}
+
+- (NSString *)footerString {
+    if (!_autocomplete) {
+        return nil;
+    }
+    return @"Press ⇧⏎ or ⌥⏎ to send command.";
+}
+
+- (void)moveLeft:(id)sender {
+    if (_autocomplete && NSApp.currentEvent.type == NSEventTypeKeyDown) {
+        [self.delegate popupKeyDown:NSApp.currentEvent];
+        [self closePopupWindow];
+    } else {
+        [super moveLeft:sender];
+    }
+}
+
+- (void)moveRight:(id)sender {
+    if (_autocomplete && NSApp.currentEvent.type == NSEventTypeKeyDown) {
+        [self.delegate popupKeyDown:NSApp.currentEvent];
+        [self closePopupWindow];
+    } else {
+        [super moveLeft:sender];
+    }
+}
+
+- (void)doCommandBySelector:(SEL)selector {
+    if (_autocomplete && NSApp.currentEvent.type == NSEventTypeKeyDown) {
+        // Control-C and such should go to the session.
+        [self.delegate popupKeyDown:NSApp.currentEvent];
+    } else {
+        [super doCommandBySelector:selector];
+    }
+}
+
+- (void)insertTab:(nullable id)sender {
+    if (!_autocomplete) {
+        return;
+    }
+    // Don't steal tab.
+    [self passKeyEventToDelegateForSelector:_cmd string:@"\t"];
 }
 
 @end

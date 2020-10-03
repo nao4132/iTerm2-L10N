@@ -470,6 +470,12 @@ NSString *const kPreferenceDidChangeFromOtherPanelKeyUserInfoKey = @"key";
     return info;
 }
 
+- (void)setControl:(NSControl *)control inPreference:(PreferenceInfo *)info {
+    [_keyMap removeObjectForKey:info.control];
+    info.control = control;
+    [_keyMap setObject:info forKey:control];
+}
+
 - (NSString *)displayNameForControl:(NSControl *)control
                         relatedView:(NSView *)relatedView
                                type:(PreferenceInfoType)type
@@ -918,14 +924,14 @@ NSString *const kPreferenceDidChangeFromOtherPanelKeyUserInfoKey = @"key";
 }
 
 - (void)resizeWindowForView:(NSView *)theView tabView:(NSTabView *)tabView animated:(BOOL)animated {
-    const CGFloat minimumWidthForOuterTabView = 380;  // Reserve space for general, appearance, profiles, etc. buttons
+    const CGFloat minimumWidthForOuterTabView = 644;  // Reserve space for general, appearance, profiles, etc. buttons
     const CGFloat kTabViewMinWidth = MAX(minimumWidthForOuterTabView, self.minimumWidth);
     const CGFloat inset = NSWidth(tabView.bounds) - NSWidth(theView.superview.bounds);
     const CGFloat bottomMargin = 36;
     CGSize tabViewSize = NSMakeSize(MAX(kTabViewMinWidth, theView.bounds.size.width) + inset,
                                     theView.bounds.size.height + bottomMargin);
     NSRect frame = [self windowFrameForTabViewSize:tabViewSize tabView:tabView];
-    frame.size.width = MAX(iTermSharedPreferencePanelWindowMinimumWidth, frame.size.width);
+    frame.size.width = MAX(iTermPreferencePanelGetWindowMinimumWidth(), frame.size.width);
     if (NSEqualRects(_desiredFrame, frame)) {
         return;
     }

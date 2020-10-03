@@ -166,6 +166,8 @@ static BOOL iTermAPIHelperLastApplescriptAuthRequiredSetting;
             return [NSString stringWithFormat:@"title.%@", [self.sessionTitleAttributes.uniqueIdentifier stringByReplacingOccurrencesOfString:@"-" withString:@"_"]];
         case ITMRPCRegistrationRequest_RoleSpecificAttributes_OneOfCase_StatusBarComponentAttributes:
             return [NSString stringWithFormat:@"statusbar.%@", [self.statusBarComponentAttributes.uniqueIdentifier  stringByReplacingOccurrencesOfString:@"-" withString:@"_"]];
+        case ITMRPCRegistrationRequest_RoleSpecificAttributes_OneOfCase_ContextMenuAttributes:
+            return [NSString stringWithFormat:@"contextMenu.%@", [self.contextMenuAttributes.uniqueIdentifier  stringByReplacingOccurrencesOfString:@"-" withString:@"_"]];
     }
 }
 
@@ -543,6 +545,10 @@ static BOOL iTermAPIHelperLastApplescriptAuthRequiredSetting;
 
 + (NSArray<ITMRPCRegistrationRequest *> *)statusBarComponentProviderRegistrationRequests {
     return [sAPIHelperInstance statusBarComponentProviderRegistrationRequests] ?: @[];
+}
+
++ (NSArray<ITMRPCRegistrationRequest *> *)contextMenuProviderRegistrationRequests {
+    return [sAPIHelperInstance contextMenuProviderRegistrationRequests] ?: @[];
 }
 
 + (BOOL)confirmShouldStartServerAndUpdateUserDefaultsForced:(BOOL)forced {
@@ -1208,6 +1214,19 @@ static BOOL iTermAPIHelperLastApplescriptAuthRequiredSetting;
     }];
 }
 
+- (NSArray<ITMRPCRegistrationRequest *> *)contextMenuProviderRegistrationRequests {
+    return [self.serverOriginatedRPCSubscriptions.allKeys mapWithBlock:^id(NSString *signature) {
+        ITMNotificationRequest *req = self.serverOriginatedRPCSubscriptions[signature].secondObject;
+        if (!req) {
+            return nil;
+        }
+        if (req.rpcRegistrationRequest.role != ITMRPCRegistrationRequest_Role_ContextMenu) {
+            return nil;
+        }
+        return req.rpcRegistrationRequest;
+    }];
+}
+
 + (ITMRPCRegistrationRequest *)registrationRequestForStatusBarComponentWithUniqueIdentifier:(NSString *)uniqueIdentifier {
     return [[[self sharedInstance] statusBarComponentProviderRegistrationRequests] objectPassingTest:^BOOL(ITMRPCRegistrationRequest *request, NSUInteger index, BOOL *stop) {
         return [request.statusBarComponentAttributes.uniqueIdentifier isEqualToString:uniqueIdentifier];
@@ -1712,6 +1731,7 @@ static BOOL iTermAPIHelperLastApplescriptAuthRequiredSetting;
                 case ITMRPCRegistrationRequest_Role_StatusBarComponent:
                     [self didRegisterStatusBarComponent:request.rpcRegistrationRequest.statusBarComponentAttributes
                                            onConnection:connectionKey];
+                case ITMRPCRegistrationRequest_Role_ContextMenu:
                     break;
             }
         } else {
@@ -2732,8 +2752,10 @@ static BOOL iTermAPIHelperLastApplescriptAuthRequiredSetting;
 }
 
 - (void)apiServerVariable:(ITMVariableRequest *)request handler:(void (^)(ITMVariableResponse *))handler {
+    NSString *userPrefix = @"user.";
     const BOOL allSetNamesLegal = [request.setArray allWithBlock:^BOOL(ITMVariableRequest_Set *setRequest) {
-        return [setRequest.name hasPrefix:@"user."];
+        return ([setRequest.name hasPrefix:userPrefix] &&
+                [[setRequest.name substringFromIndex:userPrefix.length] rangeOfString:@"."].location == NSNotFound);
     }];
     if (!allSetNamesLegal) {
         ITMVariableResponse *response = [[ITMVariableResponse alloc] init];
@@ -3602,14 +3624,16 @@ static BOOL iTermCheckSplitTreesIsomorphic(ITMSplitTreeNode *node1, ITMSplitTree
     const NSInteger absoluteOffset = session.screen.totalScrollbackOverflow;
     for (iTermSubSelection *sub in selection.allSubSelections) {
         ITMSubSelection *subProto = [[ITMSubSelection alloc] init];
-        subProto.windowedCoordRange.coordRange.start.x = sub.range.coordRange.start.x;
-        subProto.windowedCoordRange.coordRange.start.y = absoluteOffset + sub.range.coordRange.start.y;
-        subProto.windowedCoordRange.coordRange.end.x = sub.range.coordRange.end.x;
-        subProto.windowedCoordRange.coordRange.end.y = absoluteOffset + sub.range.coordRange.end.y;
+        const long long overflow = session.screen.totalScrollbackOverflow;
+        const VT100GridWindowedRange relativeRange = VT100GridWindowedRangeFromAbsWindowedRange(sub.absRange, overflow);
+        subProto.windowedCoordRange.coordRange.start.x = relativeRange.coordRange.start.x;
+        subProto.windowedCoordRange.coordRange.start.y = absoluteOffset + relativeRange.coordRange.start.y;
+        subProto.windowedCoordRange.coordRange.end.x = relativeRange.coordRange.end.x;
+        subProto.windowedCoordRange.coordRange.end.y = absoluteOffset + relativeRange.coordRange.end.y;
         subProto.connected = sub.connected;
-        if (sub.range.columnWindow.length > 0) {
-            subProto.windowedCoordRange.columns.location = sub.range.columnWindow.location;
-            subProto.windowedCoordRange.columns.length = sub.range.columnWindow.length;
+        if (relativeRange.columnWindow.length > 0) {
+            subProto.windowedCoordRange.columns.location = relativeRange.columnWindow.location;
+            subProto.windowedCoordRange.columns.length = relativeRange.columnWindow.length;
         }
         switch (sub.selectionMode) {
             case kiTermSelectionModeWholeLine:
@@ -3690,7 +3714,9 @@ static BOOL iTermCheckSplitTreesIsomorphic(ITMSplitTreeNode *node1, ITMSplitTree
         if (mode == NSNotFound) {
             return nil;
         }
-        iTermSubSelection *sub = [iTermSubSelection subSelectionWithRange:range mode:mode width:width];
+        const long long overflow = session.screen.totalScrollbackOverflow;
+        VT100GridAbsWindowedRange absRange = VT100GridAbsWindowedRangeFromWindowedRange(range, overflow);
+        iTermSubSelection *sub = [iTermSubSelection subSelectionWithAbsRange:absRange mode:mode width:width];
         return sub;
     }];
 

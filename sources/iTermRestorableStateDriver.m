@@ -20,29 +20,37 @@ static NSString *const iTermRestorableStateControllerUserDefaultsKeyCount = @"No
 #pragma mark - Save
 
 - (void)save {
+    assert([NSThread isMainThread]);
     [self saveSynchronously:NO];
 }
 
 - (void)saveSynchronously {
+    assert([NSThread isMainThread]);
     [self saveSynchronously:YES];
 }
 
 - (void)saveSynchronously:(BOOL)sync {
-    DLog(@"save");
+    assert([NSThread isMainThread]);
+    DLog(@"save sync=%@ saver=%@", @(sync), _saver);
     if (_saving) {
         DLog(@"Currently saving. Set needsSave.");
         _needsSave = YES;
         return;
     }
-    _needsSave = NO;
-    __weak __typeof(self) weakSelf;
-    [_saver saveSynchronously:sync withCompletion:^{
+    __weak __typeof(self) weakSelf = self;
+    const BOOL saved = [_saver saveSynchronously:sync withCompletion:^{
         [weakSelf didSave];
     }];
+    // Do this after saveSynchronously:withCompletion:. It guarantees not to run its completion block
+    // synchronously. It could fail if it was already busy saving, in which case we don't want
+    // to reset _needsSave. Considering it is busy, the other guy will eventually finish and cause
+    // didSave to be called, and it will try again.
+    _needsSave = !saved;
 }
 
 // Main queue
 - (void)didSave {
+    assert([NSThread isMainThread]);
     DLog(@"didSave");
     _saving = NO;
     if (_needsSave) {
@@ -53,15 +61,25 @@ static NSString *const iTermRestorableStateControllerUserDefaultsKeyCount = @"No
 
 #pragma mark - Restore
 
-- (void)restoreWithCompletion:(void (^)(void))completion {
+- (void)restoreWithReady:(void (^)(void))ready
+              completion:(void (^)(void))completion {
     DLog(@"restoreWindows");
-    if (![[NSUserDefaults standardUserDefaults] boolForKey:@"NSQuitAlwaysKeepsWindows"]) {
-        DLog(@"NSQuitAlwaysKeepsWindows=NO");
+    if (!self.restorer) {
+        DLog(@"Have no restorer.");
+        ready();
         completion();
         return;
     }
-    id<iTermRestorableStateIndex> index = [self.restorer restorableStateIndex];
+    __weak __typeof(self) weakSelf = self;
+    [self.restorer loadRestorableStateIndexWithCompletion:^(id<iTermRestorableStateIndex> index) {
+        [weakSelf restoreWithIndex:index ready:ready completion:completion];
+    }];
+}
 
+- (void)restoreWithIndex:(id<iTermRestorableStateIndex>)index
+                   ready:(void (^)(void))ready
+              completion:(void (^)(void))completion {
+    DLog(@"Have an index. Proceeding to restore windows.");
     const NSInteger count = [[NSUserDefaults standardUserDefaults] integerForKey:iTermRestorableStateControllerUserDefaultsKeyCount];
     if (count > 1) {
         const iTermWarningSelection selection =
@@ -76,21 +94,27 @@ static NSString *const iTermRestorableStateControllerUserDefaultsKeyCount = @"No
             [index restorableStateIndexUnlink];
             [[NSUserDefaults standardUserDefaults] setInteger:0
                                                        forKey:iTermRestorableStateControllerUserDefaultsKeyCount];
+            DLog(@"Ready after warning");
+            ready();
             completion();
             return;
         }
     }
     [[NSUserDefaults standardUserDefaults] setInteger:count + 1
                                                forKey:iTermRestorableStateControllerUserDefaultsKeyCount];
+    DLog(@"set restoring to YES");
     _restoring = YES;
     [self reallyRestoreWindows:index withCompletion:^{
         [self didRestoreFromIndex:index];
         completion();
     }];
+    DLog(@"Ready - normal case");
+    ready();
 }
 
 // Main queue
 - (void)didRestoreFromIndex:(id<iTermRestorableStateIndex>)index {
+    DLog(@"set restoring to NO");
     _restoring = NO;
     [[NSUserDefaults standardUserDefaults] setInteger:0
                                                forKey:iTermRestorableStateControllerUserDefaultsKeyCount];
@@ -127,8 +151,8 @@ static NSString *const iTermRestorableStateControllerUserDefaultsKeyCount = @"No
 
 #pragma mark - Erase
 
-- (void)erase {
-    [self.restorer eraseStateRestorationData];
+- (void)eraseSynchronously:(BOOL)sync {
+    [self.restorer eraseStateRestorationDataSynchronously:sync];
 }
 
 @end

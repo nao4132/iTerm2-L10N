@@ -14,6 +14,7 @@
 @class LineBuffer;
 @class VT100LineInfo;
 @class VT100Terminal;
+@protocol iTermEncoderAdapter;
 
 @protocol VT100GridDelegate <NSObject>
 - (screen_char_t)gridForegroundColorCode;
@@ -49,11 +50,14 @@
 @property(nonatomic, assign) BOOL haveScrolled;
 
 // Serialized state, but excludes screen contents.
+// DEPRECATED - use encode: instead.
 @property(nonatomic, readonly) NSDictionary *dictionaryValue;
 
 + (VT100GridSize)sizeInStateDictionary:(NSDictionary *)dict;
 
 - (instancetype)initWithSize:(VT100GridSize)size delegate:(id<VT100GridDelegate>)delegate;
+- (instancetype)initWithDictionary:(NSDictionary *)dictionary
+                          delegate:(id<VT100GridDelegate>)delegate;
 
 - (screen_char_t *)screenCharsAtLineNumber:(int)lineNumber;
 
@@ -219,6 +223,8 @@
 
 // Returns a string for the character at |coord|.
 - (NSString *)stringForCharacterAt:(VT100GridCoord)coord;
+- (VT100GridCoord)successorOf:(VT100GridCoord)coord;
+- (screen_char_t)characterAt:(VT100GridCoord)coord;
 
 // Converts a run into one or more VT100GridRect NSValues.
 - (NSArray *)rectsForRun:(VT100GridRun)run;
@@ -263,6 +269,7 @@
 - (NSArray *)orderedLines;
 
 // Restore saved state excluding screen contents.
+// DEPRECATED - use initWithDictionary:delegate: instead.
 - (void)setStateFromDictionary:(NSDictionary *)dict;
 
 // Reset timestamps to the uninitialized state.
@@ -270,6 +277,9 @@
 
 // If there is a preferred cursor position that is legal, restore it.
 - (void)restorePreferredCursorPositionIfPossible;
+
+// Saves restorable state. Goes with initWithDictionary:delegate:
+- (void)encode:(id<iTermEncoderAdapter>)encoder;
 
 #pragma mark - Testing use only
 

@@ -8,7 +8,6 @@
 #import "iTermAdvancedSettingsModel.h"
 #import "iTermCapturedOutputMark.h"
 #import "iTermColorMap.h"
-#import "iTermExpose.h"
 #import "iTermNotificationController.h"
 #import "iTermImage.h"
 #import "iTermImageInfo.h"
@@ -59,7 +58,6 @@ NSString *const kScreenStateShellIntegrationInstalledKey = @"Shell Integration I
 NSString *const kScreenStateLastCommandMarkKey = @"Last Command Mark";
 NSString *const kScreenStatePrimaryGridStateKey = @"Primary Grid State";
 NSString *const kScreenStateAlternateGridStateKey = @"Alternate Grid State";
-NSString *const kScreenStateNumberOfLinesDroppedKey = @"Number of Lines Dropped";
 NSString *const kScreenStateCursorCoord = @"Cursor Coord";
 
 int kVT100ScreenMinColumns = 2;
@@ -506,17 +504,20 @@ const NSInteger VT100ScreenBigFileDownloadThreshold = 1024 * 1024 * 1024;
              newHeight:newHeight];
     NSMutableArray *altScreenSubSelectionTuples = [NSMutableArray array];
     for (iTermSubSelection *sub in selection.allSubSelections) {
-        VT100GridCoordRange range = sub.range.coordRange;
-        LineBufferPositionRange *positionRange =
-        [self positionRangeForCoordRange:range
-                            inLineBuffer:lineBufferWithAltScreen
-                           tolerateEmpty:NO];
-        if (positionRange) {
-            [altScreenSubSelectionTuples addObject:@[ positionRange, sub ]];
-        } else {
-            DLog(@"Failed to get position range for selection on alt screen %@",
-                 VT100GridCoordRangeDescription(range));
-        }
+        VT100GridAbsCoordRangeTryMakeRelative(sub.absRange.coordRange,
+                                              self.totalScrollbackOverflow,
+                                              ^(VT100GridCoordRange range) {
+            LineBufferPositionRange *positionRange =
+            [self positionRangeForCoordRange:range
+                                inLineBuffer:lineBufferWithAltScreen
+                               tolerateEmpty:NO];
+            if (positionRange) {
+                [altScreenSubSelectionTuples addObject:@[ positionRange, sub ]];
+            } else {
+                DLog(@"Failed to get position range for selection on alt screen %@",
+                     VT100GridCoordRangeDescription(range));
+            }
+        });
     }
     return altScreenSubSelectionTuples;
 }
@@ -565,23 +566,32 @@ const NSInteger VT100ScreenBigFileDownloadThreshold = 1024 * 1024 * 1024;
 - (NSArray *)subSelectionsWithConvertedRangesFromSelection:(iTermSelection *)selection
                                                   newWidth:(int)newWidth {
     NSMutableArray *newSubSelections = [NSMutableArray array];
+    const long long overflow = self.totalScrollbackOverflow;
     for (iTermSubSelection *sub in selection.allSubSelections) {
-        VT100GridCoordRange newSelection;
         DLog(@"convert sub %@", sub);
-        BOOL ok = [self convertRange:sub.range.coordRange
-                             toWidth:newWidth
-                                  to:&newSelection
-                        inLineBuffer:linebuffer_
-                       tolerateEmpty:NO];
-        if (ok) {
-            assert(sub.range.coordRange.start.y >= 0);
-            assert(sub.range.coordRange.end.y >= 0);
-            VT100GridWindowedRange theRange = VT100GridWindowedRangeMake(newSelection, 0, 0);
-            iTermSubSelection *theSub =
-            [iTermSubSelection subSelectionWithRange:theRange mode:sub.selectionMode width:newWidth];
-            theSub.connected = sub.connected;
-            [newSubSelections addObject:theSub];
-        }
+        VT100GridAbsCoordRangeTryMakeRelative(sub.absRange.coordRange,
+                                              overflow,
+                                              ^(VT100GridCoordRange range) {
+            VT100GridCoordRange newSelection;
+            const BOOL ok = [self convertRange:range
+                                       toWidth:newWidth
+                                            to:&newSelection
+                                  inLineBuffer:linebuffer_
+                                 tolerateEmpty:NO];
+            if (ok) {
+                assert(range.start.y >= 0);
+                assert(range.end.y >= 0);
+                const VT100GridWindowedRange relativeRange = VT100GridWindowedRangeMake(newSelection, 0, 0);
+                const VT100GridAbsWindowedRange absRange =
+                    VT100GridAbsWindowedRangeFromWindowedRange(relativeRange, overflow);
+                iTermSubSelection *theSub =
+                [iTermSubSelection subSelectionWithAbsRange:absRange
+                                                       mode:sub.selectionMode
+                                                      width:newWidth];
+                theSub.connected = sub.connected;
+                [newSubSelections addObject:theSub];
+            }
+        });
     }
     return newSubSelections;
 }
@@ -643,11 +653,12 @@ const NSInteger VT100ScreenBigFileDownloadThreshold = 1024 * 1024 * 1024;
                                                 range:&newSelection
                                          linesMovedUp:linesMovedUp];
         if (ok) {
-            VT100GridWindowedRange theRange =
-            VT100GridWindowedRangeMake(newSelection, 0, 0);
-            iTermSubSelection *theSub = [iTermSubSelection subSelectionWithRange:theRange
-                                                                            mode:originalSub.selectionMode
-                                                                           width:self.width];
+            const VT100GridAbsWindowedRange theRange =
+            VT100GridAbsWindowedRangeMake(VT100GridAbsCoordRangeFromCoordRange(newSelection, self.totalScrollbackOverflow),
+                                          0, 0);
+            iTermSubSelection *theSub = [iTermSubSelection subSelectionWithAbsRange:theRange
+                                                                               mode:originalSub.selectionMode
+                                                                              width:self.width];
             theSub.connected = originalSub.connected;
             [newSubSelections addObject:theSub];
         }
@@ -839,14 +850,12 @@ const NSInteger VT100ScreenBigFileDownloadThreshold = 1024 * 1024 * 1024;
     [delegate_ screenNeedsRedraw];
     if (couldHaveSelection) {
         NSMutableArray *subSelectionsToAdd = [NSMutableArray array];
-        for (iTermSubSelection* sub in newSubSelections) {
-            VT100GridCoordRange newSelection = sub.range.coordRange;
-            if (newSelection.start.y >= linesDropped &&
-                newSelection.end.y >= linesDropped) {
-                newSelection.start.y -= linesDropped;
-                newSelection.end.y -= linesDropped;
+        for (iTermSubSelection *sub in newSubSelections) {
+            VT100GridAbsCoordRangeTryMakeRelative(sub.absRange.coordRange,
+                                                  self.totalScrollbackOverflow,
+                                                  ^(VT100GridCoordRange range) {
                 [subSelectionsToAdd addObject:sub];
-            }
+            });
         }
         [selection addSubSelections:subSelectionsToAdd];
     }
@@ -1195,7 +1204,7 @@ const NSInteger VT100ScreenBigFileDownloadThreshold = 1024 * 1024 * 1024;
                                              toLineBuffer:source->linebuffer_];
 
     LineBufferPosition *startPos = source->linebuffer_.firstPosition;
-    FindContext *context = [[FindContext alloc] init];
+    FindContext *context = [[[FindContext alloc] init] autorelease];
     [source->linebuffer_ prepareToSearchFor:query
                                  startingAt:startPos
                                     options:FindMultipleResults
@@ -1901,7 +1910,7 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
     return [self numberOfLines] - [self height] + currentGrid_.cursorY;
 }
 
-- (BOOL)continueFindAllResults:(NSMutableArray *)results
+- (BOOL)continueFindAllResults:(NSMutableArray<SearchResult *> *)results
                      inContext:(FindContext*)context {
     context.hasWrapped = YES;
     NSDate* start = [NSDate date];
@@ -2138,10 +2147,8 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
                  info:&info];
 }
 
-- (BOOL)shouldSendContentsChangedNotification
-{
-    return ([[iTermExpose sharedInstance] isVisible] ||
-            [delegate_ screenShouldSendContentsChangedNotification]);
+- (BOOL)shouldSendContentsChangedNotification {
+    return [delegate_ screenShouldSendContentsChangedNotification];
 }
 
 - (VT100GridRange)dirtyRangeForLine:(int)y {
@@ -2674,7 +2681,12 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
     return objects;
 }
 
-- (int)lineNumberOfMarkBeforeLine:(int)line {
+- (long long)lineNumberOfMarkBeforeAbsLine:(long long)absLine {
+    const long long overflow = self.totalScrollbackOverflow;
+    const long long line = absLine - overflow;
+    if (line < 0 || line > INT_MAX) {
+        return -1;
+    }
     Interval *interval = [self intervalForGridCoordRange:VT100GridCoordRangeMake(0, line, 0, line)];
     NSEnumerator *enumerator = [intervalTree_ reverseLimitEnumeratorAt:interval.limit];
     NSArray *objects = [enumerator nextObject];
@@ -2682,7 +2694,7 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
         for (id object in objects) {
             if ([object isKindOfClass:[VT100ScreenMark class]]) {
                 VT100ScreenMark *mark = object;
-                return [self coordRangeForInterval:mark.entry.interval].start.y;
+                return overflow + [self coordRangeForInterval:mark.entry.interval].start.y;
             }
         }
         objects = [enumerator nextObject];
@@ -2690,7 +2702,12 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
     return -1;
 }
 
-- (int)lineNumberOfMarkAfterLine:(int)line {
+- (long long)lineNumberOfMarkAfterAbsLine:(long long)absLine {
+    const long long overflow = self.totalScrollbackOverflow;
+    const long long line = absLine - overflow;
+    if (line < 0 || line > INT_MAX) {
+        return -1;
+    }
     Interval *interval = [self intervalForGridCoordRange:VT100GridCoordRangeMake(0, line + 1, 0, line + 1)];
     NSEnumerator *enumerator = [intervalTree_ forwardLimitEnumeratorAt:interval.limit];
     NSArray *objects = [enumerator nextObject];
@@ -2698,7 +2715,7 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
         for (id object in objects) {
             if ([object isKindOfClass:[VT100ScreenMark class]]) {
                 VT100ScreenMark *mark = object;
-                return [self coordRangeForInterval:mark.entry.interval].end.y;
+                return overflow + [self coordRangeForInterval:mark.entry.interval].end.y;
             }
         }
         objects = [enumerator nextObject];
@@ -4180,7 +4197,11 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
 }
 
 - (void)terminalDidChangeSendModifiers {
-    [delegate_ screenSetUseCSIu:terminal_.sendModifiers[4].intValue];
+    // CSI u is too different from xterm's modifyOtherKeys to allow the terminal to change it with
+    // xterm's control sequences. Lots of strange problems appear with vim. For example, mailing
+    // list thread with subject "Control Keys Failing After System Bell".
+    // TODO: terminal_.sendModifiers[i] holds the settings. See xterm's modifyOtherKeys and friends.
+    [self.delegate screenSendModifiersDidChange];
 }
 
 - (void)terminalDidFinishReceivingFile {
@@ -4425,6 +4446,10 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
 
 - (void)terminalSetHighlightCursorLine:(BOOL)highlight {
     [delegate_ screenSetHighlightCursorLine:highlight];
+}
+
+- (void)terminalClearCapturedOutput {
+    [delegate_ screenClearCapturedOutput];
 }
 
 - (void)terminalPromptDidStart {
@@ -5536,13 +5561,15 @@ static void SwapInt(int *a, int *b) {
     }
 }
 
-- (BOOL)encodeContents:(id<iTermEncoderAdapter>)encoder
-          linesDropped:(int *)linesDroppedOut {
+- (int)numberOfLinewDroppedWhenEncodingContentsIncludingGrid:(BOOL)includeGrid
+                                                     encoder:(id<iTermEncoderAdapter>)encoder
+                                              intervalOffset:(long long *)intervalOffsetPtr {
     // We want 10k lines of history at 80 cols, and fewer for small widths, to keep the size
     // reasonable.
-    int maxArea = 10000 * 80;
-    int effectiveWidth = self.width ?: 80;
-    int maxLines = MAX(1000, maxArea / effectiveWidth);
+    const int maxLines80 = [iTermAdvancedSettingsModel maxHistoryLinesToRestore];
+    const int effectiveWidth = self.width ?: 80;
+    const int maxArea = maxLines80 * (includeGrid ? 80 : effectiveWidth);
+    const int maxLines = MAX(1000, maxArea / effectiveWidth);
 
     // Make a copy of the last blocks of the line buffer; enough to contain at least |maxLines|.
     LineBuffer *temp = [linebuffer_ appendOnlyCopyWithMinimumLines:maxLines
@@ -5554,13 +5581,24 @@ static void SwapInt(int *a, int *b) {
     long long intervalOffset =
         -(linesDroppedForBrevity + [self totalScrollbackOverflow]) * (self.width + 1);
 
-    int numLines;
-    if ([iTermAdvancedSettingsModel runJobsInServers]) {
-        numLines = currentGrid_.size.height;
-    } else {
-        numLines = [currentGrid_ numberOfLinesUsed];
+    if (includeGrid) {
+        int numLines;
+        if ([iTermAdvancedSettingsModel runJobsInServers]) {
+            numLines = currentGrid_.size.height;
+        } else {
+            numLines = [currentGrid_ numberOfLinesUsed];
+        }
+        [currentGrid_ appendLines:numLines toLineBuffer:temp];
     }
-    [currentGrid_ appendLines:numLines toLineBuffer:temp];
+
+    [temp encode:encoder maxLines:maxLines80];
+    *intervalOffsetPtr = intervalOffset;
+    return linesDroppedForBrevity;
+}
+
+// Deprecated
+- (int)numberOfLinesDroppedWhenEncodingLegacyFormatWithEncoder:(id<iTermEncoderAdapter>)encoder
+                                                intervalOffset:(long long *)intervalOffsetPtr {
     if (gDebugLogging) {
         DLog(@"Saving state with width=%@", @(self.width));
         for (PTYNoteViewController *note in intervalTree_.allObjects) {
@@ -5570,44 +5608,98 @@ static void SwapInt(int *a, int *b) {
             DLog(@"Save note with coord range %@", VT100GridCoordRangeDescription([self coordRangeForInterval:note.entry.interval]));
         }
     }
+    return [self numberOfLinewDroppedWhenEncodingContentsIncludingGrid:YES
+                                                               encoder:encoder
+                                                        intervalOffset:intervalOffsetPtr];
+}
 
-    [temp encode:encoder];
+- (int)numberOfLinesDroppedWhenEncodingModernFormatWithEncoder:(id<iTermEncoderAdapter>)encoder
+                                                intervalOffset:(long long *)intervalOffsetPtr {
+    __block int linesDropped = 0;
+    [encoder encodeDictionaryWithKey:@"LineBuffer"
+                          generation:iTermGenerationAlwaysEncode
+                               block:^BOOL(id<iTermEncoderAdapter>  _Nonnull subencoder) {
+        linesDropped = [self numberOfLinesDroppedWhenEncodingLegacyFormatWithEncoder:subencoder intervalOffset:intervalOffsetPtr];
+        return YES;
+    }];
+    [encoder encodeDictionaryWithKey:@"PrimaryGrid"
+                          generation:iTermGenerationAlwaysEncode
+                               block:^BOOL(id<iTermEncoderAdapter>  _Nonnull subencoder) {
+        [primaryGrid_ encode:subencoder];
+        return YES;
+    }];
+    if (altGrid_) {
+        [encoder encodeDictionaryWithKey:@"AltGrid"
+                              generation:iTermGenerationAlwaysEncode
+                                   block:^BOOL(id<iTermEncoderAdapter>  _Nonnull subencoder) {
+            [altGrid_ encode:subencoder];
+            return YES;
+        }];
+    }
+    return linesDropped;
+}
+
+- (BOOL)encodeContents:(id<iTermEncoderAdapter>)encoder
+          linesDropped:(int *)linesDroppedOut {
+    NSDictionary *extra;
+
+    // Interval tree
+    if ([iTermAdvancedSettingsModel useNewContentFormat]) {
+        long long intervalOffset = 0;
+        const int linesDroppedForBrevity = [self numberOfLinesDroppedWhenEncodingModernFormatWithEncoder:encoder
+                                                                                          intervalOffset:&intervalOffset];
+        extra = @{
+            kScreenStateIntervalTreeKey: [intervalTree_ dictionaryValueWithOffset:intervalOffset] ?: @{},
+        };
+        if (linesDroppedOut) {
+            *linesDroppedOut = linesDroppedForBrevity;
+        }
+    } else {
+        long long intervalOffset = 0;
+        const int linesDroppedForBrevity = [self numberOfLinesDroppedWhenEncodingLegacyFormatWithEncoder:encoder
+                                                                                          intervalOffset:&intervalOffset];
+        extra = @{
+            kScreenStateIntervalTreeKey: [intervalTree_ dictionaryValueWithOffset:intervalOffset] ?: @{},
+            kScreenStateCursorCoord: VT100GridCoordToDictionary(primaryGrid_.cursor),
+        };
+        if (linesDroppedOut) {
+            *linesDroppedOut = linesDroppedForBrevity;
+        }
+    }
+
     [encoder encodeDictionaryWithKey:kScreenStateKey
                           generation:iTermGenerationAlwaysEncode
                                block:^BOOL(id<iTermEncoderAdapter>  _Nonnull encoder) {
+        [encoder mergeDictionary:extra];
         NSDictionary *dict =
-        [@{ kScreenStateTabStopsKey: [tabStops_ allObjects] ?: @[],
-            kScreenStateTerminalKey: [terminal_ stateDictionary] ?: @{},
-            kScreenStateLineDrawingModeKey: @[ @(charsetUsesLineDrawingMode_[0]),
-                                               @(charsetUsesLineDrawingMode_[1]),
-                                               @(charsetUsesLineDrawingMode_[2]),
-                                               @(charsetUsesLineDrawingMode_[3]) ],
-            kScreenStateNonCurrentGridKey: [self contentsOfNonCurrentGrid] ?: @{},
-            kScreenStateCurrentGridIsPrimaryKey: @(primaryGrid_ == currentGrid_),
-            kScreenStateIntervalTreeKey: [intervalTree_ dictionaryValueWithOffset:intervalOffset] ?: @{},
-            kScreenStateSavedIntervalTreeKey: [savedIntervalTree_ dictionaryValueWithOffset:0] ?: [NSNull null],
-            kScreenStateCommandStartXKey: @(commandStartX_),
-            kScreenStateCommandStartYKey: @(commandStartY_),
-            kScreenStateNextCommandOutputStartKey: [NSDictionary dictionaryWithGridAbsCoord:_startOfRunningCommandOutput],
-            kScreenStateCursorVisibleKey: @(_cursorVisible),
-            kScreenStateTrackCursorLineMovementKey: @(_trackCursorLineMovement),
-            kScreenStateLastCommandOutputRangeKey: [NSDictionary dictionaryWithGridAbsCoordRange:_lastCommandOutputRange],
-            kScreenStateShellIntegrationInstalledKey: @(_shellIntegrationInstalled),
-            kScreenStateLastCommandMarkKey: _lastCommandMark.guid ?: [NSNull null],
-            kScreenStatePrimaryGridStateKey: primaryGrid_.dictionaryValue ?: @{},
-            kScreenStateAlternateGridStateKey: altGrid_.dictionaryValue ?: [NSNull null],
-            kScreenStateNumberOfLinesDroppedKey: @(linesDroppedForBrevity),
-            kScreenStateCursorCoord: VT100GridCoordToDictionary(primaryGrid_.cursor),
-        } dictionaryByRemovingNullValues];
+        @{ kScreenStateTabStopsKey: [tabStops_ allObjects] ?: @[],
+           kScreenStateTerminalKey: [terminal_ stateDictionary] ?: @{},
+           kScreenStateLineDrawingModeKey: @[ @(charsetUsesLineDrawingMode_[0]),
+                                              @(charsetUsesLineDrawingMode_[1]),
+                                              @(charsetUsesLineDrawingMode_[2]),
+                                              @(charsetUsesLineDrawingMode_[3]) ],
+           kScreenStateNonCurrentGridKey: [self contentsOfNonCurrentGrid] ?: @{},
+           kScreenStateCurrentGridIsPrimaryKey: @(primaryGrid_ == currentGrid_),
+           kScreenStateSavedIntervalTreeKey: [savedIntervalTree_ dictionaryValueWithOffset:0] ?: [NSNull null],
+           kScreenStateCommandStartXKey: @(commandStartX_),
+           kScreenStateCommandStartYKey: @(commandStartY_),
+           kScreenStateNextCommandOutputStartKey: [NSDictionary dictionaryWithGridAbsCoord:_startOfRunningCommandOutput],
+           kScreenStateCursorVisibleKey: @(_cursorVisible),
+           kScreenStateTrackCursorLineMovementKey: @(_trackCursorLineMovement),
+           kScreenStateLastCommandOutputRangeKey: [NSDictionary dictionaryWithGridAbsCoordRange:_lastCommandOutputRange],
+           kScreenStateShellIntegrationInstalledKey: @(_shellIntegrationInstalled),
+           kScreenStateLastCommandMarkKey: _lastCommandMark.guid ?: [NSNull null],
+           kScreenStatePrimaryGridStateKey: primaryGrid_.dictionaryValue ?: @{},
+           kScreenStateAlternateGridStateKey: altGrid_.dictionaryValue ?: [NSNull null],
+        };
+        dict = [dict dictionaryByRemovingNullValues];
         [encoder mergeDictionary:dict];
         return YES;
     }];
-    if (linesDroppedOut) {
-        *linesDroppedOut = linesDroppedForBrevity;
-    }
     return YES;
 }
 
+// Deprecated - old format
 - (NSDictionary *)contentsOfNonCurrentGrid {
     LineBuffer *temp = [[[LineBuffer alloc] initWithBlockSize:4096] autorelease];
     VT100Grid *grid;
@@ -5620,8 +5712,8 @@ static void SwapInt(int *a, int *b) {
         return @{};
     }
     [grid appendLines:grid.size.height toLineBuffer:temp];
-    iTermMutableDictionaryEncoderAdapter *encoder = [[iTermMutableDictionaryEncoderAdapter alloc] init];
-    [temp encode:encoder];
+    iTermMutableDictionaryEncoderAdapter *encoder = [[[iTermMutableDictionaryEncoderAdapter alloc] init] autorelease];
+    [temp encode:encoder maxLines:10000];
     return encoder.mutableDictionary;
 }
 
@@ -5677,60 +5769,94 @@ static void SwapInt(int *a, int *b) {
         }
     }
 
-    LineBuffer *lineBuffer = [[LineBuffer alloc] initWithDictionary:dictionary];
-    [lineBuffer setMaxLines:maxScrollbackLines_ + self.height];
-    if (!unlimitedScrollback_) {
-        [lineBuffer dropExcessLinesWithWidth:self.width];
-    }
-    [linebuffer_ release];
-    linebuffer_ = lineBuffer;
-    int maxLinesToRestore;
-    if ([iTermAdvancedSettingsModel runJobsInServers] && reattached) {
-        maxLinesToRestore = currentGrid_.size.height;
-    } else {
-        maxLinesToRestore = currentGrid_.size.height - 1;
-    }
-    int linesRestored = MIN(MAX(0, maxLinesToRestore),
-                            [lineBuffer numLinesWithWidth:self.width]);
-    BOOL setCursorPosition = [currentGrid_ restoreScreenFromLineBuffer:linebuffer_
-                                                       withDefaultChar:[currentGrid_ defaultChar]
-                                                     maxLinesToRestore:linesRestored];
-    DLog(@"appendFromDictionary: Grid size is %dx%d", currentGrid_.size.width, currentGrid_.size.height);
-    DLog(@"Restored %d wrapped lines from dictionary", [self numberOfScrollbackLines] + linesRestored);
-    DLog(@"setCursorPosition=%@", @(setCursorPosition));
-    if (!setCursorPosition) {
-        VT100GridCoord coord;
-        if (VT100GridCoordFromDictionary(screenState[kScreenStateCursorCoord], &coord)) {
-            // The initial size of this session might be smaller than its eventual size.
-            // Save the coord because after the window is set to its correct size it might be
-            // possible to place the cursor in this position.
-            currentGrid_.preferredCursorPosition = coord;
-            DLog(@"Save preferred cursor position %@", VT100GridCoordDescription(coord));
-            if (coord.x >= 0 &&
-                coord.y >= 0 &&
-                coord.x <= self.width &&
-                coord.y < self.height) {
-                DLog(@"Also set the cursor to this position");
-                currentGrid_.cursor = coord;
-                setCursorPosition = YES;
+    const BOOL newFormat = (dictionary[@"PrimaryGrid"] != nil);
+    if (!newFormat) {
+        LineBuffer *lineBuffer = [[LineBuffer alloc] initWithDictionary:dictionary];
+        [lineBuffer setMaxLines:maxScrollbackLines_ + self.height];
+        if (!unlimitedScrollback_) {
+            [lineBuffer dropExcessLinesWithWidth:self.width];
+        }
+        [linebuffer_ release];
+        linebuffer_ = lineBuffer;
+        int maxLinesToRestore;
+        if ([iTermAdvancedSettingsModel runJobsInServers] && reattached) {
+            maxLinesToRestore = currentGrid_.size.height;
+        } else {
+            maxLinesToRestore = currentGrid_.size.height - 1;
+        }
+        const int linesRestored = MIN(MAX(0, maxLinesToRestore),
+                                [lineBuffer numLinesWithWidth:self.width]);
+        BOOL setCursorPosition = [currentGrid_ restoreScreenFromLineBuffer:linebuffer_
+                                                           withDefaultChar:[currentGrid_ defaultChar]
+                                                         maxLinesToRestore:linesRestored];
+        DLog(@"appendFromDictionary: Grid size is %dx%d", currentGrid_.size.width, currentGrid_.size.height);
+        DLog(@"Restored %d wrapped lines from dictionary", [self numberOfScrollbackLines] + linesRestored);
+        DLog(@"setCursorPosition=%@", @(setCursorPosition));
+        if (!setCursorPosition) {
+            VT100GridCoord coord;
+            if (VT100GridCoordFromDictionary(screenState[kScreenStateCursorCoord], &coord)) {
+                // The initial size of this session might be smaller than its eventual size.
+                // Save the coord because after the window is set to its correct size it might be
+                // possible to place the cursor in this position.
+                currentGrid_.preferredCursorPosition = coord;
+                DLog(@"Save preferred cursor position %@", VT100GridCoordDescription(coord));
+                if (coord.x >= 0 &&
+                    coord.y >= 0 &&
+                    coord.x <= self.width &&
+                    coord.y < self.height) {
+                    DLog(@"Also set the cursor to this position");
+                    currentGrid_.cursor = coord;
+                    setCursorPosition = YES;
+                }
             }
         }
-    }
-    if (!setCursorPosition) {
-        DLog(@"Place the cursor on the first column of the last line");
-        currentGrid_.cursorY = linesRestored + 1;
-        currentGrid_.cursorX = 0;
+        if (!setCursorPosition) {
+            DLog(@"Place the cursor on the first column of the last line");
+            currentGrid_.cursorY = linesRestored + 1;
+            currentGrid_.cursorX = 0;
+        }
+        // Reduce line buffer's max size to not include the grid height. This is its final state.
+        [lineBuffer setMaxLines:maxScrollbackLines_];
+        if (!unlimitedScrollback_) {
+            [lineBuffer dropExcessLinesWithWidth:self.width];
+        }
+    } else if (screenState) {
+        // New format
+        const BOOL onPrimary = (currentGrid_ == primaryGrid_);
+        primaryGrid_.delegate = nil;
+        [primaryGrid_ release];
+        altGrid_.delegate = nil;
+        [altGrid_ release];
+        altGrid_ = nil;
+        currentGrid_ = nil;
+
+        primaryGrid_ = [[VT100Grid alloc] initWithDictionary:dictionary[@"PrimaryGrid"]
+                                                    delegate:self];
+        if ([dictionary[@"AltGrid"] count]) {
+            altGrid_ = [[VT100Grid alloc] initWithDictionary:dictionary[@"AltGrid"]
+                                                    delegate:self];
+        }
+        if (!altGrid_) {
+            altGrid_ = [[VT100Grid alloc] initWithSize:primaryGrid_.size delegate:self];
+        }
+        if (onPrimary || includeRestorationBanner) {
+            currentGrid_ = primaryGrid_;
+        } else {
+            currentGrid_ = altGrid_;
+        }
+
+        LineBuffer *lineBuffer = [[LineBuffer alloc] initWithDictionary:dictionary[@"LineBuffer"]];
+        [lineBuffer setMaxLines:maxScrollbackLines_ + self.height];
+        if (!unlimitedScrollback_) {
+            [lineBuffer dropExcessLinesWithWidth:self.width];
+        }
+        [linebuffer_ release];
+        linebuffer_ = lineBuffer;
     }
     BOOL addedBanner = NO;
     if (includeRestorationBanner && [iTermAdvancedSettingsModel showSessionRestoredBanner]) {
         [self appendSessionRestoredBanner];
         addedBanner = YES;
-    }
-
-    // Reduce line buffer's max size to not include the grid height. This is its final state.
-    [lineBuffer setMaxLines:maxScrollbackLines_];
-    if (!unlimitedScrollback_) {
-        [lineBuffer dropExcessLinesWithWidth:self.width];
     }
 
     if (screenState) {
@@ -5743,11 +5869,20 @@ static void SwapInt(int *a, int *b) {
             charsetUsesLineDrawingMode_[i] = [array[i] boolValue];
         }
 
-        VT100Grid *otherGrid = (currentGrid_ == primaryGrid_) ? altGrid_ : primaryGrid_;
-        LineBuffer *otherLineBuffer = [[[LineBuffer alloc] initWithDictionary:screenState[kScreenStateNonCurrentGridKey]] autorelease];
-        [otherGrid restoreScreenFromLineBuffer:otherLineBuffer
-                               withDefaultChar:[altGrid_ defaultChar]
-                             maxLinesToRestore:altGrid_.size.height];
+        if (!newFormat) {
+            // Legacy content format restoration
+            VT100Grid *otherGrid = (currentGrid_ == primaryGrid_) ? altGrid_ : primaryGrid_;
+            LineBuffer *otherLineBuffer = [[[LineBuffer alloc] initWithDictionary:screenState[kScreenStateNonCurrentGridKey]] autorelease];
+            [otherGrid restoreScreenFromLineBuffer:otherLineBuffer
+                                   withDefaultChar:[altGrid_ defaultChar]
+                                 maxLinesToRestore:altGrid_.size.height];
+            VT100GridCoord savedCursor = primaryGrid_.cursor;
+            [primaryGrid_ setStateFromDictionary:screenState[kScreenStatePrimaryGridStateKey]];
+            if (addedBanner && currentGrid_.preferredCursorPosition.x < 0 && currentGrid_.preferredCursorPosition.y < 0) {
+                primaryGrid_.cursor = savedCursor;
+            }
+            [altGrid_ setStateFromDictionary:screenState[kScreenStateAlternateGridStateKey]];
+        }
 
         NSString *guidOfLastCommandMark = screenState[kScreenStateLastCommandMarkKey];
         if (reattached) {
@@ -5760,23 +5895,19 @@ static void SwapInt(int *a, int *b) {
         _lastCommandOutputRange = [screenState[kScreenStateLastCommandOutputRangeKey] gridAbsCoordRange];
         _shellIntegrationInstalled = [screenState[kScreenStateShellIntegrationInstalledKey] boolValue];
 
-        VT100GridCoord savedCursor = primaryGrid_.cursor;
-        [primaryGrid_ setStateFromDictionary:screenState[kScreenStatePrimaryGridStateKey]];
-        if (addedBanner && currentGrid_.preferredCursorPosition.x < 0 && currentGrid_.preferredCursorPosition.y < 0) {
-            primaryGrid_.cursor = savedCursor;
-        }
-        [altGrid_ setStateFromDictionary:screenState[kScreenStateAlternateGridStateKey]];
 
-        _initialSize = self.size;
-        // Change the size to how big it was when state was saved so that
-        // interval trees can be fixed up properly when it is set back later by
-        // restoreInitialSize. Interval tree ranges cannot be interpreted
-        // outside the context of the data they annotate because when an
-        // annotation affects all the trailing nulls on a line, the length of
-        // that annotation is dependent on the screen size and how text laid
-        // out (maybe there are no nulls after reflow!).
-        VT100GridSize savedSize = [VT100Grid sizeInStateDictionary:screenState[kScreenStatePrimaryGridStateKey]];
-        [self setSize:savedSize];
+        if (!newFormat) {
+            _initialSize = self.size;
+            // Change the size to how big it was when state was saved so that
+            // interval trees can be fixed up properly when it is set back later by
+            // restoreInitialSize. Interval tree ranges cannot be interpreted
+            // outside the context of the data they annotate because when an
+            // annotation affects all the trailing nulls on a line, the length of
+            // that annotation is dependent on the screen size and how text laid
+            // out (maybe there are no nulls after reflow!).
+            VT100GridSize savedSize = [VT100Grid sizeInStateDictionary:screenState[kScreenStatePrimaryGridStateKey]];
+            [self setSize:savedSize];
+        }
         [intervalTree_ release];
         intervalTree_ = [[IntervalTree alloc] initWithDictionary:screenState[kScreenStateIntervalTreeKey]];
         [self fixUpDeserializedIntervalTree:intervalTree_
@@ -5792,6 +5923,7 @@ static void SwapInt(int *a, int *b) {
                       guidOfLastCommandMark:guidOfLastCommandMark];
 
         [self reloadMarkCache];
+        [self.delegate screenSendModifiersDidChange];
 
         if (gDebugLogging) {
             DLog(@"Notes after restoring with width=%@", @(self.width));

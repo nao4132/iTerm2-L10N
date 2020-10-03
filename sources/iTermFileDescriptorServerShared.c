@@ -9,6 +9,8 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <limits.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -170,7 +172,36 @@ ssize_t iTermFileDescriptorServerSendMessageAndFileDescriptor(int connectionFd,
                                                               void *buffer,
                                                               size_t bufferSize,
                                                               int fdToSend) {
-    FDLog(LOG_DEBUG, "Send file descriptor %d", fdToSend);
+    FDLog(LOG_DEBUG, "Send file descriptor %d and message of size %ld", fdToSend, (long)bufferSize);
+    if (bufferSize > IOV_MAX) {
+        // sendmsg wants to send the whole buffer atomically so it has a small upper bound on message
+        // size. The client-server protocol allows a message to be fragmented as long as the first
+        // one has the file descriptor.
+        //
+        // Send the prefix of the message with the file descriptor.
+        const ssize_t firstResult = iTermFileDescriptorServerSendMessageAndFileDescriptor(connectionFd,
+                                                                                          buffer,
+                                                                                          IOV_MAX,
+                                                                                          fdToSend);
+        if (firstResult <= 0) {
+            return firstResult;
+        }
+        ssize_t remainingSize = bufferSize;
+        remainingSize -= firstResult;
+        assert(remainingSize > 0);
+
+        // Now write the remainder. Because this doesn't use sendmsg there's no size limit problem.
+        int error = 0;
+        const ssize_t secondResult = iTermFileDescriptorWriteImpl(connectionFd,
+                                                                  buffer + IOV_MAX,
+                                                                  remainingSize,
+                                                                  &error);
+        if (secondResult <= 0) {
+            return secondResult;
+        }
+        return bufferSize;
+    }
+
     struct msghdr message;
     memset(&message, 0, sizeof(message));
 
@@ -210,6 +241,7 @@ ssize_t iTermFileDescriptorServerSendMessageAndFileDescriptor(int connectionFd,
     return rc;
 }
 
+/* Selects for reading */
 int iTermSelect(int *fds, int count, int *results, int wantErrors) {
     int result;
     int theError;
@@ -237,6 +269,41 @@ int iTermSelect(int *fds, int count, int *results, int wantErrors) {
     int n = 0;
     for (int i = 0; i < count; i++) {
         results[i] = FD_ISSET(fds[i], &readset) || (wantErrors && FD_ISSET(fds[i], &errorset));
+        if (results[i]) {
+            n++;
+        }
+    }
+    return n;
+}
+
+/* Selects for writing */
+int iTermSelectForWriting(int *fds, int count, int *results, int wantErrors) {
+    int result;
+    int theError;
+    fd_set writeset;
+    fd_set errorset;
+    do {
+        FD_ZERO(&writeset);
+        FD_ZERO(&errorset);
+        int max = 0;
+        for (int i = 0; i < count; i++) {
+            if (fds[i] > max) {
+                max = fds[i];
+            }
+            FD_SET(fds[i], &writeset);
+            if (wantErrors) {
+                FD_SET(fds[i], &errorset);
+            }
+        }
+        FDLog(LOG_DEBUG, "Calling select...");
+        result = select(max + 1, NULL, &writeset, wantErrors ? &errorset : NULL, NULL);
+        theError = errno;
+        FDLog(LOG_DEBUG, "select returned %d, error = %s", result, strerror(theError));
+    } while (result == -1 && theError == EINTR);
+
+    int n = 0;
+    for (int i = 0; i < count; i++) {
+        results[i] = FD_ISSET(fds[i], &writeset) || (wantErrors && FD_ISSET(fds[i], &errorset));
         if (results[i]) {
             n++;
         }
@@ -278,5 +345,19 @@ int iTermFileDescriptorServerSocketBindListen(const char *path) {
     }
     umask(oldMask);
     return socketFd;
+}
+
+int iTermAcquireAdvisoryLock(const char *path) {
+    int fd;
+    do {
+        FDLog(LOG_DEBUG, "Attempting to lock %s", path);
+        fd = open(path, O_CREAT | O_TRUNC | O_EXLOCK | O_NONBLOCK, 0600);
+    } while (fd < 0 && errno == EINTR);
+    if (fd < 0) {
+        FDLog(LOG_DEBUG, "Failed: %s", strerror(errno));
+        return -1;
+    }
+    FDLog(LOG_DEBUG, "Lock acquired");
+    return fd;
 }
 

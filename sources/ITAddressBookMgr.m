@@ -384,10 +384,23 @@ iTermWindowType iTermThemedWindowType(iTermWindowType windowType) {
     [aDict setObject:NSHomeDirectory() forKey: KEY_WORKING_DIRECTORY];
 }
 
+- (BOOL)usernameIsSafe:(NSString *)username {
+    NSCharacterSet *unsafeSet = [[NSCharacterSet characterSetWithCharactersInString:@"abcdefghijklmnopqrstuvwxyz_1234567890"] invertedSet];
+    const NSRange range = [username rangeOfCharacterFromSet:unsafeSet
+                                                    options:NSCaseInsensitiveSearch];
+    return range.location == NSNotFound;
+}
+
 - (void)_addBonjourHostProfileWithName:(NSString *)serviceName
-                       ipAddressString:(NSString *)ipAddressString
+                       ipAddressString:(NSString *)address
                                   port:(int)port
-                           serviceType:(NSString *)serviceType {
+                           serviceType:(NSString *)serviceType
+                              userName:(NSString *)username {
+    NSArray<NSString *> *allowedServices = @[ @"ssh", @"scp", @"sftp" ];
+    if (![allowedServices containsObject:serviceType]) {
+        return;
+    }
+
     NSMutableDictionary *newBookmark;
     Profile* prototype = [[ProfileModel sharedInstance] defaultBookmark];
     if (prototype) {
@@ -404,13 +417,22 @@ iTermWindowType iTermThemedWindowType(iTermWindowType windowType) {
     if ([serviceType isEqualToString:@"ssh"] && port != 22) {
         optionalPortArg = [NSString stringWithFormat:@"-p %d ", port];
     }
-    [newBookmark setObject:[NSString stringWithFormat:@"%@ %@%@", serviceType, optionalPortArg, ipAddressString]
+    NSString *userNameArg = @"";
+    NSString *destination = address;
+    if (username.length > 0 && [self usernameIsSafe:username]) {
+        if ([serviceType isEqualToString:@"ssh"]) {
+            userNameArg = [NSString stringWithFormat:@"-l %@ ", username];
+        } else {
+            destination = [NSString stringWithFormat:@"%@@%@", username, address];
+        }
+    }
+    [newBookmark setObject:[NSString stringWithFormat:@"%@ %@%@%@", serviceType, userNameArg, optionalPortArg, destination]
                     forKey:KEY_COMMAND_LINE];
     [newBookmark setObject:@"" forKey:KEY_WORKING_DIRECTORY];
     [newBookmark setObject:kProfilePreferenceCommandTypeCustomValue forKey:KEY_CUSTOM_COMMAND];
     [newBookmark setObject:kProfilePreferenceInitialDirectoryHomeValue
                     forKey:KEY_CUSTOM_DIRECTORY];
-    [newBookmark setObject:ipAddressString forKey:KEY_BONJOUR_SERVICE_ADDRESS];
+    [newBookmark setObject:destination forKey:KEY_BONJOUR_SERVICE_ADDRESS];
     [newBookmark setObject:[NSArray arrayWithObjects:@"bonjour",nil] forKey:KEY_TAGS];
     [newBookmark setObject:[ProfileModel freshGuid] forKey:KEY_GUID];
     [newBookmark setObject:@"No" forKey:KEY_DEFAULT_BOOKMARK];
@@ -447,6 +469,14 @@ iTermWindowType iTermThemedWindowType(iTermWindowType windowType) {
         // Assume ipv6
         return htons(((struct sockaddr_in6*)sa)->sin6_port);
     }
+}
+
+- (NSString *)usernameFromTXTRecord:(NSData *)txtData {
+    NSDictionary<NSString *, NSData *> *txtFields = [NSNetService dictionaryFromTXTRecordData:txtData];
+    // https://kodi.wiki/view/Avahi_Zeroconf
+    NSData *usernameData = txtFields[@"u"] ?: txtFields[@"username"];
+    NSString *usernameString = [[NSString alloc] initWithData:usernameData encoding:NSUTF8StringEncoding];
+    return usernameString;
 }
 
 // NSNetService delegate
@@ -490,10 +520,13 @@ iTermWindowType iTermThemedWindowType(iTermWindowType windowType) {
         if ([self verbose]) {
             NSLog(@"netServiceDidResolveAddress add profile with address %s", strAddr);
         }
+        
+        NSString *username = [self usernameFromTXTRecord:sender.TXTRecordData];
         [self _addBonjourHostProfileWithName:serviceName
                              ipAddressString:[NSString stringWithFormat:@"%s", strAddr]
                                         port:[self portFromSockaddr:socketAddress]
-                                 serviceType:serviceType];
+                                 serviceType:serviceType
+                                    userName:username];
 
         // remove from array now that resolving is done
         if ([bonjourServices containsObject:sender]) {
@@ -627,20 +660,24 @@ iTermWindowType iTermThemedWindowType(iTermWindowType windowType) {
     BOOL custom = [profile[KEY_CUSTOM_COMMAND] isEqualToString:kProfilePreferenceCommandTypeCustomValue];
     NSString *swifty = [self bookmarkCommandSwiftyString:profile forObjectType:objectType];
     if (!custom) {
+        DLog(@"Don't have a custom command. COmputed command is %@", swifty);
         completion(swifty);
         return;
     }
 
+    DLog(@"Must evaluate swifty string: %@", swifty);
     iTermExpressionEvaluator *evaluator =
     [[iTermExpressionEvaluator alloc] initWithStrictInterpolatedString:swifty
                                                                  scope:scope];
     [evaluator evaluateWithTimeout:5 completion:^(iTermExpressionEvaluator * _Nonnull evaluator) {
         NSString *string = [NSString castFrom:evaluator.value];
+        DLog(@"Evaluation finished with value %@", string);
         string = [string stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
         if (!string.length) {
             string = [ITAddressBookMgr loginShellCommandForBookmark:profile
                                                       forObjectType:objectType];
         }
+        DLog(@"Finish with %@", string);
         completion(string);
     }];
 }

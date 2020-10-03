@@ -280,6 +280,10 @@ const double iTermStatusBarBaseComponentDefaultPriority = 5;
             [updatedKeys addObject:key];
         }
     }
+    if ([_configuration isEqualToDictionary:replacement]) {
+        DLog(@"Configuration remains unchanged.");
+        return;
+    }
     _configuration = replacement;
     [self statusBarComponentUpdate];
     [self.delegate statusBarComponentKnobsDidChange:self
@@ -313,6 +317,11 @@ const double iTermStatusBarBaseComponentDefaultPriority = 5;
 - (CGFloat)statusBarComponentSpringConstant {
     NSNumber *value = self.configuration[iTermStatusBarComponentConfigurationKeyKnobValues][iTermStatusBarCompressionResistanceKey] ?: @1;
     return MAX(0.01, value.doubleValue);
+}
+
+- (CGFloat)statusBarComponentMaximumWidth {
+    NSNumber *value = self.configuration[iTermStatusBarComponentConfigurationKeyKnobValues][iTermStatusBarMaximumWidthKey] ?: @(INFINITY);
+    return MAX(24, value.doubleValue);
 }
 
 - (nullable NSViewController<iTermFindViewController> *)statusBarComponentSearchViewController {

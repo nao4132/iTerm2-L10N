@@ -248,7 +248,8 @@ typedef enum {
 - (void)sessionDidUpdatePaneTitle:(PTYSession *)session;
 - (void)sessionDidSetWindowTitle:(NSString *)title;
 - (void)sessionJobDidChange:(PTYSession *)session;
-- (void)sessionRevealActionsTool;
+- (void)sessionEditActions;
+- (void)sessionEditSnippets;
 - (void)session:(PTYSession *)session
 setBackgroundImage:(NSImage *)image
            mode:(iTermBackgroundImageMode)imageMode
@@ -305,7 +306,8 @@ backgroundColor:(NSColor *)backgroundColor;
 
 // Array of subprocessess names. WARNING: This forces a synchronous update of the process cache.
 // It is up-to-date but too slow to call frequently.
-@property(nonatomic, readonly) NSArray *childJobNames;
+// The first value is the name and the second is the process title.
+@property(nonatomic, readonly) NSArray<iTermTuple<NSString *, NSString *> *> *childJobNameTuples;
 
 // Is the session idle? Used by updateLabelAttributes to send a user notification when processing ends.
 @property(nonatomic, assign) BOOL havePostedIdleNotification;
@@ -514,6 +516,7 @@ backgroundColor:(NSColor *)backgroundColor;
 @property(nonatomic, assign) BOOL sessionIsSeniorToTmuxSplitPane;
 
 @property(nonatomic, readonly) NSArray<iTermCommandHistoryCommandUseMO *> *commandUses;
+@property(nonatomic, readonly) BOOL eligibleForAutoCommandHistory;
 
 // If we want to show quicklook this will not be nil.
 @property(nonatomic, readonly) iTermQuickLookController *quickLookController;
@@ -544,6 +547,7 @@ backgroundColor:(NSColor *)backgroundColor;
 @property(nonatomic, readonly) BOOL hasNontrivialJob;
 @property(nonatomic, readonly) iTermExpect *expect;
 @property(nonatomic, readonly) BOOL tmuxPaused;
+@property(nonatomic, readonly) NSString *userShell;  // Something like "/bin/bash".
 
 #pragma mark - methods
 
@@ -600,7 +604,8 @@ backgroundColor:(NSColor *)backgroundColor;
                                 named:(NSString *)arrangementName
                                inView:(SessionView *)sessionView
                          withDelegate:(id<PTYSessionDelegate>)delegate
-                        forObjectType:(iTermObjectType)objectType;
+                        forObjectType:(iTermObjectType)objectType
+                   partialAttachments:(NSDictionary *)partialAttachments;
 
 + (NSDictionary *)arrangementFromTmuxParsedLayout:(NSDictionary *)parseNode
                                          bookmark:(Profile *)bookmark
@@ -793,6 +798,7 @@ backgroundColor:(NSColor *)backgroundColor;
 
 // Refreshes the textview and takes a snapshot of the SessionView.
 - (NSImage *)snapshot;
+- (NSImage *)snapshotCenteredOn:(VT100GridAbsCoord)coord size:(NSSize)size;
 
 - (void)enterPassword:(NSString *)password;
 
@@ -874,6 +880,7 @@ backgroundColor:(NSColor *)backgroundColor;
 - (BOOL)copyModeConsumesEvent:(NSEvent *)event;
 - (Profile *)profileForSplit;
 - (void)compose;
+- (void)didChangeScreen:(CGFloat)scaleFactor;
 
 #pragma mark - API
 

@@ -18,6 +18,7 @@ static NSString *const kGridCoordAbsYKey = @"absY";
 static NSString *const kGridCoordStartKey = @"start";
 static NSString *const kGridCoordEndKey = @"end";
 static NSString *const kGridCoordRange = @"Coord Range";
+static NSString *const kGridCoordAbsRange = @"Coord Abs Range";
 static NSString *const kGridRange = @"Range";
 static NSString *const kGridRangeLocation = @"Location";
 static NSString *const kGridRangeLength = @"Length";
@@ -121,6 +122,22 @@ static const NSEventModifierFlags iTermHotkeyModifierMask = (NSEventModifierFlag
     range.coordRange = [self[kGridCoordRange] gridCoordRange];
     range.columnWindow = [self[kGridRange] gridRange];
     return range;
+}
+
++ (NSDictionary *)dictionaryWithGridAbsWindowedRange:(VT100GridAbsWindowedRange)absRange {
+    return @{ kGridCoordAbsRange: [NSDictionary dictionaryWithGridAbsCoordRange:absRange.coordRange],
+              kGridRange: [NSDictionary dictionaryWithGridRange:absRange.columnWindow] };
+}
+
+- (VT100GridAbsWindowedRange)gridAbsWindowedRange {
+    VT100GridAbsWindowedRange absRange;
+    absRange.coordRange = [self[kGridCoordAbsRange] gridAbsCoordRange];
+    absRange.columnWindow = [self[kGridRange] gridRange];
+    return absRange;
+}
+
+- (BOOL)hasGridAbsWindowedRange {
+    return self[kGridCoordAbsRange] != nil && self[kGridRange] != nil;
 }
 
 + (NSDictionary *)dictionaryWithGridRange:(VT100GridRange)range {
@@ -304,16 +321,6 @@ static const NSEventModifierFlags iTermHotkeyModifierMask = (NSEventModifierFlag
                 result[class] = subdict;
             }
             subdict[key] = obj;
-        }
-    }];
-    return result;
-}
-
-- (NSDictionary *)filterWithBlock:(BOOL (^NS_NOESCAPE)(id, id))block {
-    NSMutableDictionary *result = [NSMutableDictionary dictionary];
-    [self enumerateKeysAndObjectsUsingBlock:^(id  _Nonnull key, id  _Nonnull obj, BOOL * _Nonnull stop) {
-        if (block(key, obj)) {
-            result[key] = obj;
         }
     }];
     return result;

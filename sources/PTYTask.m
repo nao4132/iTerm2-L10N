@@ -71,6 +71,7 @@ static void HandleSigChld(int n) {
     BOOL _paused;
 
     PTYTaskSize _desiredSize;
+    CGFloat _lastScaleFactor;
     PTYTaskSize _lastSize;
     NSTimeInterval _timeOfLastSizeChange;
     BOOL _rateLimitedSetSizeToDesiredSizePending;
@@ -91,7 +92,7 @@ static void HandleSigChld(int n) {
         writeBuffer = [[NSMutableData alloc] init];
         writeLock = [[NSLock alloc] init];
         if ([iTermAdvancedSettingsModel runJobsInServers]) {
-            if ([iTermAdvancedSettingsModel multiserver]) {
+            if ([iTermMultiServerJobManager available]) {
                 self.jobManager = [[iTermMultiServerJobManager alloc] initWithQueue:_jobManagerQueue];
             } else {
                 self.jobManager = [[iTermMonoServerJobManager alloc] initWithQueue:_jobManagerQueue];
@@ -264,7 +265,7 @@ static void HandleSigChld(int n) {
     DLog(@"launchWithPath:%@ args:%@ env:%@ grisSize:%@ isUTF8:%@",
          progpath, args, env, VT100GridSizeDescription(gridSize), @(isUTF8));
 
-    if ([iTermAdvancedSettingsModel runJobsInServers] && ![iTermAdvancedSettingsModel multiserver]) {
+    if ([iTermAdvancedSettingsModel runJobsInServers] && ![iTermMultiServerJobManager available]) {
         // We want to run
         //   iTerm2 --server progpath args
         NSArray *updatedArgs = [@[ @"--server", progpath ] arrayByAddingObjectsFromArray:args];
@@ -389,8 +390,20 @@ static void HandleSigChld(int n) {
     }
 }
 
-- (void)setSize:(VT100GridSize)size viewSize:(NSSize)viewSize scaleFactor:(CGFloat)scaleFactor {
-    DLog(@"Set terminal size to %@", VT100GridSizeDescription(size));
+// NOTE: maybeScaleFactor will be 0 if the session is not attached to a window. For example, if
+// a different space is active.
+- (void)setSize:(VT100GridSize)size viewSize:(NSSize)viewSize scaleFactor:(CGFloat)maybeScaleFactor {
+    CGFloat scaleFactor = maybeScaleFactor;
+    if (scaleFactor < 1) {
+        scaleFactor = _lastScaleFactor;
+    } else {
+        _lastScaleFactor = scaleFactor;
+    }
+    if (scaleFactor < 1) {
+        scaleFactor = 2;
+    }
+    DLog(@"Set terminal size to %@; %@; %f for %@",
+         VT100GridSizeDescription(size), NSStringFromSize(viewSize), scaleFactor, self.delegate);
     if (self.fd == -1) {
         return;
     }
@@ -609,6 +622,35 @@ static void HandleSigChld(int n) {
     return [self attachToServer:generalConnection];
 }
 
+- (void)partiallyAttachToMultiserverWithRestorationIdentifier:(NSDictionary *)restorationIdentifier
+                                                   completion:(void (^)(id<iTermJobManagerPartialResult>))completion {
+    if (!self.canAttach) {
+        completion(0);
+        return;
+    }
+    iTermGeneralServerConnection generalConnection;
+    if (![iTermMultiServerJobManager getGeneralConnection:&generalConnection
+                                fromRestorationIdentifier:restorationIdentifier]) {
+        completion(0);
+        return;
+    }
+    if (generalConnection.type != iTermGeneralServerConnectionTypeMulti) {
+        assert(NO);
+    }
+    [_jobManager asyncPartialAttachToServer:generalConnection
+                              withProcessID:@(generalConnection.multi.pid)
+                                 completion:completion];
+}
+
+- (iTermJobManagerAttachResults)finishAttachingToMultiserver:(id<iTermJobManagerPartialResult>)partialResult
+                                                  jobManager:(id<iTermJobManager>)jobManager
+                                                       queue:(dispatch_queue_t)queue {
+    assert([NSThread isMainThread]);
+    self.jobManager = jobManager;
+    _jobManagerQueue = queue;
+    return [_jobManager finishAttaching:partialResult task:self];
+}
+
 - (void)registerTmuxTask {
     _isTmuxTask = YES;
     DLog(@"Register pid %@ as coprocess-only task", @(self.pid));
@@ -781,8 +823,10 @@ static void HandleSigChld(int n) {
 
         case iTermJobManagerForkAndExecStatusTaskDiedImmediately:
         case iTermJobManagerForkAndExecStatusServerError:
+        case iTermJobManagerForkAndExecStatusServerLaunchFailed:
             [self.delegate taskDiedImmediately];
             break;
+
     }
 }
 
@@ -873,8 +917,13 @@ static void HandleSigChld(int n) {
 }
 
 - (void)setTerminalSizeToDesiredSize {
-    DLog(@"Set size of %@ to %@x%@ cells, %@x%@ px",
+    DLog(@"Set size of %@ from (%@x%@ cells, %@x%@px) to (%@x%@ cells, %@x%@ px)",
          self.delegate,
+         @(_lastSize.cellSize.width),
+         @(_lastSize.cellSize.height),
+         @(_lastSize.pixelSize.width),
+         @(_lastSize.pixelSize.height),
+
          @(_desiredSize.cellSize.width),
          @(_desiredSize.cellSize.height),
          @(_desiredSize.pixelSize.width),

@@ -16,14 +16,21 @@ NS_ASSUME_NONNULL_BEGIN
 @class NSWindow;
 
 @protocol iTermRestorableStateControllerDelegate<iTermRestorableStateSaving, iTermRestorableStateRestoring>
+- (void)restorableStateDidFinishRequestingRestorations:(iTermRestorableStateController *)sender;
 @end
 
 @interface iTermRestorableStateController : NSObject
 @property (nonatomic, weak) id<iTermRestorableStateControllerDelegate> delegate;
 @property (nonatomic, readonly) NSInteger numberOfWindowsRestored;
 
+// This is the single source of truth for the whole app.
++ (BOOL)stateRestorationEnabled;
+
 - (void)saveRestorableState;
-- (void)restoreWindows;
+
+// Call exactly one of these at startup:
+- (void)restoreWindowsWithCompletion:(void (^)(void))completion;
+- (void)didSkipRestoration;
 
 @end
 

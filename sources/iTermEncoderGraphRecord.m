@@ -57,6 +57,10 @@
     [self dumpWithIndent:@""];
 }
 
+- (NSString *)compactDescription {
+    return [NSString stringWithFormat:@"key=%@ id=%@", self.key, self.identifier];
+}
+
 - (void)dumpWithIndent:(NSString *)indent {
     NSLog(@"%@%@[%@] rowid=%@ %@", indent, self.key, self.identifier, self.rowid,
           [[self.pod.allKeys mapWithBlock:^id(NSString *key) {
@@ -81,6 +85,11 @@
 }
 
 - (void)setRowid:(NSNumber *)rowid {
+    if (_rowid != nil) {
+        @throw [NSException exceptionWithName:@"DuplicateRowID"
+                                       reason:[NSString stringWithFormat:@"_rowid=%@ setRowid:%@", _rowid, rowid]
+                                     userInfo:nil];
+    }
     assert(_rowid == nil);
     _rowid = rowid;
 }
@@ -201,7 +210,9 @@
 - (id)objectWithKey:(NSString *)key class:(Class)desiredClass error:(out NSError *__autoreleasing  _Nullable * _Nullable)error {
     id instance = [desiredClass castFrom:_pod[key]];
     if (!instance) {
-        *error = [[NSError alloc] initWithDomain:@"com.iterm2.graph-record" code:1 userInfo:@{ NSLocalizedDescriptionKey: @"No such record or wrong type" }];
+        if (error) {
+            *error = [[NSError alloc] initWithDomain:@"com.iterm2.graph-record" code:1 userInfo:@{ NSLocalizedDescriptionKey: @"No such record or wrong type" }];
+        }
         return nil;
     }
     return instance;
@@ -307,6 +318,13 @@
         DLog(@"Failed to serialize pod %@ in %@: %@", self.pod, self, error);
     }
     return data;
+}
+
+- (void)eraseRowIDs {
+    _rowid = nil;
+    [_graphRecords enumerateObjectsUsingBlock:^(iTermEncoderGraphRecord * _Nonnull child, NSUInteger idx, BOOL * _Nonnull stop) {
+        [child eraseRowIDs];
+    }];
 }
 
 @end

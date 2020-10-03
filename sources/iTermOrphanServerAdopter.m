@@ -17,6 +17,7 @@
 #import "iTermController.h"
 #import "iTermFileDescriptorSocketPath.h"
 #import "iTermMultiServerConnection.h"
+#import "iTermMultiServerJobManager.h"
 #import "iTermSessionFactory.h"
 #import "iTermSessionLauncher.h"
 
@@ -83,7 +84,7 @@ static void iTermOrphanServerAdopterFindMultiServers(void (^completion)(NSArray<
     self = [super init];
     if (self) {
         _group = dispatch_group_create();
-        if ([iTermAdvancedSettingsModel multiserver]) {
+        if ([iTermMultiServerJobManager available]) {
             dispatch_group_enter(_group);
             iTermOrphanServerAdopterFindMultiServers(^(NSArray<NSString *> *paths) {
                 DLog(@"Have found multiservers at %@", paths);
@@ -113,6 +114,7 @@ static void iTermOrphanServerAdopterFindMultiServers(void (^completion)(NSArray<
 }
 
 - (void)reallyOpenWindowWithOrphansWithCompletion:(void (^)(void))completion {
+    DLog(@"Orphan adoption beginning");
     dispatch_group_t group = dispatch_group_create();
     for (NSString *path in _pathsOfOrphanedMonoServers) {
         dispatch_group_enter(group);
@@ -196,6 +198,7 @@ static void iTermOrphanServerAdopterFindMultiServers(void (^completion)(NSArray<
                                completion:(void (^)(void))completion {
     dispatch_group_t group = dispatch_group_create();
 
+    DLog(@"Multiserver adoption beginning.");
     NSArray<iTermFileDescriptorMultiClientChild *> *children = [connection.unattachedChildren copy];
     for (iTermFileDescriptorMultiClientChild *child in children) {
         iTermGeneralServerConnection generalConnection = {
@@ -217,6 +220,18 @@ static void iTermOrphanServerAdopterFindMultiServers(void (^completion)(NSArray<
         }];
     }
     dispatch_group_notify(group, dispatch_get_main_queue(), completion);
+}
+
+- (void)adoptPartialAttachments:(NSArray<id<iTermPartialAttachment>> *)partialAttachments {
+    [partialAttachments enumerateObjectsUsingBlock:^(id  _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+        [self.delegate orphanServerAdopterOpenSessionForPartialAttachment:obj
+                                                                 inWindow:self->_window
+                                                               completion:^(PTYSession *session) {
+            if (!self->_window) {
+                self->_window = [[iTermController sharedInstance] terminalWithSession:session];
+            }
+        }];
+    }];
 }
 
 #pragma mark - Properties

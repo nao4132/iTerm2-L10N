@@ -115,10 +115,11 @@
 @implementation iTermRestorableStateSQLite {
     iTermGraphDatabase *_db;
     NSInteger _generation;
+    NSURL *_url;
 }
 
 + (void)unlinkDatabaseAtURL:(NSURL *)url {
-    [[[[iTermSqliteDatabaseFactory alloc] init] withURL:url] unlink];
+    [[[iTermSqliteDatabaseImpl alloc] initWithURL:url] unlink];
 }
 
 - (instancetype)initWithURL:(NSURL *)url erase:(BOOL)erase {
@@ -127,15 +128,29 @@
         if (erase) {
             [self.class unlinkDatabaseAtURL:url];
         }
-
-        _db = [[iTermGraphDatabase alloc] initWithURL:url
-                                      databaseFactory:[[iTermSqliteDatabaseFactory alloc] init]];
+        _url = url;
+        [self initializeDb];
     }
     return self;
 }
 
-- (id<iTermRestorableStateIndex>)restorableStateIndex {
-    return [[iTermRestorableStateSQLiteIndex alloc] initWithGraphRecord:_db.record];
+- (void)initializeDb {
+    if (_db) {
+        return;
+    }
+    _db = [[iTermGraphDatabase alloc] initWithDatabase:[[iTermSqliteDatabaseImpl alloc] initWithURL:_url]];
+}
+
+- (void)loadRestorableStateIndexWithCompletion:(void (^)(id<iTermRestorableStateIndex>))completion {
+    if (!_db) {
+        completion(nil);
+        return;
+    }
+    DLog(@"Add a when-ready callback to %@", _db);
+    [_db whenReady:^{
+        DLog(@"db is ready now");
+        completion([[iTermRestorableStateSQLiteIndex alloc] initWithGraphRecord:self->_db.record]);
+    }];
 }
 
 - (void)restoreWindowWithRecord:(id<iTermRestorableStateRecord>)record
@@ -152,9 +167,11 @@
     }
     assert(i >= 0);
 
+    DLog(@"Create index...");
     iTermRestorableStateSQLiteIndex *windowIndex =
         [[iTermRestorableStateSQLiteIndex alloc] initWithGraphRecord:_db.record];
     iTermEncoderGraphRecord *windowRecord = windowIndex[i];
+    DLog(@"Done creating index");
     if (!windowRecord) {
         completion();
         return;
@@ -176,15 +193,19 @@
     [self.delegate restorableStateRestoreApplicationStateWithRecord:_db.record];
 }
 
-- (void)eraseStateRestorationData {
-    [_db.db close];
-    [self.class unlinkDatabaseAtURL:_db.url];
+- (void)eraseStateRestorationDataSynchronously:(BOOL)sync {
+    [self initializeDb];
+    [_db invalidateSynchronously:sync];
     _db = nil;
 }
 
 #pragma mark - iTermRestorableStateSaver
 
-- (void)saveSynchronously:(BOOL)sync withCompletion:(void (^)(void))completion {
+- (BOOL)saveSynchronously:(BOOL)sync withCompletion:(void (^)(void))completion {
+    DLog(@"saveSynchronously:%@", @(sync));
+    assert([NSThread isMainThread]);
+
+    [self initializeDb];
     _generation += 1;
     const NSInteger generation = _generation;
     NSArray<NSWindow *> *windows = [self.delegate restorableStateWindows];
@@ -206,7 +227,8 @@
                             options:0
                               block:^BOOL(NSString * _Nonnull identifier,
                                           NSInteger index,
-                                          iTermGraphEncoder * _Nonnull subencoder) {
+                                          iTermGraphEncoder * _Nonnull subencoder,
+                                          BOOL *stop) {
             NSWindow *window = windows[index];
             [subencoder encodeString:identifier forKey:@"__identifier"];
             [subencoder encodeNumber:@(window.windowNumber) forKey:@"__windowNumber"];
@@ -228,7 +250,7 @@
         completion();
     }];
 
-    [_db updateSynchronously:sync block:update completion:callback];
+    return [_db updateSynchronously:sync block:update completion:callback];
 }
 
 @end

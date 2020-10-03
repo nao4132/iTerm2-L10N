@@ -177,11 +177,22 @@ NSString *const iTermStatusBarElementPasteboardType = @"com.iterm2.status-bar-el
     assert(NO);
 }
 
-- (void)statusBarComponentRevealActionsTool:(id<iTermStatusBarComponent>)component {
+- (void)statusBarComponentEditActions:(id<iTermStatusBarComponent>)component {
+    assert(NO);
+}
+
+- (void)statusBarComponentEditSnippets:(id<iTermStatusBarComponent>)component {
     assert(NO);
 }
 
 - (void)statusBarComponentResignFirstResponder:(id<iTermStatusBarComponent>)component {
+    assert(NO);
+}
+
+- (void)statusBarComponent:(id<iTermStatusBarComponent>)component
+      reportScriptingError:(NSError *)error
+             forInvocation:(NSString *)invocation
+                    origin:(NSString *)origin {
     assert(NO);
 }
 

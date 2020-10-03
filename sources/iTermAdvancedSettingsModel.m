@@ -211,12 +211,12 @@ DEFINE_INT(minimumTabDragDistance, 10, SECTION_TABS @"How far must the mouse mov
 DEFINE_BOOL(tabTitlesUseSmartTruncation, YES, SECTION_TABS @"Use “smart truncation” for tab titles.\nIf a tab‘s title is too long to fit, ellipsize the start of the title if more tabs have unique suffixes than prefixes in a given window.");
 DEFINE_BOOL(middleClickClosesTab, YES, SECTION_TABS @"Should middle-click on a tab in the tab bar close the tab?");
 DEFINE_FLOAT(coloredSelectedTabOutlineStrength, 0.5, SECTION_TABS @"How prominent should the outline around the selected tab be drawn when there are colored tabs in a window?\nTakes a value in 0 to 3, where 0 means no outline and 3 means a very prominent outline.");
-DEFINE_FLOAT(minimalTabStyleBackgroundColorDifference, 0.05, SECTION_TABS @"In minimal tab style, how different should the background color of the selected tab be from the others?\nTakes a value in 0 to 1, where 0 is no difference and 1 very different.");
-DEFINE_FLOAT(minimalTabStyleOutlineStrength, 0.2, SECTION_TABS @"In minimal tab style, how prominent should the tab outline be?\nTakes a value in 0 to 1, where 0 is invisible and 1 is very prominent");
-DEFINE_FLOAT(minimalSplitPaneDividerProminence, 0.15, SECTION_TABS @"In minimal tab style, how prominent should split pane dividers be?\nTakes a value in 0 to 1, where 0 is invisible and 1 is very prominent");
+DEFINE_FLOAT(minimalTabStyleBackgroundColorDifference, 0.05, SECTION_TABS @"In the Minimal theme, how different should the background color of the selected tab be from the others?\nTakes a value in 0 to 1, where 0 is no difference and 1 very different.");
+DEFINE_FLOAT(minimalTabStyleOutlineStrength, 0.2, SECTION_TABS @"In the Minimal theme, how prominent should the tab outline be?\nTakes a value in 0 to 1, where 0 is invisible and 1 is very prominent");
+DEFINE_FLOAT(minimalSplitPaneDividerProminence, 0.15, SECTION_TABS @"In the Minimal theme, how prominent should split pane dividers be?\nTakes a value in 0 to 1, where 0 is invisible and 1 is very prominent");
 DEFINE_FLOAT(coloredUnselectedTabTextProminence, 0.5, SECTION_TABS @"How prominent should the text in a non-selected tab be when there are colored tabs in a window?\nTakes a value in 0 to 1, the alpha value.");
-DEFINE_BOOL(minimalTabStyleTreatLeftInsetAsPartOfFirstTab, NO, SECTION_TABS @"In the minimal tab style, should the area left of the tab bar be treated as part of the first tab?");
-DEFINE_FLOAT(compactMinimalTabBarHeight, 38, SECTION_TABS @"Tab bar height (points) for minimal theme.\nThe default is 38. Use 22 to match the compact theme's height.");
+DEFINE_BOOL(minimalTabStyleTreatLeftInsetAsPartOfFirstTab, NO, SECTION_TABS @"In the Minimal theme, should the area left of the tab bar be treated as part of the first tab?");
+DEFINE_FLOAT(compactMinimalTabBarHeight, 38, SECTION_TABS @"Tab bar height (points) for the Minimal theme.\nThe default is 38. Use 22 to match the compact theme's height.");
 DEFINE_FLOAT(defaultTabBarHeight, 24, SECTION_TABS @"Default tab bar height")
 DEFINE_BOOL(doubleClickTabToEdit, YES, SECTION_TABS @"Should double-clicking a tab open a window to edit its title?");
 DEFINE_FLOAT(minimumTabLabelWidth, 35, SECTION_TABS @"Minimum width for tab labels.\nThe activity/bell icon will be hidden when the space for the label drops below this size (in points)");
@@ -227,7 +227,7 @@ DEFINE_BOOL(drawBottomLineForHorizontalTabBar, YES, SECTION_TABS @"Draw bottom l
 DEFINE_BOOL(disableTabBarTooltips, NO, SECTION_TABS @"Disable tab bar tooltips?");
 DEFINE_BOOL(useCustomTabBarFontSize, NO, SECTION_TABS @"Use custom font size for tab labels?\nSee also advanced setting “Custom tab label font size”.");
 DEFINE_FLOAT(customTabBarFontSize, 11.0, SECTION_TABS @"Custom tab label font size\nFor this to take effect, turn on “Use custom font size for tab labels?”.");
-DEFINE_FLOAT(minimalSelectedTabUnderlineProminence, 1, SECTION_TABS @"Prominence of selected tab underline indicator in Minimal theme when there is at least one colored tab.");
+DEFINE_FLOAT(minimalSelectedTabUnderlineProminence, 1, SECTION_TABS @"Prominence of selected tab underline indicator in the Minimal theme when there is at least one colored tab.");
 DEFINE_BOOL(allowInteractiveSwipeBetweenTabs, YES, SECTION_TABS @"Allow two-finger interactive swipe between tabs?\nThe system preference Trackpad > More Gestures > Swipe between pages controls this globally. When “swipe with two fingers” is enabled, you can change this setting to “No” to prevent swiping between tabs in iTerm2.");
 
 #pragma mark Mouse
@@ -294,6 +294,7 @@ DEFINE_BOOL(fullHeightCursor, NO, SECTION_TERMINAL @"Cursor occupies line spacin
 DEFINE_FLOAT(underlineCursorOffset, 0, SECTION_TERMINAL @"Vertical offset for underline cursor.\nPositive values move it up, negative values move it down.");
 DEFINE_SETTABLE_OPTIONAL_BOOL(preventEscapeSequenceFromClearingHistory, PreventEscapeSequenceFromClearingHistory, nil, SECTION_TERMINAL @"Prevent CSI 3 J from clearing scrollback history?\nThis is also known as the terminfo E3 capability.");
 DEFINE_SETTABLE_OPTIONAL_BOOL(preventEscapeSequenceFromChangingProfile, PreventEscapeSequenceFromChangingProfile, nil, SECTION_TERMINAL @"Prevent control sequences from changing the current profile?");
+DEFINE_INT(maxHistoryLinesToRestore, 20000, SECTION_TERMINAL @"Maximum number of lines of history to restore.\nWhen the app is relaunched, only the last N lines of history are restored to avoid making launch too slow. If you reduce this number, existing sessions won't be affected until their history is cleared.");
 
 DEFINE_FLOAT(verticalBarCursorWidth, 1, SECTION_TERMINAL @"Width of vertical bar cursor.");
 DEFINE_BOOL(acceptOSC7, YES, SECTION_TERMINAL @"Accept OSC 7 to set username, hostname, and path.");
@@ -304,6 +305,12 @@ DEFINE_INT(defaultTabStopWidth, 8, SECTION_TERMINAL @"Default tab stop width for
 DEFINE_BOOL(convertItalicsToReverseVideoForTmux, YES, SECTION_TERMINAL @"Convert italics to reverse video in tmux integration?");
 DEFINE_FLOAT(bellRateLimit, 0.1, SECTION_TERMINAL @"Minimum time between beeping or flashing screen on bell, in seconds.\nIf the time interval between bells is less than this amount of time, it will be ignored.");
 DEFINE_BOOL(translateScreenToXterm, YES, SECTION_TERMINAL @"Support TERM=screen\nMost notably, this fixes italics replacing inverse text.");
+
+// TODO: When xterm compatibility is reached, change 95 to 314 or later. Even 277 would be an
+// improvement as it would let vim use ttym=sgr rather than xterm2, which passes through luit.
+// However, it must return three arguments (at the very least) to keep vim happy. For more, see
+// check_termcode() in vim's term.c.
+DEFINE_INT(xtermVersion, 95, SECTION_TERMINAL @"xterm version for secondary device attributes (SDA).\nIncreasing this number enables more features in apps but may break things. Use 216 to get more support for modifier keys in emacs.");
 
 #pragma mark Hotkey
 
@@ -337,6 +344,7 @@ DEFINE_BOOL(indicateBellsInDockBadgeLabel, YES, SECTION_GENERAL @"Indicate the n
 DEFINE_STRING(downloadsDirectory, @"", SECTION_GENERAL @"Downloads folder.\nIf set, downloaded files go to this location instead of the user’s $HOME/Downloads folder.");
 DEFINE_BOOL(noSyncSuppressDownloadConfirmation, NO, SECTION_GENERAL @"Suppress confirmation of terminal-initiated downloads?");
 DEFINE_FLOAT(pointSizeOfTimeStamp, 10, SECTION_GENERAL @"Point size for timestamps");
+DEFINE_BOOL(showTimestampsByDefault, NO, SECTION_GENERAL @"Show timestamps by default?");
 DEFINE_NONNEGATIVE_INT(terminalMargin, 5, SECTION_GENERAL @"Width of left and right margins in terminal panes\nHow much space to leave between the left and right edges of the terminal.\nYou must restart iTerm2 after modifying this property. Saved window arrangements should be re-created.");
 DEFINE_INT(terminalVMargin, 2, SECTION_GENERAL @"Height of top and bottom margins in terminal panes\nHow much space to leave between the top and bottom edges of the terminal.\nYou must restart iTerm2 after modifying this property. Saved window arrangements should be re-created.");
 DEFINE_STRING(viewManPageCommand, @"man %@ || sleep 3", SECTION_GENERAL @"Command to view man pages.\nUsed when you press the man page button on the touch bar. %@ is replaced with the command. End the command with & to avoid opening an iTerm2 window (e.g., if you're launching an external viewer).");
@@ -439,6 +447,8 @@ DEFINE_BOOL(autologAppends, YES, SECTION_SESSION @"Automatic session logging app
 DEFINE_BOOL(focusNewSplitPaneWithFocusFollowsMouse, YES, SECTION_SESSION @"When focus follows mouse is enabled, should new split panes automatically be focused?");
 DEFINE_BOOL(NoSyncSuppressRestartSessionConfirmationAlert, NO, SECTION_SESSION @"Suppress restart session confirmation alert.\nDon't ask for a confirmation when manually restarting a session.");
 DEFINE_BOOL(showAutomaticProfileSwitchingBanner, YES, SECTION_SESSION @"Show a “Switched to profile” message when Automatic Profile Switching activates.");
+DEFINE_BOOL(autoLockSessionNameOnEdit, YES, SECTION_SESSION @"Auto-lock sesison name after editing it.");
+DEFINE_FLOAT(timeoutForDaemonAttachment, 10, SECTION_SESSION @"How long to wait when trying to attach to an iTerm daemon at startup when restoring windows (in seconds)?");
 
 #pragma mark - Windows
 
@@ -591,9 +601,10 @@ DEFINE_BOOL(multiserver, YES, SECTION_EXPERIMENTAL @"Enable multi-server daemon.
 DEFINE_BOOL(useRestorableStateController, YES, SECTION_EXPERIMENTAL @"Enable restorable state controller?\nThis makes window restoration more reliable.");
 DEFINE_BOOL(fixMouseWheel, YES, SECTION_EXPERIMENTAL @"Mouse wheel always scrolls when scroll bars are visible");
 DEFINE_BOOL(oscColorReport16Bits, YES, SECTION_EXPERIMENTAL @"Report 16-bit color values to OSC 4 and 10 through 19.\nWorks around a bug in older vim where they could not properly parse 8-bit values.");
-DEFINE_BOOL(showSearchResultsMinimap, YES, SECTION_EXPERIMENTAL @"Show search result locations in scroll bar.\nChanging this setting will not affect existing sessions until you restart.");
+DEFINE_BOOL(showLocationsInScrollbar, YES, SECTION_EXPERIMENTAL @"Show search result and prompt locations in scroll bar.\nChanging this setting will not affect existing sessions until you restart.");
 DEFINE_BOOL(allowTabbarInTitlebarAccessoryBigSur, NO, SECTION_EXPERIMENTAL @"Make the tab bar a titlebar accessory view in Big Sur?");
 DEFINE_BOOL(storeStateInSqlite, YES, SECTION_EXPERIMENTAL @"Store window restoration state in SQLite");
+DEFINE_BOOL(useNewContentFormat, YES, SECTION_EXPERIMENTAL @"Save unlimited amount of window contents.\nThis is going to be slow unless you enable SQLite-based window restoration too.");
 
 #pragma mark - Scripting
 #define SECTION_SCRIPTING @"Scripting: "

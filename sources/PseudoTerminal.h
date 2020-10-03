@@ -59,13 +59,9 @@ extern NSString *const iTermDidCreateTerminalWindowNotification;
   PTYWindowDelegateProtocol,
   WindowControllerInterface>
 
-// Called when entering fullscreen has finished.
-// Used to make restoring fullscreen windows work on 10.11.
-@property(nonatomic, copy) void (^didEnterLionFullscreen)(PseudoTerminal *);
-
 // Is this window in the process of becoming fullscreen?
 // Used to make restoring fullscreen windows work on 10.11.
-@property(nonatomic, readonly) BOOL togglingLionFullScreen;
+- (BOOL)togglingLionFullScreen;
 
 // What kind of hotkey window this is, if any.
 @property(nonatomic, assign) iTermHotkeyWindowType hotkeyWindowType;
@@ -280,7 +276,8 @@ extern NSString *const iTermDidCreateTerminalWindowNotification;
 // Load just the tabs into this window.
 - (BOOL)restoreTabsFromArrangement:(NSDictionary *)arrangement
                              named:(NSString *)arrangementName
-                          sessions:(NSArray<PTYSession *> *)sessions;
+                          sessions:(NSArray<PTYSession *> *)sessions
+                partialAttachments:(NSDictionary *)partialAttachments;
 
 // Returns the arrangement for this window.
 - (NSDictionary*)arrangement;
@@ -381,6 +378,9 @@ extern NSString *const iTermDidCreateTerminalWindowNotification;
 - (PseudoTerminal *)it_moveTabToNewWindow:(PTYTab *)aTab;
 - (BOOL)getAndResetRestorableState;
 - (void)restoreState:(PseudoTerminalState *)state;
+- (void)asyncRestoreState:(PseudoTerminalState *)state
+                  timeout:(void (^)(NSArray *))timeout
+               completion:(void (^)(void))completion;
 
 @end
 

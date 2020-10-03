@@ -420,23 +420,27 @@ NSString *const kSemanticHistoryColumnNumberKey = @"semanticHistory.columnNumber
         return;
     }
 
-    path = [path stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLPathAllowedCharacterSet]];
-    NSURL *url = nil;
-    NSString *editorIdentifier = identifier;
+    NSMutableCharacterSet *queryCharset = [[NSCharacterSet URLQueryAllowedCharacterSet] mutableCopy];
+    [queryCharset removeCharactersInString:@"/"];
+    NSString *(^percentEncoded)(NSString *) = ^NSString *(NSString *string) {
+        return [string stringByAddingPercentEncodingWithAllowedCharacters:queryCharset];
+    };
+    NSURLComponents *urlComponents = [[NSURLComponents alloc] init];
+    urlComponents.host = @"open";
+    urlComponents.path = nil;
+    urlComponents.scheme = [iTermSemanticHistoryPrefsController schemeForEditor:identifier];
+    NSURL *fileURL = [NSURL fileURLWithPath:path];
+    urlComponents.percentEncodedQueryItems = @[ [NSURLQueryItem queryItemWithName:@"url"
+                                                                            value:percentEncoded(fileURL.absoluteString)] ];
     if (lineNumber) {
-        url = [NSURL URLWithString:[NSString stringWithFormat:
-                                    @"%@://open?url=file://%@&line=%@",
-                                    [iTermSemanticHistoryPrefsController schemeForEditor:editorIdentifier],
-                                    path, lineNumber]];
-    } else {
-        url = [NSURL URLWithString:[NSString stringWithFormat:
-                                    @"%@://open?url=file://%@",
-                                    [iTermSemanticHistoryPrefsController schemeForEditor:editorIdentifier],
-                                    path]];
+        NSURLQueryItem *lineItem = [NSURLQueryItem queryItemWithName:@"line"
+                                                               value:percentEncoded(lineNumber)];
+        urlComponents.percentEncodedQueryItems = [urlComponents.queryItems arrayByAddingObject:lineItem];
     }
+    NSURL *url = urlComponents.URL;
     DLog(@"Open url %@", url);
-    // BBEdit and TextMate share a URL scheme, so this disambiguates.
-    [self openURL:url editorIdentifier:editorIdentifier];
+    // BBEdit and TextMate share a URL scheme, so identifier disambiguates.
+    [self openURL:url editorIdentifier:identifier];
 }
 
 - (void)openFileInEditor:(NSString *)path lineNumber:(NSString *)lineNumber columnNumber:(NSString *)columnNumber {
@@ -530,9 +534,10 @@ NSString *const kSemanticHistoryColumnNumberKey = @"semanticHistory.columnNumber
     [runner run];
 }
 
-- (BOOL)openFile:(NSString *)fullPath {
+- (BOOL)openFile:(NSString *)fullPath fragment:(NSString *)fragment {
     DLog(@"Open file %@", fullPath);
-    return [[iTermLaunchServices sharedInstance] openFile:fullPath];
+    return [[iTermLaunchServices sharedInstance] openFile:fullPath
+                                                 fragment:fragment];
 }
 
 - (BOOL)openURL:(NSURL *)url editorIdentifier:(NSString *)editorIdentifier {
@@ -566,6 +571,7 @@ NSString *const kSemanticHistoryColumnNumberKey = @"semanticHistory.columnNumber
 
 - (void)openPath:(NSString *)cleanedUpPath
    orRawFilename:(NSString *)rawFileName
+        fragment:(NSString *)fragment
    substitutions:(NSDictionary *)substitutions
            scope:(iTermVariableScope *)originalScope
       lineNumber:(NSString *)lineNumber
@@ -657,7 +663,7 @@ NSString *const kSemanticHistoryColumnNumberKey = @"semanticHistory.columnNumber
 
     if (isDirectory) {
         DLog(@"Open directory %@", path);
-        [self openFile:path];
+        [self openFile:path fragment:fragment];
         completion(YES);
         return;
     }
@@ -712,7 +718,7 @@ NSString *const kSemanticHistoryColumnNumberKey = @"semanticHistory.columnNumber
         }
     }
 
-    [self openFile:path];
+    [self openFile:path fragment:fragment];
     completion(YES);
 }
 

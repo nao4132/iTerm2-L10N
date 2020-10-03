@@ -31,14 +31,15 @@ NS_ASSUME_NONNULL_BEGIN
 @end
 
 @protocol iTermRestorableStateRestorer<NSObject>
-- (id<iTermRestorableStateIndex>)restorableStateIndex;
+
+- (void)loadRestorableStateIndexWithCompletion:(void (^)(id<iTermRestorableStateIndex> _Nullable))completion;
 
 - (void)restoreWindowWithRecord:(id<iTermRestorableStateRecord>)record
                      completion:(void (^)(void))completion;
 
 - (void)restoreApplicationState;
 
-- (void)eraseStateRestorationData;
+- (void)eraseStateRestorationDataSynchronously:(BOOL)sync;
 
 @end
 
@@ -54,7 +55,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 @protocol iTermRestorableStateSaver<NSObject>
 @property (nonatomic, weak) id<iTermRestorableStateSaving> delegate;
-- (void)saveSynchronously:(BOOL)synchronously withCompletion:(void (^)(void))completion;
+// Returns NO if an async request couldn't be done because it's busy. Completion is not called in
+// that case.
+- (BOOL)saveSynchronously:(BOOL)synchronously withCompletion:(void (^)(void))completion;
 @end
 
 @interface iTermRestorableStateDriver : NSObject
@@ -64,10 +67,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly) NSInteger numberOfWindowsRestored;
 @property (nonatomic) BOOL needsSave;
 
-- (void)restoreWithCompletion:(void (^)(void))completion;
+// ready is called after all windows have been asked to restore.
+// completion is called when they are actually restored.
+- (void)restoreWithReady:(void (^)(void))ready
+              completion:(void (^)(void))completion;
 - (void)save;
 - (void)saveSynchronously;
-- (void)erase;
+- (void)eraseSynchronously:(BOOL)sync;
 
 @end
 

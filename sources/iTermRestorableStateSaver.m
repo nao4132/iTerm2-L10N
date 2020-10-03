@@ -8,6 +8,7 @@
 #import "iTermRestorableStateSaver.h"
 
 #import "DebugLogging.h"
+#import "iTermRestorableStateController.h"
 #import "iTermRestorableStateRecord.h"
 #import "NSArray+iTerm.h"
 #import "NSData+iTerm.h"
@@ -32,11 +33,11 @@
 
 #pragma mark - iTermRestorableStateSaver
 
-- (void)saveSynchronously:(BOOL)synchronously withCompletion:(void (^)(void))completion {
+- (BOOL)saveSynchronously:(BOOL)synchronously withCompletion:(void (^)(void))completion {
     NSMutableArray<iTermRestorableStateRecord *> *recordsToKeepUnchanged = [NSMutableArray array];
     NSMutableArray<iTermRestorableStateRecord *> *recordsNeedingNewContent = [NSMutableArray array];
-    if ([[NSUserDefaults standardUserDefaults] boolForKey:@"NSQuitAlwaysKeepsWindows"]) {
-        DLog(@"NSQuitAlwaysKeepsWindows=YES");
+    if ([iTermRestorableStateController stateRestorationEnabled]) {
+        DLog(@"stateRestorationEnabled=YES");
         for (NSWindow *window in [self.delegate restorableStateWindows]) {
             iTermRestorableStateRecord *record = [_records objectPassingTest:^BOOL(iTermRestorableStateRecord *element, NSUInteger index, BOOL *stop) {
                 return element.windowNumber == window.windowNumber;
@@ -67,7 +68,7 @@
             [recordsNeedingNewContent addObject:record];
         }
     } else {
-        DLog(@"NSQuitAlwaysKeepsWindows=NO");
+        DLog(@"stateRestorationEnabled=NO");
     }
     _records = [recordsNeedingNewContent arrayByAddingObjectsFromArray:recordsToKeepUnchanged];
     __weak __typeof(self) weakSelf = self;
@@ -84,6 +85,7 @@
                           completion:completion];
         });
     }
+    return YES;
 }
 
 // queue

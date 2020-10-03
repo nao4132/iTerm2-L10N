@@ -34,6 +34,10 @@
 + (NSDictionary *)dictionaryWithGridWindowedRange:(VT100GridWindowedRange)range;
 - (VT100GridWindowedRange)gridWindowedRange;
 
++ (NSDictionary *)dictionaryWithGridAbsWindowedRange:(VT100GridAbsWindowedRange)range;
+- (VT100GridAbsWindowedRange)gridAbsWindowedRange;
+- (BOOL)hasGridAbsWindowedRange;
+
 + (NSDictionary *)dictionaryWithGridRange:(VT100GridRange)range;
 - (VT100GridRange)gridRange;
 
@@ -64,7 +68,6 @@
 // tuple is iTermTuple<KeyType, ObjectType>. Compiler won't let me write this.
 - (NSDictionary *)mapWithBlock:(iTermTuple * (^)(KeyType key, ObjectType object))block;
 - (NSDictionary<id, NSDictionary<KeyType, ObjectType> *> *)classifyWithBlock:(id (^NS_NOESCAPE)(KeyType key, ObjectType object))block;
-- (NSDictionary<KeyType, ObjectType> *)filterWithBlock:(BOOL (^NS_NOESCAPE)(KeyType key, ObjectType object))block;
 
 - (BOOL)it_writeToXMLPropertyListAt:(NSString *)path;
 - (id)it_jsonSafeValue;

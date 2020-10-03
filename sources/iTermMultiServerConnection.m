@@ -15,6 +15,7 @@
 #import "NSArray+iTerm.h"
 #import "NSFileManager+iTerm.h"
 #import "TaskNotifier.h"
+#include <sys/un.h>
 
 @class iTermMultiServerConnectionState;
 
@@ -109,10 +110,11 @@
         return;
     }
 
-    [self tryCreatingConnectionStartingAtNumber:1 state:state callback:callback];
+    [self tryCreatingConnectionStartingAtNumber:1 failures:0 state:state callback:callback];
 }
 
 + (void)tryCreatingConnectionStartingAtNumber:(int)i
+                                     failures:(int)failures
                                         state:(iTermMultiServerConnectionGlobalState *)state
                                      callback:(iTermCallback<id, iTermMultiServerConnection *> *)callback {
     DLog(@"tryCreatingConnectionStartingAtNumber: %@", @(i));
@@ -127,7 +129,12 @@
         } error:
          ^(NSError * _Nonnull error) {
             DLog(@"tryCreatingConnectionStartingAtNumber: Failed, trying the next number.");
+            if (failures >= 5) {
+                [callback invokeWithObject:nil];
+                return;
+            }
             [self tryCreatingConnectionStartingAtNumber:i + 1
+                                               failures:failures + 1
                                                   state:state
                                                callback:callback];
         }];
@@ -142,6 +149,10 @@
     }
 
     [self findAnyConnectionCreatingIfNeededWithState:state callback:callback];
+}
+
++ (BOOL)available {
+    return [self pathIsSafe:[self pathForNumber:1000]];
 }
 
 + (void)connectionForSocketNumber:(int)number
@@ -165,6 +176,8 @@
     result = [[self alloc] initWithSocketNumber:number];
     assert(result);
 
+    globalState.pending[@(number)] = [NSMutableArray arrayWithObject:callback];
+
     DLog(@"Don't have an existing or pending connection for %@", @(number));
     [result.thread dispatchAsync:^(iTermMultiServerPerConnectionState * _Nullable connectionState) {
         if (shouldCreate) {
@@ -175,18 +188,14 @@
                 if (!statusNumber.boolValue) {
                     DLog(@"Failed to attach or launch socket %@", @(number));
                     resultObject = [iTermResult withError:self.cannotConnectError];
-                    [callback invokeWithObject:resultObject];
                 } else {
                     DLog(@"Succeeded to attach or launch socket %@", @(number));
                     resultObject = [iTermResult withObject:result];
-                    [self addConnection:result number:number state:globalState callback:callback];
+                    [self addConnection:result number:number state:globalState];
                 }
-                NSMutableArray<iTermCallback *> *pendingCallbacks = globalState.pending[@(number)];
-                [globalState.pending removeObjectForKey:@(number)];
-                for (iTermCallback *callback in pendingCallbacks) {
-                    DLog(@"Runner pending callback for %@", @(number));
-                    [callback invokeWithObject:resultObject];
-                }
+                [self invokePendingCallbacksForSocketNumber:number
+                                                      state:globalState
+                                                     result:resultObject];
             }]];
             return;
         }
@@ -195,12 +204,30 @@
         DLog(@"Attach to %@", @(number));
         [connectionState.client attachWithCallback:[self.thread newCallbackWithBlock:^(iTermMultiServerConnectionGlobalState *globalState, NSNumber *statusNumber) {
             if (!statusNumber.boolValue) {
-                [callback invokeWithObject:[iTermResult withError:self.cannotConnectError]];
+                DLog(@"Attach failed for socket %@", @(number));
+                [self invokePendingCallbacksForSocketNumber:number
+                                                      state:globalState
+                                                     result:[iTermResult withError:self.cannotConnectError]];
             } else {
-                [self addConnection:result number:number state:globalState callback:callback];
+                [self addConnection:result number:number state:globalState];
+                DLog(@"Attach succeeded for socket %@", @(number));
+                [self invokePendingCallbacksForSocketNumber:number
+                                                      state:globalState
+                                                     result:[iTermResult withObject:result]];
             }
         }]];
     }];
+}
+
++ (void)invokePendingCallbacksForSocketNumber:(int)number
+                                        state:(iTermMultiServerConnectionGlobalState *)globalState
+                                       result:(iTermResult *)resultObject {
+    NSMutableArray<iTermCallback *> *pendingCallbacks = globalState.pending[@(number)];
+    [globalState.pending removeObjectForKey:@(number)];
+    for (iTermCallback *callback in pendingCallbacks) {
+        DLog(@"Running pending callback for %@ with result %@", @(number), resultObject);
+        [callback invokeWithObject:resultObject];
+    }
 }
 
 + (NSError *)cannotConnectError {
@@ -211,21 +238,55 @@
 
 + (void)addConnection:(iTermMultiServerConnection *)result
                number:(NSInteger)number
-                state:(iTermMultiServerConnectionGlobalState *)state
-             callback:(iTermCallback<id, iTermResult<iTermMultiServerConnection *> *> *)callback {
+                state:(iTermMultiServerConnectionGlobalState *)state {
     DLog(@"Register connection number %@", @(number));
     state.registry[@(number)] = result;
     if (!state.primary) {
         state.primary = result;
     }
-    [callback invokeWithObject:[iTermResult withObject:result]];
+}
+
++ (BOOL)pathIsSafe:(NSString *)path {
+    struct sockaddr_un addr;
+    return (strlen(path.UTF8String) + 1 <= sizeof(addr.sun_path));
 }
 
 + (NSString *)pathForNumber:(int)number {
+    // Normally use application support for the socket because that's where we keep everything
+    // else. But for some users the path may be too long to fit in sockaddr_un.sun_path, in which
+    // case we'll fall back to their home directory.
     NSString *appSupportPath = [[NSFileManager defaultManager] applicationSupportDirectory];
-    NSString *filename = [NSString stringWithFormat:@"iterm2-daemon-%d.socket", number];
-    NSURL *url = [[NSURL fileURLWithPath:appSupportPath] URLByAppendingPathComponent:filename];
-    return url.path;
+    NSString *normalFilename = [NSString stringWithFormat:@"iterm2-daemon-%d.socket", number];
+    NSURL *normalURL = [[NSURL fileURLWithPath:appSupportPath] URLByAppendingPathComponent:normalFilename];
+    if ([self pathIsSafe:normalURL.path]) {
+        return normalURL.path;
+    }
+
+    NSString *homedir = NSHomeDirectory();
+    NSString *dotdir = [homedir stringByAppendingPathComponent:@".iterm2"];
+    NSString *shortFilename = [NSString stringWithFormat:@"%d.socket", number];
+    NSURL *shortURL = [[NSURL fileURLWithPath:dotdir] URLByAppendingPathComponent:shortFilename];
+
+    BOOL isdir = NO;
+
+    // Try to create ~/.iterm2
+    // NOTE: If this fails we return the known-to-be-too-long normal path. It is important to check
+    // that the path is legal before using it.
+    if (![[NSFileManager defaultManager] fileExistsAtPath:dotdir isDirectory:&isdir]) {
+        NSError *error = nil;
+        [[NSFileManager defaultManager] createDirectoryAtPath:dotdir withIntermediateDirectories:NO attributes:nil error:&error];
+        if (error) {
+            // Failed to create it.
+            // check.
+            return normalURL.path;
+        }
+    }
+    if (!isdir) {
+        // Can't put a directory there because a file already exists.
+        return normalURL.path;
+    }
+
+    return shortURL.path;
 }
 
 #pragma mark - Instance Methods

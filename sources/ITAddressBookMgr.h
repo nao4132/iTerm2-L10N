@@ -45,7 +45,7 @@
 #define KEY_DESCRIPTION                 @"Description"  // Deprecated
 #define KEY_CUSTOM_COMMAND              @"Custom Command"
 #define KEY_COMMAND_LINE                @"Command"
-#define KEY_INITIAL_TEXT                @"Initial Text"
+#define KEY_INITIAL_TEXT                @"Initial Text"  // String. Evaluated as a swifty string.
 #define KEY_CUSTOM_DIRECTORY            @"Custom Directory"  // values are Yes, No, Recycle, Advanced
 #define KEY_WORKING_DIRECTORY           @"Working Directory"
 #define KEY_BADGE_FORMAT                @"Badge Text"
@@ -254,6 +254,10 @@
 // the tmux pane title to the edit session dialog so it can prepopulate the
 // field correctly.
 #define KEY_TMUX_PANE_TITLE                  @"tmux Pane Title"
+
+// This is not a real setting. It's a way to communicate that a newly created
+// window should not use auto-saved frames (see -loadAutoSave). Takes a boolean.
+#define KEY_DISABLE_AUTO_FRAME               @"Disable Auto Frame"
 
 @class iTermVariableScope;
 

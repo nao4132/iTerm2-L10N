@@ -9,6 +9,7 @@
 #import "iTermActionsModel.h"
 #import "iTermScriptHistory.h"
 #import "iTermSwiftyString.h"
+#import "NSArray+iTerm.h"
 #import "NSDictionary+iTerm.h"
 #import "NSImage+iTerm.h"
 #import "RegexKitLite.h"
@@ -50,7 +51,7 @@ static NSString *const iTermStatusBarActionKey = @"action";
                                                placeholder:nil
                                               defaultValue:nil
                                                        key:iTermStatusBarActionKey];
-    return [@[ actionKnob ] arrayByAddingObjectsFromArray:[self minMaxWidthKnobs]];
+    return [@[ actionKnob, [super statusBarComponentKnobs] ] flattenedArray];
 }
 
 - (NSDictionary *)actionDictionary {
@@ -195,7 +196,7 @@ static NSString *const iTermStatusBarActionKey = @"action";
 
     [menu addItem:[NSMenuItem separatorItem]];
 
-    NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:@"Reveal Actions Tool…" action:@selector(editActions:) keyEquivalent:@""];
+    NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:@"Edit Actions…" action:@selector(editActions:) keyEquivalent:@""];
     item.target = self;
     [menu addItem:item];
 
@@ -215,7 +216,7 @@ static NSString *const iTermStatusBarActionKey = @"action";
 }
 
 - (void)editActions:(id)sender {
-    [self.delegate statusBarComponentRevealActionsTool:self];
+    [self.delegate statusBarComponentEditActions:self];
 }
 
 @end

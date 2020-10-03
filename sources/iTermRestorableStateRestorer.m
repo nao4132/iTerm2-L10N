@@ -50,7 +50,7 @@
     if (self) {
         _indexURL = [indexURL copy];
         if (erase) {
-            [self eraseStateRestorationData];
+            [self eraseStateRestorationDataSynchronously:YES];
         }
     }
     return self;
@@ -58,8 +58,8 @@
 
 #pragma mark - iTermRestorableStateRestorationImpl
 
-- (id<iTermRestorableStateIndex>)restorableStateIndex {
-    return [[iTermRestorableStateRestorerIndex alloc] initWithURL:_indexURL];
+- (void)loadRestorableStateIndexWithCompletion:(void (^)(id<iTermRestorableStateIndex>))completion {
+    completion([[iTermRestorableStateRestorerIndex alloc] initWithURL:_indexURL]);
 }
 
 - (void)restoreWindowWithRecord:(id<iTermRestorableStateRecord>)record
@@ -80,7 +80,7 @@
     // This goes through the regular mechanism.
 }
 
-- (void)eraseStateRestorationData {
+- (void)eraseStateRestorationDataSynchronously:(BOOL)sync {
     [[NSFileManager defaultManager] removeItemAtURL:_indexURL error:nil];
 }
 

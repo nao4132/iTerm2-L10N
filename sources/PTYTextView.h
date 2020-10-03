@@ -20,6 +20,7 @@
 #include <sys/time.h>
 
 @class CRunStorage;
+@class iTermAction;
 @class iTermExpect;
 @class iTermFindCursorView;
 @class iTermFindOnPageHelper;
@@ -212,7 +213,11 @@ typedef NS_ENUM(NSInteger, PTYCharType) {
 - (NSEdgeInsets)textViewExtraMargins;
 - (id<iTermSwipeHandler>)textViewSwipeHandler;
 - (void)textViewAddContextMenuItems:(NSMenu *)menu;
-
+- (NSString *)textViewShell;
+- (void)textViewContextMenuInvocation:(NSString *)invocation
+                      failedWithError:(NSError *)error
+                          forMenuItem:(NSString *)title;
+- (void)textViewApplyAction:(iTermAction *)action;
 @end
 
 @interface iTermHighlightedRow : NSObject
@@ -400,9 +405,6 @@ typedef void (^PTYTextViewDrawingHookBlock)(iTermTextDrawingHelper *);
 // called.
 - (instancetype)initWithFrame:(NSRect)frame colorMap:(iTermColorMap *)colorMap;
 
-// Sets the "changed since last Exposé" flag to NO and returns its original value.
-- (BOOL)getAndResetChangedSinceLastExpose;
-
 // Changes the document cursor, if needed. The event is used to get modifier flags.
 - (void)updateCursor:(NSEvent *)event;
 
@@ -549,6 +551,7 @@ scrollToFirstResult:(BOOL)scrollToFirstResult;
 // Open a semantic history path.
 - (void)openSemanticHistoryPath:(NSString *)path
                   orRawFilename:(NSString *)rawFileName
+                       fragment:(NSString *)fragment
                workingDirectory:(NSString *)workingDirectory
                      lineNumber:(NSString *)lineNumber
                    columnNumber:(NSString *)columnNumber
@@ -600,6 +603,9 @@ scrollToFirstResult:(BOOL)scrollToFirstResult;
                            by:(PTYTextViewSelectionExtensionUnit)unit
                   cursorCoord:(VT100GridCoord)cursorCoord;
 
+- (void)selectCoordRange:(VT100GridCoordRange)range;
+- (NSRect)frameForCoord:(VT100GridCoord)coord;
+
 - (iTermLogicalMovementHelper *)logicalMovementHelperForCursorCoordinate:(VT100GridCoord)cursorCoord;
 
 // Undoes -refuseFirstResponderAtCurrentMouseLocation.
@@ -611,8 +617,6 @@ scrollToFirstResult:(BOOL)scrollToFirstResult;
 - (IBAction)selectOutputOfLastCommand:(id)sender;
 
 - (void)showFireworks;
-
-- (BOOL)imageIsVisible:(iTermImageInfo *)image;
 
 // Turns on the flicker fixer (if enabled) while drawing.
 - (void)performBlockWithFlickerFixerGrid:(void (NS_NOESCAPE ^)(void))block;

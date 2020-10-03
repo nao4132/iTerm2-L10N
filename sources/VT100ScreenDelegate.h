@@ -193,6 +193,7 @@
 - (void)screenSetCursorVisible:(BOOL)visible;
 
 - (void)screenSetHighlightCursorLine:(BOOL)highlight;
+- (void)screenClearCapturedOutput;
 
 // Only called if the trackCursorLineMovement property is set.
 - (void)screenCursorDidMoveToLine:(int)line;
@@ -268,6 +269,7 @@
 - (void)screenSetLabel:(NSString *)label forKey:(NSString *)keyName;
 - (void)screenPushKeyLabels:(NSString *)value;
 - (void)screenPopKeyLabels:(NSString *)value;
+- (void)screenSendModifiersDidChange;
 
 - (void)screenTerminalAttemptedPasteboardAccess;
 - (NSString *)screenValueOfVariableNamed:(NSString *)name;
@@ -282,7 +284,6 @@
                        displayInline:(BOOL)displayInline
                          promptIfBig:(BOOL *)promptIfBig;
 - (BOOL)screenShouldClearScrollbackBuffer;
-- (void)screenSetUseCSIu:(int)terminalSetting;
 - (VT100GridRange)screenRangeOfVisibleLines;
 
 @end

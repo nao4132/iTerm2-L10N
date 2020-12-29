@@ -454,9 +454,9 @@ DQ
                                 <modifierMask key="keyEquivalentModifierMask"/>
                                 <menu key="submenu" title="Snippets" id="sOq-3j-vtq" userLabel="Snippets"/>
                             </menuItem>
-                            <menuItem title="Actions" id="8Ja-GB-Waf" userLabel="Snippets">
+                            <menuItem title="アクション" id="8Ja-GB-Waf" userLabel="Snippets">
                                 <modifierMask key="keyEquivalentModifierMask"/>
-                                <menu key="submenu" title="Actions" id="w4F-uL-QPB" userLabel="Snippets"/>
+                                <menu key="submenu" title="アクション" id="w4F-uL-QPB" userLabel="Snippets"/>
                             </menuItem>
                             <menuItem isSeparatorItem="YES" id="6Wz-M8-IFF"/>
                             <menuItem title="Open Selection" keyEquivalent="o" identifier="Open Selection" id="upW-1r-eM7">
@@ -519,7 +519,7 @@ DQ
                                                 <action selector="performFindPanelAction:" target="-1" id="Vts-fb-OCE"/>
                                             </connections>
                                         </menuItem>
-                                        <menuItem title="Find Globally..." keyEquivalent="F" identifier="Find.Find Globally..." id="yIL-PC-jnC">
+                                        <menuItem title="全体検索..." keyEquivalent="F" identifier="Find.Find Globally..." id="yIL-PC-jnC">
                                             <connections>
                                                 <action selector="findGlobally:" target="201" id="Oyc-5J-YYw"/>
                                             </connections>
@@ -910,13 +910,13 @@ DQ
                                             </connections>
                                         </menuItem>
                                         <menuItem isSeparatorItem="YES" id="7kW-Nx-k6m"/>
-                                        <menuItem title="Focus Reporting" tag="2" identifier="Focus Reporting" id="2Ek-PE-o7F">
+                                        <menuItem title="フォーカスのレポート" tag="2" identifier="Focus Reporting" id="2Ek-PE-o7F">
                                             <modifierMask key="keyEquivalentModifierMask"/>
                                             <connections>
                                                 <action selector="terminalStateToggleFocusReporting:" target="-1" id="EMX-TB-2cQ"/>
                                             </connections>
                                         </menuItem>
-                                        <menuItem title="Mouse Reporting" tag="3" identifier="Mouse Reporting" id="Lbh-lI-2tO">
+                                        <menuItem title="マウスのレポート" tag="3" identifier="Mouse Reporting" id="Lbh-lI-2tO">
                                             <modifierMask key="keyEquivalentModifierMask"/>
                                             <connections>
                                                 <action selector="terminalStateToggleMouseReporting:" target="-1" id="xZ2-Nv-hGN"/>
@@ -942,7 +942,7 @@ DQ
                                             </connections>
                                         </menuItem>
                                         <menuItem isSeparatorItem="YES" id="Csl-Na-fLA"/>
-                                        <menuItem title="Report Modifiers with CSI u" tag="7" identifier="Terminal State.Standard Key Reporting" id="NiW-ZC-qkW">
+                                        <menuItem title="CSI u で装飾キーをレポート" tag="7" identifier="Terminal State.Standard Key Reporting" id="NiW-ZC-qkW">
                                             <modifierMask key="keyEquivalentModifierMask"/>
                                             <connections>
                                                 <action selector="terminalStateToggleApplicationKeypad:" target="-1" id="dEu-4i-avK"/>
@@ -960,13 +960,13 @@ DQ
                                                 <action selector="terminalStateToggleApplicationKeypad:" target="-1" id="hFh-Cz-Vqt"/>
                                             </connections>
                                         </menuItem>
-                                        <menuItem title="CSI u Mode" tag="10" identifier="Terminal State.Report Modifiers with CSI u" id="Qlm-EZ-J8K">
+                                        <menuItem title="CSI u モード" tag="10" identifier="Terminal State.Report Modifiers with CSI u" id="Qlm-EZ-J8K">
                                             <modifierMask key="keyEquivalentModifierMask"/>
                                             <connections>
                                                 <action selector="terminalStateToggleApplicationKeypad:" target="-1" id="kMi-Ez-WPl"/>
                                             </connections>
                                         </menuItem>
-                                        <menuItem title="Raw Key Reporting Mode" tag="11" identifier="Terminal State.Raw Key Reporting" id="HUg-bw-Kax">
+                                        <menuItem title="Rawキーのレポートモード" tag="11" identifier="Terminal State.Raw Key Reporting" id="HUg-bw-Kax">
                                             <modifierMask key="keyEquivalentModifierMask"/>
                                             <connections>
                                                 <action selector="terminalStateToggleApplicationKeypad:" target="-1" id="Io8-vc-lTj"/>
@@ -1160,22 +1160,22 @@ DQ
                                             </connections>
                                         </menuItem>
                                         <menuItem isSeparatorItem="YES" id="xVP-RA-UyC"/>
-                                        <menuItem title="Full-Width Bottom of Screen" tag="5" identifier="Window Style.FullWidth Bottom of Screen" id="VcO-5C-gYt">
+                                        <menuItem title="画面下端に最大幅で表示" tag="5" identifier="Window Style.FullWidth Bottom of Screen" id="VcO-5C-gYt">
                                             <connections>
                                                 <action selector="setWindowStyle:" target="-1" id="AoZ-YA-7dw"/>
                                             </connections>
                                         </menuItem>
-                                        <menuItem title="Full-Width Top of Screen" tag="2" identifier="Window Style.FullWidth Top of Screen" id="xx4-Ao-jke">
+                                        <menuItem title="画面上端に最大幅で表示" tag="2" identifier="Window Style.FullWidth Top of Screen" id="xx4-Ao-jke">
                                             <connections>
                                                 <action selector="setWindowStyle:" target="-1" id="shN-Pz-FqQ"/>
                                             </connections>
                                         </menuItem>
-                                        <menuItem title="Full-Height Left of Screen" tag="6" identifier="Window Style..FullHeight Left of Screen" id="8Up-pV-Ad7">
+                                        <menuItem title="画面左端に最大高で表示" tag="6" identifier="Window Style..FullHeight Left of Screen" id="8Up-pV-Ad7">
                                             <connections>
                                                 <action selector="setWindowStyle:" target="-1" id="GTz-qr-LxZ"/>
                                             </connections>
                                         </menuItem>
-                                        <menuItem title="Full-Height Right of Screen" tag="7" identifier="Window Style.FullHeight Right of Screen" id="Nbx-zl-DQO">
+                                        <menuItem title="画面右端に最大高で表示" tag="7" identifier="Window Style.FullHeight Right of Screen" id="Nbx-zl-DQO">
                                             <connections>
                                                 <action selector="setWindowStyle:" target="-1" id="jq8-Pr-NnW"/>
                                             </connections>

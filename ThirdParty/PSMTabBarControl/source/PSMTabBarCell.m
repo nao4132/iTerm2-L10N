@@ -107,9 +107,9 @@ static NSRect PSMConvertAccessibilityFrameToScreen(NSView *view, NSRect frame) {
 }
 
 - (BOOL)accessibilityPerformPress {
-        PSMTabBarCell *cell = self.cell;
-    [cell.psmTabControlView closeTabClick:cell];
-    return YES; // we don't actually know if -closeTabClick: succeeded, but for now, let's pretend it did
+    PSMTabBarCell *cell = self.cell;
+    [cell.psmTabControlView closeTabClick:cell button:0];
+    return YES; // we don't actually know if -closeTabClick:button: succeeded, but for now, let's pretend it did
 }
 
 @end
@@ -363,6 +363,25 @@ static NSRect PSMConvertAccessibilityFrameToScreen(NSView *view, NSRect frame) {
     }
 
     _currentStep = value;
+}
+
+- (BOOL)hasCloseButton {
+    if (self.frame.size.width > 85) {
+        return _hasCloseButton;
+    }
+    id control = [self controlView];
+    if (![control respondsToSelector:@selector(tabView)]) {
+        // Shouldn't happen.
+        return _hasCloseButton;
+    }
+    NSTabView *tabView = [control tabView];
+    if (!tabView) {
+        return _hasCloseButton;
+    }
+    if ([tabView selectedTabViewItem] == self.representedObject) {
+        return _hasCloseButton;
+    }
+    return NO;
 }
 
 #pragma mark - Bindings

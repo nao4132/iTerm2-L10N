@@ -12,7 +12,9 @@
 #import "iTermAdvancedSettingsModel.h"
 #import "iTermRestorableStateDriver.h"
 #import "iTermRestorableStateSQLite.h"
+#import "iTermUserDefaults.h"
 
+static BOOL gShouldIgnoreOpenUntitledFile;
 extern NSString *const iTermApplicationWillTerminate;
 
 @interface NSApplication(Private)
@@ -33,16 +35,51 @@ extern NSString *const iTermApplicationWillTerminate;
     id<iTermRestorableStateRestorer> _restorer;
     iTermRestorableStateDriver *_driver;
     BOOL _ready;
+    NSMutableDictionary<NSString *, void (^)(NSWindow *, NSError *)> *_systemCallbacks;
+    dispatch_group_t _completionGroup;
+}
+
++ (BOOL)shouldIgnoreOpenUntitledFile {
+    return gShouldIgnoreOpenUntitledFile;
+}
+
++ (void)setShouldIgnoreOpenUntitledFile:(BOOL)value {
+    gShouldIgnoreOpenUntitledFile = value;
+}
+
+
++ (instancetype)sharedInstance {
+    static dispatch_once_t onceToken;
+    static id instance;
+    dispatch_once(&onceToken, ^{
+        instance = [[self alloc] init];
+    });
+    return instance;
 }
 
 + (BOOL)stateRestorationEnabled {
     return ([[NSUserDefaults standardUserDefaults] boolForKey:@"NSQuitAlwaysKeepsWindows"] ||
-            [NSApp shouldRestoreStateOnNextLaunch]);
+            [self shouldRestoreStateOnNextLaunch]);
+}
+
++ (BOOL)shouldRestoreStateOnNextLaunch {
+    return self.forceSaveState || [NSApp shouldRestoreStateOnNextLaunch];
+}
+
+static BOOL gForceSaveState;
+
++ (BOOL)forceSaveState {
+    return gForceSaveState;
+}
+
++ (void)setForceSaveState:(BOOL)forceSaveState {
+    gForceSaveState = forceSaveState;
 }
 
 - (instancetype)init {
     self = [super init];
     if (self) {
+        _systemCallbacks = [NSMutableDictionary dictionary];
         dispatch_queue_t queue = dispatch_queue_create("com.iterm2.restorable-state", DISPATCH_QUEUE_SERIAL);
         NSString *appSupport = [[NSFileManager defaultManager] applicationSupportDirectory];
         if (!appSupport) {
@@ -119,12 +156,15 @@ extern NSString *const iTermApplicationWillTerminate;
 // restoration must be made before state is *saved* not before it is restored. See the comment on
 // shouldRestoreStateOnNextLaunch above.
 - (void)restoreWindowsWithCompletion:(void (^)(void))completion {
+    _completionGroup = dispatch_group_create();
+    dispatch_group_enter(_completionGroup);
     assert([NSThread isMainThread]);
     __weak __typeof(self) weakSelf = self;
-    [_driver restoreWithReady:^{
+    [_driver restoreWithSystemCallbacks:_systemCallbacks
+                                  ready:^{
         [weakSelf.delegate restorableStateDidFinishRequestingRestorations:self];
     }
-                   completion:^{
+                             completion:^{
         DLog(@"Restoration did complete");
         [weakSelf completeInitialization];
         completion();
@@ -134,6 +174,12 @@ extern NSString *const iTermApplicationWillTerminate;
 - (void)didSkipRestoration {
     DLog(@"did skip restoration");
     [self completeInitialization];
+}
+
+- (void)setSystemRestorationCallback:(void (^)(NSWindow *, NSError *))callback
+                    windowIdentifier:(NSString *)windowIdentifier {
+    assert(!_ready);
+    _systemCallbacks[windowIdentifier] = [callback copy];
 }
 
 #pragma mark - Private
@@ -163,15 +209,28 @@ extern NSString *const iTermApplicationWillTerminate;
     DLog(@"completeInitialization");
     assert([NSThread isMainThread]);
     _ready = YES;
+    dispatch_group_leave(_completionGroup);
     if (![iTermRestorableStateController stateRestorationEnabled]) {
         // Just in case we don't get a chance to erase the state later.
         DLog(@"State restoration is disabled so erase db");
         [_driver eraseSynchronously:NO];
-        return;
-    }
-    if (_driver.needsSave) {
+    } else if (_driver.needsSave) {
         [_driver save];
     }
+    [self invokeRemainingCompletionBlocksAsFailure];
+}
+
+// Run system callbacks that were never married up to windows as failures.
+- (void)invokeRemainingCompletionBlocksAsFailure {
+    NSMutableDictionary<NSString *, void (^)(NSWindow *, NSError *)> *temp = [_systemCallbacks copy];
+    [_systemCallbacks removeAllObjects];
+
+    iTermRestorableStateController.shouldIgnoreOpenUntitledFile = YES;
+    [temp enumerateKeysAndObjectsUsingBlock:^(NSString * _Nonnull windowIdentifier, void (^ _Nonnull completion)(NSWindow *, NSError *), BOOL * _Nonnull stop) {
+        DLog(@"Running system callback with nil for %@", windowIdentifier);
+        completion(nil, nil);
+    }];
+    iTermRestorableStateController.shouldIgnoreOpenUntitledFile = NO;
 }
 
 #pragma mark - iTermRestorableStateRestoring
@@ -181,7 +240,10 @@ extern NSString *const iTermApplicationWillTerminate;
                              completion:(void (^)(NSWindow *, NSError *))completion {
     [self.delegate restorableStateRestoreWithCoder:coder
                                         identifier:identifier
-                                        completion:completion];
+                                        completion:^(NSWindow * _Nullable window, NSError * _Nullable error) {
+        completion(window, error);
+        [self didRestoreWindow:window];
+    }];
 }
 
 - (void)restorableStateRestoreWithRecord:(nonnull iTermEncoderGraphRecord *)record
@@ -190,11 +252,31 @@ extern NSString *const iTermApplicationWillTerminate;
                                                            NSError *))completion {
     [self.delegate restorableStateRestoreWithRecord:record
                                          identifier:identifier
-                                         completion:completion];
+                                         completion:^(NSWindow * _Nullable window, NSError * _Nullable error) {
+        NSLog(@"iTermRestorableStateController's completion block calling the completion block for window %@", window);
+        completion(window, error);
+        NSLog(@"iTermRestorableStateController's completion block calling didRestoreWindow:%@", window);
+        __weak __typeof(window) weakWindow = window;
+        dispatch_group_notify(self->_completionGroup, dispatch_get_main_queue(), ^{
+            __strong __typeof(window) strongWindow = weakWindow;
+            if (strongWindow) {
+                [self didRestoreWindow:strongWindow];
+            }
+        });
+        NSLog(@"iTermRestorableStateController's completion block returning");
+    }];
 }
 
 - (void)restorableStateRestoreApplicationStateWithRecord:(nonnull iTermEncoderGraphRecord *)record {
     [self.delegate restorableStateRestoreApplicationStateWithRecord:record];
+}
+
+- (void)didRestoreWindow:(NSWindow *)window {
+    if (![window.delegate conformsToProtocol:@protocol(iTermRestorableWindowController)]) {
+        return;
+    }
+    id<iTermRestorableWindowController> controller = (id<iTermRestorableWindowController>)[window delegate];
+    [controller didFinishRestoringWindow];
 }
 
 #pragma mark - iTermRestorableStateSaving

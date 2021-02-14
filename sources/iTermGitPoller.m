@@ -88,14 +88,14 @@ NS_ASSUME_NONNULL_BEGIN
         DLog(@"%@: don't poll: current directory unknown", self);
         return;
     }
-    if (![self.delegate gitPollerShouldPoll:self]) {
+    if (![self.delegate gitPollerShouldPoll:self after:_lastPollTime]) {
         DLog(@"%@: don't poll: delegate %@ declined", self, self.delegate);
         return;
     }
     _lastPollTime = [NSDate date];
     __weak __typeof(self) weakSelf = self;
     DLog(@"%@: POLL: request path %@", self, self.currentDirectory);
-    iTermGitPollWorker *worker = [iTermGitPollWorker instanceForPath:self.currentDirectory];
+    iTermGitPollWorker *worker = [iTermGitPollWorker sharedInstance];
     DLog(@"%@: Using worker %@", self, worker);
     [worker requestPath:self.currentDirectory completion:^(iTermGitState *state) {
         [weakSelf didPollWithUpdatedState:state];
@@ -103,6 +103,7 @@ NS_ASSUME_NONNULL_BEGIN
 }
 
 - (void)didPollWithUpdatedState:(iTermGitState *)state {
+    DLog(@"%@ (%@)", state, self.delegate);
     self.state = state;
 }
 
@@ -123,7 +124,7 @@ NS_ASSUME_NONNULL_BEGIN
         DLog(@"%@: Attempt to invalidate cache", self);
         [_rateLimit performRateLimitedBlock:^{
             DLog(@"%@: Invalidate cache", self);
-            iTermGitPollWorker *worker = [iTermGitPollWorker instanceForPath:currentDirectory];
+            iTermGitPollWorker *worker = [iTermGitPollWorker sharedInstance];
             DLog(@"%@: Worker for %@ is %@", self, currentDirectory, worker);
             [worker invalidateCacheForPath:currentDirectory];
         }];

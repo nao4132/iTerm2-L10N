@@ -16,7 +16,6 @@
 #import "iTermController.h"
 #import "iTermImageInfo.h"
 #import "iTermLaunchServices.h"
-#import "iTermLocalHostNameGuesser.h"
 #import "iTermMouseCursor.h"
 #import "iTermNotificationController.h"
 #import "iTermPreferences.h"
@@ -38,6 +37,7 @@
 #import "NSObject+iTerm.h"
 #import "NSSavePanel+iTerm.h"
 #import "NSURL+iTerm.h"
+#import "PasteboardHistory.h"
 #import "PTYMouseHandler.h"
 #import "PTYNoteViewController.h"
 #import "PTYTextView+Private.h"
@@ -100,7 +100,7 @@ static const NSUInteger kRectangularSelectionModifierMask = (kRectangularSelecti
     int x, y;
     int width = [self.dataSource width];
 
-    x = (locationInTextView.x - [iTermAdvancedSettingsModel terminalMargin] + self.charWidth * [iTermAdvancedSettingsModel fractionOfCharacterSelectingNextNeighbor]) / self.charWidth;
+    x = (locationInTextView.x - [iTermPreferences intForKey:kPreferenceKeySideMargins] + self.charWidth * [iTermAdvancedSettingsModel fractionOfCharacterSelectingNextNeighbor]) / self.charWidth;
     if (x < 0) {
         x = 0;
     }
@@ -139,7 +139,7 @@ static const NSUInteger kRectangularSelectionModifierMask = (kRectangularSelecti
 }
 
 - (NSPoint)pointForCoord:(VT100GridCoord)coord {
-    return NSMakePoint([iTermAdvancedSettingsModel terminalMargin] + coord.x * self.charWidth,
+    return NSMakePoint([iTermPreferences intForKey:kPreferenceKeySideMargins] + coord.x * self.charWidth,
                        coord.y * self.lineHeight);
 }
 
@@ -269,8 +269,6 @@ static const NSUInteger kRectangularSelectionModifierMask = (kRectangularSelecti
     [self setNeedsDisplay:YES];  // It would be better to just display the underlined/formerly underlined area.
     [self updateCursor:event action:action];
 }
-
-#pragma mark - Smart Selection
 
 #pragma mark - Context Menu
 
@@ -604,7 +602,7 @@ static const NSUInteger kRectangularSelectionModifierMask = (kRectangularSelecti
 }
 
 - (NSPoint)urlActionHelper:(iTermURLActionHelper *)helper pointForCoord:(VT100GridCoord)coord {
-    NSRect windowRect = [self convertRect:NSMakeRect(coord.x * self.charWidth + [iTermAdvancedSettingsModel terminalMargin],
+    NSRect windowRect = [self convertRect:NSMakeRect(coord.x * self.charWidth + [iTermPreferences intForKey:kPreferenceKeySideMargins],
                                                      coord.y * self.lineHeight,
                                                      0,
                                                      0)
@@ -781,6 +779,16 @@ allowRightMarginOverflow:(BOOL)allowRightMarginOverflow {
 
 - (void)contextMenuMovePane:(iTermTextViewContextMenuHelper *)contextMenu {
     [self.delegate textViewMovePane];
+}
+
+- (void)contextMenu:(iTermTextViewContextMenuHelper *)contextMenu copyURL:(NSURL *)url {
+    NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
+    [pasteboard declareTypes:@[ NSPasteboardTypeString ]
+                       owner:self];
+    NSString *copyString = url.absoluteString;
+    [pasteboard setString:copyString
+                  forType:NSPasteboardTypeString];
+    [[PasteboardHistory sharedInstance] save:copyString];
 }
 
 - (void)contextMenuSwapSessions:(iTermTextViewContextMenuHelper *)contextMenu {
@@ -1023,6 +1031,10 @@ toggleTerminalStateForMenuItem:(nonnull NSMenuItem *)item {
     iTermSnippet *snippet = [[iTermSnippet alloc] initWithTitle:selectedText
                                                           value:selectedText];
     [[iTermSnippetsModel sharedInstance] addSnippet:snippet];
+}
+
+- (void)contextMenu:(iTermTextViewContextMenuHelper *)contextMenu addTrigger:(NSString *)text {
+    [self.delegate textViewAddTrigger:text];
 }
 
 #pragma mark - NSResponder Additions

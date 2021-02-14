@@ -95,6 +95,10 @@ function Build {
   vi $SVNDIR/downloads/stable/iTerm2-${NAME}.description
   echo 'SHA-256 of the zip file is' > $SVNDIR/downloads/stable/iTerm2-${NAME}.changelog
   shasum -a256 iTerm2-${NAME}.zip | awk '{print $1}' >> $SVNDIR/downloads/stable/iTerm2-${NAME}.changelog
+  gpg --clearsign /tmp/sum
+  echo "You can use the following to verify the zip file on https://keybase.io/verify:" >> $SVNDIR/downloads/beta/iTerm2-${NAME}.changelog
+  echo "" >> $SVNDIR/downloads/beta/iTerm2-${NAME}.changelog
+  cat /tmp/sum.asc >> $SVNDIR/downloads/beta/iTerm2-${NAME}.changelog
   vi $SVNDIR/downloads/stable/iTerm2-${NAME}.changelog
   pushd $SVNDIR
 
@@ -104,6 +108,7 @@ function Build {
   git add downloads/stable/iTerm2-${NAME}.summary downloads/stable/iTerm2-${NAME}.description downloads/stable/iTerm2-${NAME}.changelog downloads/stable/iTerm2-${NAME}.zip source/appcasts/final_modern.xml source/appcasts/full_changes.txt downloads/stable/.htaccess
   popd
 
+  SparkleSign ${SPARKLE_PREFIX}final_new.xml ${SPARKLE_PREFIX}final_template_new.xml
   SparkleSign ${SPARKLE_PREFIX}final_modern.xml ${SPARKLE_PREFIX}final_template_modern.xml
 
   popd
@@ -132,9 +137,9 @@ git checkout -- version.txt
 
 git tag v${VERSION}
 git commit -am ${VERSION}
-#git push origin HEAD
-#git push --tags
+git push origin HEAD
+git push --tags
 cd $SVNDIR
 git commit -am v${VERSION}
-#git push origin HEAD
+git push origin HEAD
 

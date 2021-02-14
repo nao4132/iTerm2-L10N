@@ -11,6 +11,10 @@
 #import "iTermSearchableViewController.h"
 #import "PreferenceInfo.h"
 
+@protocol iTermPreferencePanelSizing<NSObject>
+- (CGFloat)preferencePanelMinimumWidth;
+@end
+
 // Used in preferenceDidChangeFromOtherPanel:'s notification's user info dictionary.
 extern NSString *const kPreferenceDidChangeFromOtherPanelKeyUserInfoKey;
 
@@ -23,7 +27,7 @@ extern NSString *const kPreferenceDidChangeFromOtherPanelKeyUserInfoKey;
 @property(nonatomic, readonly) NSMapTable *keyMap;
 @property(nonatomic, readonly) NSArray *keysForBulkCopy;
 
-@property(nonatomic, weak) NSWindowController *preferencePanel;
+@property(nonatomic, weak) NSWindowController<iTermPreferencePanelSizing> *preferencePanel;
 
 #pragma mark - Core Methods
 
@@ -41,6 +45,8 @@ extern NSString *const kPreferenceDidChangeFromOtherPanelKeyUserInfoKey;
 - (PreferenceInfo *)defineUnsearchableControl:(NSControl *)control
                                           key:(NSString *)key
                                          type:(PreferenceInfoType)type;
+
+- (void)associateStepper:(NSStepper *)stepper withPreference:(PreferenceInfo *)info;
 
 // Define a control with a custom settingChanged and update handler. If they're both not null then
 // the default value is not type checked.

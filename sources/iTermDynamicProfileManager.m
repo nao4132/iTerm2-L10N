@@ -148,7 +148,8 @@
 
 - (void)reportError:(NSString *)error file:(NSString *)file {
     [[iTermScriptHistory sharedInstance] addDynamicProfilesLoggingEntryIfNeeded];
-    [[iTermScriptHistoryEntry dynamicProfilesEntry] addOutput:[error stringByAppendingString:@"\n"]];
+    [[iTermScriptHistoryEntry dynamicProfilesEntry] addOutput:[error stringByAppendingString:@"\n"]
+                                                   completion:^{}];
 
     _pendingErrors += 1;
     if (_pendingErrors > 1) {
@@ -276,6 +277,9 @@
         DLog(@"Examine file %@", file);
         if ([file hasPrefix:@"."]) {
             DLog(@"Skipping it because of leading dot");
+            continue;
+        } else if ([file hasSuffix:@"~"]) {
+            DLog(@"Skipping it because of trailing tilde (GNU-style backup file)");
             continue;
         }
         NSString *fullName = [path stringByAppendingPathComponent:file];

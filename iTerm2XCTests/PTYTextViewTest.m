@@ -631,12 +631,10 @@ static NSString *const kDiffScriptPath = @"/tmp/diffs";
     [session setSize:size];
     NSRect theFrame = NSMakeRect(0,
                                  0,
-                                 size.width * session.textview.charWidth + [iTermAdvancedSettingsModel terminalMargin] * 2,
-                                 size.height * session.textview.lineHeight + [iTermAdvancedSettingsModel terminalVMargin] * 2);
+                                 size.width * session.textview.charWidth + [iTermPreferences intForKey:kPreferenceKeySideMargins] * 2,
+                                 size.height * session.textview.lineHeight + [iTermPreferences intForKey:kPreferenceKeyTopBottomMargins] * 2);
     session.view.frame = theFrame;
-    [session loadInitialColorTable];
-//    [session.nameController setSessionName:profile[KEY_NAME]];
-//    [session.nameController setOriginalName:profile[KEY_NAME]];
+    [session loadInitialColorTableAndResetCursorGuide];
     return session;
 }
 
@@ -2567,9 +2565,9 @@ static NSString *const kDiffScriptPath = @"/tmp/diffs";
         [iTermAdvancedSettingsModel loadAdvancedSettingsFromUserDefaults];
         // When
         [_textView selectAll:nil];
-        NSAttributedString *selectedAttributedText = [_textView selectedTextAttributed:YES
-                                                                          cappedAtSize:0
-                                                                     minimumLineNumber:0];
+        NSAttributedString *selectedAttributedText = [_textView selectedTextWithStyle:iTermCopyTextStyleAttributed
+                                                                         cappedAtSize:0
+                                                                    minimumLineNumber:0];
 
         // Then
         XCTAssertEqualObjects([text stringByAppendingString:@"\n"], selectedAttributedText.string);
@@ -2582,7 +2580,7 @@ static NSString *const kDiffScriptPath = @"/tmp/diffs";
     NSString *text = @"123456789abc";
     [session synchronousReadTask:text];
     [_textView selectAll:nil];
-    NSString *selectedText = [_textView selectedTextAttributed:NO cappedAtSize:5 minimumLineNumber:0];
+    NSString *selectedText = [_textView selectedTextWithStyle:iTermCopyTextStylePlainText cappedAtSize:5 minimumLineNumber:0];
     XCTAssertEqualObjects(@"12345", selectedText);
 }
 
@@ -2603,7 +2601,7 @@ static NSString *const kDiffScriptPath = @"/tmp/diffs";
         [iTermAdvancedSettingsModel loadAdvancedSettingsFromUserDefaults];
         // When
         [_textView selectAll:nil];
-        NSString *selectedText = [_textView selectedTextAttributed:NO cappedAtSize:0 minimumLineNumber:1];
+        NSString *selectedText = [_textView selectedTextWithStyle:iTermCopyTextStylePlainText cappedAtSize:0 minimumLineNumber:1];
 
         // Then
         XCTAssertEqualObjects(@"12345\n", selectedText);
@@ -2616,7 +2614,7 @@ static NSString *const kDiffScriptPath = @"/tmp/diffs";
     NSString *text = @"blah\r\n12345";
     [session synchronousReadTask:text];
     [_textView selectAll:nil];
-    NSString *selectedText = [_textView selectedTextAttributed:NO cappedAtSize:2 minimumLineNumber:1];
+    NSString *selectedText = [_textView selectedTextWithStyle:iTermCopyTextStylePlainText cappedAtSize:2 minimumLineNumber:1];
     XCTAssertEqualObjects(@"12", selectedText);
 }
 

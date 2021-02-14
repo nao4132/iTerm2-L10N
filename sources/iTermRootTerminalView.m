@@ -298,6 +298,9 @@ NS_CLASS_AVAILABLE_MAC(10_14)
                     if (@available(macOS 10.16, *)) {
                         halfName = @"WindowCorner_BigSur";
                     }
+                    if ([iTermAdvancedSettingsModel squareWindowCorners]) {
+                        halfName = @"WindowCorner_Square";
+                    }
                     gTopLeftCornerHalfImage = [[NSImage it_imageNamed:halfName forClass:self.class] it_verticallyFlippedImage];
                     gTopRightCornerHalfImage = [gTopLeftCornerHalfImage it_horizontallyFlippedImage];
                     gBottomLeftCornerHalfImage = [NSImage it_imageNamed:halfName forClass:self.class];
@@ -306,6 +309,9 @@ NS_CLASS_AVAILABLE_MAC(10_14)
                     NSString *fullName = @"WindowCornerFull";
                     if (@available(macOS 10.16, *)) {
                         fullName = @"WindowCornerFull_BigSur";
+                    }
+                    if ([iTermAdvancedSettingsModel squareWindowCorners]) {
+                        fullName = @"WindowCornerFull_Square";
                     }
                     gTopLeftCornerFullImage = [[NSImage it_imageNamed:fullName forClass:self.class] it_verticallyFlippedImage];
                     gTopRightCornerFullImage = [gTopLeftCornerFullImage it_horizontallyFlippedImage];
@@ -754,11 +760,6 @@ NS_CLASS_AVAILABLE_MAC(10_14)
 }
 
 - (void)updateBorderViews NS_AVAILABLE_MAC(10_14) {
-    if (@available(macOS 10.16, *)) {
-        // Don't need window border on 10.16. And possibly not on earlier versions of macOS?
-        // I think users will be more accepting of the change if it is tied to an OS change.
-        return;
-    }
     const BOOL haveLeft = self.delegate.haveLeftBorder;
     const BOOL haveTop = self.delegate.haveTopBorder;
     const BOOL haveRight = self.delegate.haveRightBorderRegardlessOfScrollBar;
@@ -1382,9 +1383,6 @@ NS_CLASS_AVAILABLE_MAC(10_14)
 
 - (NSRect)tabViewFrameByShrinkingForFullScreenTabBar:(NSRect)frame
                                               window:(NSWindow *)thisWindow {
-    if (@available(macOS 10.14, *)) {} else {
-        return frame;
-    }
     if (!thisWindow) {
         return frame;
     }
@@ -1402,6 +1400,10 @@ NS_CLASS_AVAILABLE_MAC(10_14)
         case PSMTab_TopTab:
             if (self.tabBarControl.flashing) {
                 // Overlaps content
+                return frame;
+            }
+            if (!_tabBarControlOnLoan && !self.tabBarControl.flashing) {
+                // Already accounted for this before calling this function.
                 return frame;
             }
             break;
@@ -1528,6 +1530,8 @@ NS_CLASS_AVAILABLE_MAC(10_14)
 
 - (void)layoutSubviews {
     DLog(@"layoutSubviews");
+    [self.delegate rootTerminalViewWillLayoutSubviews];
+
     if (@available(macOS 10.15, *)) { } else {
         _workaroundView.frame = NSMakeRect(0, self.bounds.size.height - 1, 1, 1);
     }
@@ -1599,7 +1603,7 @@ NS_CLASS_AVAILABLE_MAC(10_14)
 
 - (CGFloat)leftTabBarWidthForPreferredWidth:(CGFloat)preferredWidth contentWidth:(CGFloat)contentWidth {
     const CGFloat minimumWidth = [self minimumTabBarWidth];
-    const CGFloat maximumWidth = MAX(1, contentWidth - [iTermAdvancedSettingsModel terminalMargin] * 2 - 10);
+    const CGFloat maximumWidth = MAX(1, contentWidth - [iTermPreferences intForKey:kPreferenceKeySideMargins] * 2 - 10);
     return MAX(MIN(maximumWidth, preferredWidth), minimumWidth);
 }
 
@@ -1749,7 +1753,13 @@ NS_CLASS_AVAILABLE_MAC(10_14)
     }
     if ([_delegate lionFullScreen] || [_delegate enteringLionFullscreen]) {
         if (isTop) {
-            return [iTermPreferences boolForKey:kPreferenceKeyFlashTabBarInFullscreen];
+            if ([iTermPreferences boolForKey:kPreferenceKeyFlashTabBarInFullscreen]) {
+                return YES;
+            }
+            if (![self tabBarShouldBeVisible] && !_tabBarControlOnLoan) {
+                // Code path taken big Big Sur workaround for issue #9199
+                return YES;
+            }
         } else {
             return NO;
         }

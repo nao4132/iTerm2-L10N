@@ -194,6 +194,9 @@ NSInteger iTermGenerationAlwaysEncode = NSIntegerMax;
                                                  NSInteger index,
                                                  iTermGraphEncoder *subencoder,
                                                  BOOL *stop))block {
+    if (identifiers.count != [NSSet setWithArray:identifiers].count) {
+        ITBetaAssert(NO, @"Identifiers for %@ contains a duplicate: %@", key, identifiers);
+    }
     [self encodeChildWithKey:@"__array"
                   identifier:key
                   generation:generation
@@ -216,6 +219,7 @@ NSInteger iTermGenerationAlwaysEncode = NSIntegerMax;
         if (options & iTermGraphEncoderArrayOptionsReverse) {
             orderedIdentifiers = orderedIdentifiers.reversed;
         }
+        orderedIdentifiers = [orderedIdentifiers arrayByRemovingDuplicatesStably];
         [subencoder encodeString:[orderedIdentifiers componentsJoinedByString:@"\t"] forKey:@"__order"];
         return YES;
     }];

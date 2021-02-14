@@ -196,6 +196,10 @@
                      return YES;
                  }];
 
+    if (@available(macOS 10.16, *)) {
+        // 😢 See issue 9209
+        _subpixelAA.hidden = YES;
+    }
 
     _asciiFontPicker.delegate = self;
     _asciiFontPicker.mode = BFPCompositeViewModeFixedPitch;
@@ -299,9 +303,9 @@
 
 - (NSSize)myPreferredContentSize {
     if ([self boolForKey:KEY_USE_NONASCII_FONT]) {
-        return NSMakeSize(NSWidth(self.view.frame), _heightWithNonAsciiControls);
+        return NSMakeSize(((iTermSizeRememberingView *)self.view).originalSize.width, _heightWithNonAsciiControls);
     } else {
-        return NSMakeSize(NSWidth(self.view.frame), _heightWithoutNonAsciiControls);
+        return NSMakeSize(((iTermSizeRememberingView *)self.view).originalSize.width, _heightWithoutNonAsciiControls);
     }
 }
 

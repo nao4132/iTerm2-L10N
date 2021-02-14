@@ -20,6 +20,7 @@
 #import "iTermSelection.h"
 #import "iTermTextExtractor.h"
 #import "iTermURLActionHelper.h"
+#import "NSColor+iTerm.h"
 #import "RegexKitLite.h"
 #import "WindowControllerInterface.h"
 
@@ -97,7 +98,7 @@ static const int kMaxSelectedTextLengthForCustomActions = 400;
                                         workingDirectoryOnLine:y];
         markMenu = [self menuForMark:mark directory:workingDirectory];
         NSPoint locationInWindow = [event locationInWindow];
-        if (locationInWindow.x < [iTermAdvancedSettingsModel terminalMargin]) {
+        if (locationInWindow.x < [iTermPreferences intForKey:kPreferenceKeySideMargins]) {
             return markMenu;
         }
     }
@@ -172,7 +173,8 @@ static const int kMaxSelectedTextLengthForCustomActions = 400;
         [item action] == @selector(openImage:) ||
         [item action] == @selector(togglePauseAnimatingImage:) ||
         [item action] == @selector(inspectImage:) ||
-        [item action] == @selector(apiMenuItem:)) {
+        [item action] == @selector(apiMenuItem:) ||
+        [item action] == @selector(copyLinkAddress:)) {
         return YES;
     }
     if ([item action] == @selector(stopCoprocess:)) {
@@ -190,6 +192,7 @@ static const int kMaxSelectedTextLengthForCustomActions = 400;
         [item action] == @selector(mail:) ||
         [item action] == @selector(browse:) ||
         [item action] == @selector(searchInBrowser:) ||
+        [item action] == @selector(addTrigger:) ||
         [item action] == @selector(saveSelectionAsSnippet:)) {
         iTermSelection *selection = [self.delegate contextMenuSelection:self];
         return selection.hasSelection;
@@ -204,6 +207,10 @@ static const int kMaxSelectedTextLengthForCustomActions = 400;
                                                                   _validationClickPoint.x + 1,
                                                                   _validationClickPoint.y);
         return [self.delegate contextMenu:self hasOpenAnnotationInRange:range];
+    }
+
+    if ([self.smartSelectionActionSelectorDictionary.allValues containsObject:NSStringFromSelector(item.action)]) {
+        return YES;
     }
 
     return NO;
@@ -269,12 +276,43 @@ static const int kMaxSelectedTextLengthForCustomActions = 400;
     if (haveShortSelection) {
         shortSelectedText = [self.delegate contextMenuSelectedText:self capped:0];
         NSArray<NSString *> *synonyms = [shortSelectedText helpfulSynonyms];
+        BOOL needSeparator = synonyms.count > 0;
         for (NSString *conversion in synonyms) {
             NSMenuItem *theItem = [[NSMenuItem alloc] init];
             theItem.title = conversion;
             [theMenu addItem:theItem];
         }
-        if (synonyms.count) {
+        NSArray *captures = [shortSelectedText captureComponentsMatchedByRegex:@"^#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$"];
+        if (captures.count) {
+            NSMenuItem *theItem = [[NSMenuItem alloc] init];
+            NSColor *color = [NSColor colorFromHexString:shortSelectedText];
+            if (color) {
+                CGFloat x;
+                if (@available(macOS 10.16, *)) {
+                    x = 15;
+                } else {
+                    x = 11;
+                }
+                const CGFloat margin = 2;
+                const CGFloat height = 24;
+                const CGFloat width = 24;
+                NSView *wrapper = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, width + x, height + margin * 2)];
+                NSView *colorView = [[NSView alloc] initWithFrame:NSMakeRect(x, margin, width, height)];
+                colorView.wantsLayer = YES;
+                colorView.layer = [[CALayer alloc] init];
+                colorView.layer.backgroundColor = [color CGColor];
+                colorView.layer.borderColor = [color.isDark ? [NSColor colorWithWhite:0.8 alpha:1] : [NSColor colorWithWhite:0.2 alpha:1] CGColor];
+                colorView.layer.borderWidth = 1;
+                colorView.layer.cornerRadius = 3;
+                wrapper.autoresizesSubviews = YES;
+                colorView.autoresizingMask = NSViewMaxXMargin;
+                [wrapper addSubview:colorView];
+                theItem.view = wrapper;
+                [theMenu addItem:theItem];
+                needSeparator = YES;
+            }
+        }
+        if (needSeparator) {
             [theMenu addItem:[NSMenuItem separatorItem]];
         }
     }
@@ -304,26 +342,25 @@ static const int kMaxSelectedTextLengthForCustomActions = 400;
         }];
     }
 
-    [theMenu addItemWithTitle:scpTitle
-                       action:@selector(downloadWithSCP:)
-                keyEquivalent:@""];
-    [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
-    [theMenu addItemWithTitle:@"Open Selection as URL"
-                     action:@selector(browse:) keyEquivalent:@""];
-    [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
-    [theMenu addItemWithTitle:@"Search the Web for Selection"
-                     action:@selector(searchInBrowser:) keyEquivalent:@""];
-    [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
-    [theMenu addItemWithTitle:@"Send Email to Selected Address"
-                     action:@selector(mail:) keyEquivalent:@""];
-    [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
+    void (^add)(NSString *, SEL) = ^(NSString *title, SEL selector) {
+        [theMenu addItemWithTitle:title
+                         action:selector
+                    keyEquivalent:@""];
+        [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
+    };
+    add(scpTitle, @selector(downloadWithSCP:));
+    add(@"Open Selection as URL", @selector(browse:));
+    add(@"Search the Web for Selection", @selector(searchInBrowser:));
+    add(@"Send Email to Selected Address", @selector(mail:));
+    add(@"Add Trigger…", @selector(addTrigger:));
 
     // Separator
     [theMenu addItem:[NSMenuItem separatorItem]];
 
     // Custom actions
     if ([selection hasSelection] &&
-        [selection length] < kMaxSelectedTextLengthForCustomActions) {
+        [selection length] < kMaxSelectedTextLengthForCustomActions &&
+        coord.y >= 0) {
         NSString *selectedText = [self.delegate contextMenuSelectedText:self capped:1024];
         if ([self addCustomActionsToMenu:theMenu matchingText:selectedText line:coord.y]) {
             [theMenu addItem:[NSMenuItem separatorItem]];
@@ -335,22 +372,17 @@ static const int kMaxSelectedTextLengthForCustomActions = 400;
     }
 
     // Split pane options
-    [theMenu addItemWithTitle:@"Split Pane Vertically" action:@selector(splitTextViewVertically:) keyEquivalent:@""];
-    [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
-
-    [theMenu addItemWithTitle:@"Split Pane Horizontally" action:@selector(splitTextViewHorizontally:) keyEquivalent:@""];
-    [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
+    add(@"Split Pane Vertically", @selector(splitTextViewVertically:));
+    add(@"Split Pane Horizontally", @selector(splitTextViewHorizontally:));
 
     // Separator
     [theMenu addItem:[NSMenuItem separatorItem]];
 
-    [theMenu addItemWithTitle:@"Move Session to Split Pane" action:@selector(movePane:) keyEquivalent:@""];
-    [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
-
-    [theMenu addItemWithTitle:@"Move Session to Window" action:@selector(moveSessionToWindow:) keyEquivalent:@""];
-
-    [theMenu addItemWithTitle:@"Swap With Session…" action:@selector(swapSessions:) keyEquivalent:@""];
-    [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
+    add(@"Move Session to Split Pane", @selector(movePane:));
+    [theMenu addItemWithTitle:@"Move Session to Window"
+                     action:@selector(moveSessionToWindow:)
+                keyEquivalent:@""];
+    add(@"Swap With Session…", @selector(swapSessions:));
 
     // Separator
     [theMenu addItem:[NSMenuItem separatorItem]];
@@ -361,6 +393,19 @@ static const int kMaxSelectedTextLengthForCustomActions = 400;
                                                                  [NSBundle bundleForClass: [self class]],
                                                                  @"Context menu")
                      action:@selector(copy:) keyEquivalent:@""];
+
+    // Don't attempt to extract a URL from invalid coordinates (-1,-1) if opened from the session titlebar
+    if (coord.x >= 0 && coord.y >= 0) {
+        iTermTextExtractor *extractor = [self.delegate contextMenuTextExtractor:self];
+        NSString *urlID;
+        NSURL *url = [extractor urlOfHypertextLinkAt:coord urlId:&urlID];
+        if (url) {
+            NSMenuItem *item = [theMenu addItemWithTitle:@"Copy Link Address" action:@selector(copyLinkAddress:) keyEquivalent:@""];
+            item.target = self;
+            item.representedObject = url;
+        }
+    }
+    
     [theMenu addItemWithTitle:NSLocalizedStringFromTableInBundle(@"Paste",
                                                                  @"iTerm",
                                                                  [NSBundle bundleForClass: [self class]],
@@ -382,78 +427,44 @@ static const int kMaxSelectedTextLengthForCustomActions = 400;
                                                                  @"Context menu")
                      action:@selector(selectAll:) keyEquivalent:@""];
 
-    [theMenu addItemWithTitle:@"Send Selection"
-                       action:@selector(sendSelection:)
-                keyEquivalent:@""];
-    [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
-    [theMenu addItemWithTitle:@"Save Selection as Snippet"
-                     action:@selector(saveSelectionAsSnippet:) keyEquivalent:@""];
-    [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
+    add(@"Send Selection", @selector(sendSelection:));
+    add(@"Save Selection as Snippet", @selector(saveSelectionAsSnippet:));
 
     // Clear buffer
-    [theMenu addItemWithTitle:@"Clear Buffer"
-                       action:@selector(clearTextViewBuffer:)
-                keyEquivalent:@""];
-    [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
+    add(@"Clear Buffer", @selector(clearTextViewBuffer:));
 
     // Make note
-    [theMenu addItemWithTitle:@"Annotate Selection"
-                       action:@selector(addNote:)
-                keyEquivalent:@""];
-    [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
-
-    [theMenu addItemWithTitle:@"Reveal Annotation"
-                       action:@selector(showNotes:)
-                keyEquivalent:@""];
-    [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
+    add(@"Annotate Selection", @selector(addNote:));
+    add(@"Reveal Annotation", @selector(showNotes:));
 
     // Separator
     [theMenu addItem:[NSMenuItem separatorItem]];
 
     // Edit Session
-    [theMenu addItemWithTitle:@"Edit Session..."
-                       action:@selector(editTextViewSession:)
-                keyEquivalent:@""];
-    [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
+    add(@"Edit Session...", @selector(editTextViewSession:));
 
     // Separator
     [theMenu addItem:[NSMenuItem separatorItem]];
 
     // Toggle broadcast
-    [theMenu addItemWithTitle:@"Toggle Broadcasting Input"
-                       action:@selector(toggleBroadcastingInput:)
-                keyEquivalent:@""];
-    [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
+    add(@"Toggle Broadcasting Input", @selector(toggleBroadcastingInput:));
 
     if ([self.delegate contextMenuHasCoprocess:self]) {
-        [theMenu addItemWithTitle:@"Stop Coprocess"
-                           action:@selector(stopCoprocess:)
-                    keyEquivalent:@""];
-        [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
+        add(@"Stop Coprocess", @selector(stopCoprocess:));
     }
 
     // Separator
     [theMenu addItem:[NSMenuItem separatorItem]];
 
     // Close current pane
-    [theMenu addItemWithTitle:@"Close"
-                       action:@selector(closeTextViewSession:)
-                keyEquivalent:@""];
-    [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
-
-    [theMenu addItemWithTitle:@"Restart"
-                       action:@selector(restartSession:)
-                keyEquivalent:@""];
-    [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
+    add(@"Close", @selector(closeTextViewSession:));
+    add(@"Restart", @selector(restartSession:));
 
     [self.delegate contextMenu:self amend:theMenu];
 
     // Separator
     [theMenu addItem:[NSMenuItem separatorItem]];
-    [theMenu addItemWithTitle:@"Bury"
-                       action:@selector(bury:)
-                keyEquivalent:@""];
-    [[theMenu itemAtIndex:[theMenu numberOfItems] - 1] setTarget:self];
+    add(@"Bury", @selector(bury:));
 
     // Terminal State
     [theMenu addItem:[NSMenuItem separatorItem]];
@@ -712,6 +723,10 @@ static const int kMaxSelectedTextLengthForCustomActions = 400;
     [_urlActionHelper findUrlInString:url.absoluteString andOpenInBackground:NO];
 }
 
+- (void)addTrigger:(id)sender {
+    [self.delegate contextMenu:self addTrigger:[self.delegate contextMenuSelectedText:self capped:0]];
+}
+
 - (void)mail:(id)sender {
     NSString *mailto;
 
@@ -736,6 +751,10 @@ static const int kMaxSelectedTextLengthForCustomActions = 400;
 
 - (void)movePane:(id)sender {
     [self.delegate contextMenuMovePane:self];
+}
+
+- (void)copyLinkAddress:(id)sender {
+    [self.delegate contextMenu:self copyURL:[sender representedObject]];
 }
 
 - (void)swapSessions:(id)sender {
@@ -1113,27 +1132,36 @@ static const int kMaxSelectedTextLengthForCustomActions = 400;
 }
 
 - (NSDate *)dateValueFromUnix {
-    static const NSUInteger kTimestampLength = 10;
-    static const NSUInteger kJavaTimestampLength = 13;
-    if ((self.length == kTimestampLength ||
-         self.length == kJavaTimestampLength) &&
-        [self hasPrefix:@"1"]) {
-        for (int i = 0; i < kTimestampLength; i++) {
-            if (!isdigit([self characterAtIndex:i])) {
-                return nil;
-            }
+    typedef struct {
+        NSString *regex;
+        double divisor;
+    } Format;
+    // TODO: Change these regexes to begin with ^[12] in the year 2032 or so.
+    Format formats[] = {
+        {
+            .regex = @"^1[0-9]{9}$",
+            .divisor = 1
+        },
+        {
+            .regex = @"^1[0-9]{12}$",
+            .divisor = 1000
+        },
+        {
+            .regex = @"^1[0-9]{15}$",
+            .divisor = 1000000
+        },
+        {
+            .regex = @"^1[0-9]{9}\\.[0-9]+$",
+            .divisor = 1
         }
-        // doubles run out of precision at 2^53. The largest Java timestamp we will convert is less
-        // than 2^41, so this is fine.
-        NSTimeInterval timestamp = [self doubleValue];
-        if (self.length == kJavaTimestampLength) {
-            // Convert milliseconds to seconds
-            timestamp /= 1000.0;
+    };
+    for (size_t i = 0; i < sizeof(formats) / sizeof(*formats); i++) {
+        if ([self isMatchedByRegex:formats[i].regex]) {
+            const NSTimeInterval timestamp = [self doubleValue] / formats[i].divisor;
+            return [NSDate dateWithTimeIntervalSince1970:timestamp];
         }
-        return [NSDate dateWithTimeIntervalSince1970:timestamp];
-    } else {
-        return nil;
     }
+    return nil;
 }
 
 - (NSDate *)dateValueFromUTC {
@@ -1157,3 +1185,4 @@ static const int kMaxSelectedTextLengthForCustomActions = 400;
 }
 
 @end
+

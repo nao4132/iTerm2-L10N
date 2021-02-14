@@ -15,6 +15,29 @@
 #import "pidinfo.h"
 #include <stdatomic.h>
 
+typedef void (^iTermRecentBranchFetchCallback)(NSArray<NSString *> *);
+
+@interface iTermGitRecentBranchesBox: NSObject
+@property (nonatomic, copy) iTermRecentBranchFetchCallback block;
+@end
+
+@implementation iTermGitRecentBranchesBox
+- (BOOL)isEqual:(id)object {
+    return self == object;
+}
+@end
+
+@interface iTermGitStateHandlerBox: NSObject
+@property (nonatomic, copy) void (^block)(iTermGitState *);
+@end
+
+@implementation iTermGitStateHandlerBox
+
+- (BOOL)isEqual:(id)object {
+    return self == object;
+}
+@end
+
 @interface iTermSlowOperationGateway()
 @property (nonatomic, readwrite) BOOL ready;
 @end
@@ -22,6 +45,8 @@
 @implementation iTermSlowOperationGateway {
     NSXPCConnection *_connectionToService;
     NSTimeInterval _timeout;
+    NSMutableArray<iTermGitStateHandlerBox *> *_gitStateHandlers;
+    NSMutableArray<iTermGitRecentBranchesBox *> *_gitRecentBranchFetchCallbacks;
 }
 
 + (instancetype)sharedInstance {
@@ -36,6 +61,8 @@
 - (instancetype)initPrivate {
     self = [super init];
     if (self) {
+        _gitStateHandlers = [NSMutableArray array];
+        _gitRecentBranchFetchCallbacks = [NSMutableArray array];
         _timeout = 0.5;
         [self connect];
         __weak __typeof(self) weakSelf = self;
@@ -69,6 +96,33 @@
             [weakSelf didInvalidateConnection];
         });
     };
+    _connectionToService.interruptionHandler = ^{
+        [weakSelf didInterrupt];
+    };
+}
+
+- (void)didInterrupt {
+    {
+        NSArray<iTermGitStateHandlerBox *> *handlers;
+        @synchronized (_gitStateHandlers) {
+            handlers = [_gitStateHandlers copy];
+            [_gitStateHandlers removeAllObjects];
+        }
+        DLog(@"didInterrupt. Run all %@ handlers", @(handlers.count));
+        [handlers enumerateObjectsUsingBlock:^(iTermGitStateHandlerBox  *_Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+            obj.block(nil);
+        }];
+    }
+    {
+        NSArray<iTermGitRecentBranchesBox *> *handlers;
+        @synchronized (_gitRecentBranchFetchCallbacks) {
+            handlers = [_gitRecentBranchFetchCallbacks copy];
+            [_gitRecentBranchFetchCallbacks removeAllObjects];
+        }
+        [handlers enumerateObjectsUsingBlock:^(iTermGitRecentBranchesBox *_Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+            obj.block(nil);
+        }];
+    }
 }
 
 - (int)nextReqid {
@@ -140,4 +194,77 @@
     });
 }
 
+- (void)runCommandInUserShell:(NSString *)command completion:(void (^)(NSString *))completion {
+    [[_connectionToService remoteObjectProxy] runShellScript:command
+                                                       shell:[iTermOpenDirectory userShell] ?: @"/bin/bash"
+                                                   withReply:^(NSData * _Nullable data,
+                                                               NSData * _Nullable error,
+                                                               int status) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            completion(status == 0 ? [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] stringByTrimmingTrailingCharactersFromCharacterSet:[NSCharacterSet newlineCharacterSet]] : nil);
+        });
+    }];
+}
+
+- (void)findCompletionsWithPrefix:(NSString *)prefix
+                    inDirectories:(NSArray<NSString *> *)directories
+                              pwd:(NSString *)pwd
+                         maxCount:(NSInteger)maxCount
+                       executable:(BOOL)executable
+                       completion:(void (^)(NSArray<NSString *> *))completions {
+    [[_connectionToService remoteObjectProxy] findCompletionsWithPrefix:prefix
+                                                          inDirectories:directories
+                                                                    pwd:pwd
+                                                               maxCount:maxCount
+                                                             executable:executable
+                                                              withReply:completions];
+}
+
+- (void)requestGitStateForPath:(NSString *)path
+                    completion:(void (^)(iTermGitState * _Nullable))completion {
+    iTermGitStateHandlerBox *box = [[iTermGitStateHandlerBox alloc] init];
+    box.block = completion;
+    @synchronized(_gitStateHandlers) {
+        [_gitStateHandlers addObject:box];
+    }
+    [[_connectionToService remoteObjectProxy] requestGitStateForPath:path
+                                                          completion:^(iTermGitState * _Nullable state) {
+        [self didGetGitState:state completion:box];
+    }];
+}
+
+- (void)didGetGitState:(iTermGitState *)gitState completion:(iTermGitStateHandlerBox *)completion {
+    @synchronized (_gitStateHandlers) {
+        if (![_gitStateHandlers containsObject:completion]) {
+            return;
+        }
+        [_gitStateHandlers removeObject:completion];
+    }
+    completion.block(gitState);
+}
+
+- (void)fetchRecentBranchesAt:(NSString *)path
+                        count:(NSInteger)maxCount
+                   completion:(void (^)(NSArray<NSString *> *))reply {
+    iTermGitRecentBranchesBox *box = [[iTermGitRecentBranchesBox alloc] init];
+    box.block = reply;
+    @synchronized(_gitStateHandlers) {
+        [_gitRecentBranchFetchCallbacks addObject:box];
+    }
+    [[_connectionToService remoteObjectProxy] fetchRecentBranchesAt:path
+                                                              count:maxCount
+                                                         completion:^(NSArray<NSString *> * _Nonnull branches) {
+        [self didGetRecentBranches:branches box:box];
+    }];
+}
+
+- (void)didGetRecentBranches:(NSArray<NSString *> *)branches box:(iTermGitRecentBranchesBox *)box {
+    @synchronized (_gitRecentBranchFetchCallbacks) {
+        if (![_gitRecentBranchFetchCallbacks containsObject:box]) {
+            return;
+        }
+        [_gitRecentBranchFetchCallbacks removeObject:box];
+    }
+    box.block(branches);
+}
 @end

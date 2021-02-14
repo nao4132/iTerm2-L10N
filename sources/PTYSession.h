@@ -45,6 +45,7 @@ extern NSString *const iTermSessionWillTerminateNotification;
 @class iTermAnnouncementViewController;
 @class iTermEchoProbe;
 @class iTermExpect;
+@class iTermImageWrapper;
 @class iTermKeyBindingAction;
 @class iTermScriptHistoryEntry;
 @class iTermStatusBarViewController;
@@ -122,6 +123,7 @@ typedef enum {
 // End the session (calling terminate normally or killing/hiding a tmux
 // session), and closes the tab if needed.
 - (void)closeSession:(PTYSession *)session;
+- (void)softCloseSession:(PTYSession *)session;
 
 // Sets whether the bell indicator should show.
 - (void)setBell:(BOOL)flag;
@@ -251,15 +253,16 @@ typedef enum {
 - (void)sessionEditActions;
 - (void)sessionEditSnippets;
 - (void)session:(PTYSession *)session
-setBackgroundImage:(NSImage *)image
+setBackgroundImage:(iTermImageWrapper *)image
            mode:(iTermBackgroundImageMode)imageMode
 backgroundColor:(NSColor *)backgroundColor;
-- (NSImage *)sessionBackgroundImage;
+- (iTermImageWrapper *)sessionBackgroundImage;
 - (iTermBackgroundImageMode)sessionBackgroundImageMode;
 - (CGFloat)sessionBlend;
 - (void)sessionDidUpdatePreferencesFromProfile:(PTYSession *)session;
 - (id<iTermSwipeHandler>)sessionSwipeHandler;
 - (BOOL)sessionIsInSelectedTab:(PTYSession *)session;
+- (void)sessionDisableFocusFollowsMouseAtCurrentLocation;
 @end
 
 @class SessionView;
@@ -391,7 +394,7 @@ backgroundColor:(NSColor *)backgroundColor;
 
 // Filename of background image.
 @property(nonatomic, copy) NSString *backgroundImagePath;  // Used by scripting
-@property(nonatomic, retain) NSImage *backgroundImage;
+@property(nonatomic, retain) iTermImageWrapper *backgroundImage;
 
 @property(nonatomic, retain) iTermColorMap *colorMap;
 @property(nonatomic, assign) float transparency;
@@ -643,6 +646,7 @@ backgroundColor:(NSColor *)backgroundColor;
 // Preferences
 - (void)setPreferencesFromAddressBookEntry: (NSDictionary *)aePrefs;
 - (void)loadInitialColorTable;
+- (void)loadInitialColorTableAndResetCursorGuide;
 
 // Call this after the profile changed. If not divorced, the profile and
 // settings are updated. If divorced, changes are found in the session and
@@ -730,14 +734,18 @@ backgroundColor:(NSColor *)backgroundColor;
 - (void)changeFontSizeDirection:(int)dir;
 - (void)setFont:(NSFont*)font
     nonAsciiFont:(NSFont*)nonAsciiFont
-    horizontalSpacing:(float)horizontalSpacing
-    verticalSpacing:(float)verticalSpacing;
+    horizontalSpacing:(CGFloat)horizontalSpacing
+    verticalSpacing:(CGFloat)verticalSpacing;
 
 // Assigns a new GUID to the session so that changes to the bookmark will not
 // affect it. Returns the GUID of a divorced bookmark. Does nothing if already
 // divorced, but still returns the divorced GUID.
 - (NSString*)divorceAddressBookEntryFromPreferences;
 - (void)remarry;
+
+// After divorcing, if there are already profile values that differ from underlying, call this to
+// set overridden fields.
+- (void)refreshOverriddenFields;
 
 // Call refresh on the textview and schedule a timer if anything is blinking.
 - (void)refresh;
@@ -880,6 +888,7 @@ backgroundColor:(NSColor *)backgroundColor;
 - (BOOL)copyModeConsumesEvent:(NSEvent *)event;
 - (Profile *)profileForSplit;
 - (void)compose;
+- (BOOL)closeComposer;
 - (void)didChangeScreen:(CGFloat)scaleFactor;
 
 #pragma mark - API

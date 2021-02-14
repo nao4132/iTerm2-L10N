@@ -3,13 +3,13 @@
 #import "iTermPopupWindowController.h"
 #import "DebugLogging.h"
 #import "iTermAdvancedSettingsModel.h"
+#import "iTermPreferences.h"
 #import "NSTextField+iTerm.h"
 #import "NSView+iTerm.h"
 #import "NSWindow+PSM.h"
 #import "PopupEntry.h"
 #import "PopupModel.h"
 #import "PopupWindow.h"
-#import "PTYTextView.h"
 #import "SolidColorView.h"
 #import "VT100Screen.h"
 
@@ -147,10 +147,11 @@
     return (PopupWindow *)self.window;
 }
 
-- (void)popWithDelegate:(id<PopupDelegate>)delegate {
+- (void)popWithDelegate:(id<PopupDelegate>)delegate
+               inWindow:(NSWindow *)owningWindow {
     self.delegate = delegate;
 
-    [self.popupWindow setOwningWindow:delegate.popupWindowController.window];
+    [self.popupWindow setOwningWindow:owningWindow];
 
     static const NSTimeInterval kAnimationDuration = 0.15;
     self.window.alphaValue = 0;
@@ -162,8 +163,8 @@
         self.window.level = NSPopUpMenuWindowLevel;
         [self.window makeKeyAndOrderFront:nil];
     } else {
-        [self showWindow:delegate.popupWindowController];
-        [[self window] makeKeyAndOrderFront:delegate.popupWindowController];
+        [self showWindow:nil];
+        [[self window] makeKeyAndOrderFront:nil];
     }
     [NSAnimationContext beginGrouping];
     [[NSAnimationContext currentContext] setDuration:kAnimationDuration];
@@ -302,27 +303,22 @@
 {
     BOOL onTop = NO;
 
-    VT100Screen* screen = [self.delegate popupVT100Screen];
-    int cx = [screen cursorX] - 1;
-    int cy = [screen cursorY];
+    id<iTermPopupWindowPresenter> presenter = [self.delegate popupPresenter];
+    [presenter popupWindowWillPresent:self];
 
-    PTYTextView* tv = [self.delegate popupVT100TextView];
-    [tv scrollEnd];
     NSRect frame = [[self window] frame];
     frame.size.height = self.desiredHeight;
 
-    NSPoint p = NSMakePoint([iTermAdvancedSettingsModel terminalMargin] + cx * [tv charWidth],
-                            ([screen numberOfLines] - [screen height] + cy) * [tv lineHeight]);
-    p = [tv convertPoint:p toView:nil];
-    p = [[tv window] pointToScreenCoords:p];
+    const NSRect cursorRect = [presenter popupWindowOriginRectInScreenCoords];
+    NSPoint p = cursorRect.origin;
     p.y -= frame.size.height;
 
-    NSRect monitorFrame = [[[[self.delegate popupWindowController] window] screen] visibleFrame];
+    NSRect monitorFrame = [self.delegate popupScreenVisibleFrame];
 
     if (canChangeSide) {
         // p.y gives the bottom of the frame relative to the bottom of the screen, assuming it's below the cursor.
         float bottomOverflow = monitorFrame.origin.y - p.y;
-        float topOverflow = p.y + 2 * frame.size.height + [tv lineHeight] - (monitorFrame.origin.y + monitorFrame.size.height);
+        float topOverflow = p.y + 2 * frame.size.height + NSHeight(cursorRect) - (monitorFrame.origin.y + monitorFrame.size.height);
         if (bottomOverflow > 0 && topOverflow < bottomOverflow) {
             onTop = YES;
         }
@@ -330,7 +326,7 @@
         onTop = onTop_;
     }
     if (onTop) {
-        p.y += frame.size.height + [tv lineHeight];
+        p.y += frame.size.height + NSHeight(cursorRect);
     }
     float rightX = monitorFrame.origin.x + monitorFrame.size.width;
     if (p.x + frame.size.width > rightX) {

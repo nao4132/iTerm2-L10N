@@ -5,6 +5,7 @@
 #import "iTermMalloc.h"
 #import "iTermMetalBufferPool.h"
 #import "iTermMetalDebugInfo.h"
+#import "iTermSharedImageStore.h"
 #import "iTermShaderTypes.h"
 #import "iTermTexture.h"
 #import "NSDictionary+iTerm.h"
@@ -69,13 +70,15 @@ const NSInteger iTermMetalDriverMaximumNumberOfFramesInFlight = 3;
 - (instancetype)initWithViewportSize:(vector_uint2)viewportSize
                                scale:(CGFloat)scale
                   hasBackgroundImage:(BOOL)hasBackgroundImage
-                        extraMargins:(NSEdgeInsets)extraMargins {
+                        extraMargins:(NSEdgeInsets)extraMargins
+maximumExtendedDynamicRangeColorComponentValue:(CGFloat)maximumExtendedDynamicRangeColorComponentValue {
     self = [super init];
     if (self) {
         _viewportSize = viewportSize;
         _scale = scale;
         _hasBackgroundImage = hasBackgroundImage;
         _extraMargins = extraMargins;
+        _maximumExtendedDynamicRangeColorComponentValue = maximumExtendedDynamicRangeColorComponentValue;
     }
     return self;
 }
@@ -346,7 +349,11 @@ const NSInteger iTermMetalDriverMaximumNumberOfFramesInFlight = 3;
     pipelineStateDescriptor.label = [NSString stringWithFormat:@"Pipeline for %@", NSStringFromClass([self class])];
     pipelineStateDescriptor.vertexFunction = vertexFunction;
     pipelineStateDescriptor.fragmentFunction = fragmentFunction;
-    pipelineStateDescriptor.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm;
+    if ([iTermAdvancedSettingsModel hdrCursor]) {
+        pipelineStateDescriptor.colorAttachments[0].pixelFormat = MTLPixelFormatRGBA16Float;
+    } else {
+        pipelineStateDescriptor.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm;
+    }
 
     if (blending) {
         MTLRenderPipelineColorAttachmentDescriptor *renderbufferAttachment = pipelineStateDescriptor.colorAttachments[0];
@@ -368,7 +375,7 @@ const NSInteger iTermMetalDriverMaximumNumberOfFramesInFlight = 3;
     return pipeline;
 }
 
-- (nullable id<MTLTexture>)textureFromImage:(NSImage *)image context:(nullable iTermMetalBufferPoolContext *)context {
+- (nullable id<MTLTexture>)textureFromImage:(iTermImageWrapper *)image context:(nullable iTermMetalBufferPoolContext *)context {
     return [self textureFromImage:image context:context pool:nil];
 }
 
@@ -392,17 +399,15 @@ const NSInteger iTermMetalDriverMaximumNumberOfFramesInFlight = 3;
     }
 }
 
-- (nullable id<MTLTexture>)textureFromImage:(NSImage *)image context:(iTermMetalBufferPoolContext *)context pool:(iTermTexturePool *)pool {
-    if (!image) {
+- (nullable id<MTLTexture>)textureFromImage:(iTermImageWrapper *)image context:(iTermMetalBufferPoolContext *)context pool:(iTermTexturePool *)pool {
+    if (!image.image) {
         return nil;
     }
-    NSRect imageRect = NSMakeRect(0, 0, image.size.width, image.size.height);
-    CGImageRef imageRef = [image CGImageForProposedRect:&imageRect context:NULL hints:nil];
 
-    // Create a suitable bitmap context for extracting the bits of the image
+    // Calculate a safe size for the image while preserving its aspect ratio.
     NSUInteger width, height;
-    [self convertWidth:CGImageGetWidth(imageRef)
-                height:CGImageGetHeight(imageRef)
+    [self convertWidth:image.image.size.width
+                height:image.image.size.height
                toWidth:&width
                 height:&height
           notExceeding:4096];
@@ -410,22 +415,11 @@ const NSInteger iTermMetalDriverMaximumNumberOfFramesInFlight = 3;
         return nil;
     }
 
-    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    uint8_t *rawData = (uint8_t *)iTermCalloc(height * width * 4, sizeof(uint8_t));
-    NSUInteger bytesPerPixel = 4;
-    NSUInteger bytesPerRow = bytesPerPixel * width;
-    NSUInteger bitsPerComponent = 8;
-    CGContextRef bitmapContext = CGBitmapContextCreate(rawData, width, height,
-                                                       bitsPerComponent, bytesPerRow, colorSpace,
-                                                       kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
-    CGColorSpaceRelease(colorSpace);
-
-    // Flip the context so the positive Y axis points down
-    CGContextTranslateCTM(bitmapContext, 0, height);
-    CGContextScaleCTM(bitmapContext, 1, -1);
-
-    CGContextDrawImage(bitmapContext, CGRectMake(0, 0, width, height), imageRef);
-    CGContextRelease(bitmapContext);
+    NSData *data = [image.image rawDataForMetal];
+    if (!data) {
+        return nil;
+    }
+    const uint8_t *rawData = data.bytes;
 
     MTLTextureDescriptor *textureDescriptor =
     [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
@@ -441,6 +435,8 @@ const NSInteger iTermMetalDriverMaximumNumberOfFramesInFlight = 3;
     }
 
     MTLRegion region = MTLRegionMake2D(0, 0, width, height);
+    NSUInteger bytesPerPixel = 4;
+    NSUInteger bytesPerRow = bytesPerPixel * width;
     [texture replaceRegion:region mipmapLevel:0 withBytes:rawData bytesPerRow:bytesPerRow];
 
     [iTermTexture setBytesPerRow:bytesPerRow
@@ -448,7 +444,6 @@ const NSInteger iTermMetalDriverMaximumNumberOfFramesInFlight = 3;
                  samplesPerPixel:4
                       forTexture:texture];
 
-    free(rawData);
     if (texture) {
         [context didAddTextureOfSize:texture.width * texture.height];
     }

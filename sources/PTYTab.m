@@ -36,6 +36,7 @@
 #import "NSWindow+PSM.h"
 #import "PreferencePanel.h"
 #import "ProfileModel.h"
+#import "ProfilesWindowPreferencesViewController.h"
 #import "PSMTabBarControl.h"
 #import "PSMTabDragAssistant.h"
 #import "PSMTabStyle.h"
@@ -303,12 +304,10 @@ static void SetAgainstGrainDim(BOOL isVertical, NSSize *dest, CGFloat value) {
 
 + (NSSize)cellSizeForBookmark:(Profile *)bookmark {
     NSFont *font;
-    double hspace;
-    double vspace;
 
     font = [ITAddressBookMgr fontWithDesc:[bookmark objectForKey:KEY_NORMAL_FONT]];
-    hspace = [[bookmark objectForKey:KEY_HORIZONTAL_SPACING] doubleValue];
-    vspace = [[bookmark objectForKey:KEY_VERTICAL_SPACING] doubleValue];
+    const CGFloat hspace = [[bookmark objectForKey:KEY_HORIZONTAL_SPACING] doubleValue];
+    const CGFloat vspace = [[bookmark objectForKey:KEY_VERTICAL_SPACING] doubleValue];
     return [PTYTextView charSizeForFont:font
                       horizontalSpacing:hspace
                         verticalSpacing:vspace];
@@ -515,6 +514,7 @@ static void SetAgainstGrainDim(BOOL isVertical, NSSize *dest, CGFloat value) {
 #pragma mark - NSCopying
 
 - (id)copyWithZone:(NSZone *)zone {
+    DLog(@"Making a copy of tab %@", self);
     NSDictionary *arrangement = [self arrangementWithNewGUID];
     PTYTab *theCopy = [PTYTab tabWithArrangement:arrangement
                                            named:nil
@@ -738,6 +738,7 @@ static void SetAgainstGrainDim(BOOL isVertical, NSSize *dest, CGFloat value) {
 }
 
 - (void)addSession:(PTYSession *)session toRestorableSession:(iTermRestorableSession *)restorableSession {
+    DLog(@"Add %@ to restorable session", session);
     NSArray *sessions = restorableSession.sessions ?: @[];
     restorableSession.sessions = [sessions arrayByAddingObject:session];
     restorableSession.terminalGuid = self.realParentWindow.terminalGuid;
@@ -972,11 +973,12 @@ static void SetAgainstGrainDim(BOOL isVertical, NSSize *dest, CGFloat value) {
     }
     Profile *profile = [self.tmuxController profileForWindow:self.tmuxWindow];
     NSSize cellSize = [PTYTab cellSizeForBookmark:profile];
+    const NSSize delta = NSMakeSize(flexibleView_.frame.size.width - root_.frame.size.width,
+                                    flexibleView_.frame.size.height - root_.frame.size.height);
     if (![realParentWindow_ anyFullScreen] &&
-        flexibleView_.frame.size.width > root_.frame.size.width &&
-        flexibleView_.frame.size.width - root_.frame.size.width < cellSize.width &&
-        flexibleView_.frame.size.height > root_.frame.size.height &&
-        flexibleView_.frame.size.height - root_.frame.size.height < cellSize.height) {
+        delta.width >= 0 && delta.width < cellSize.width &&
+        delta.height >= 0 && delta.height < cellSize.height) {
+        DLog(@"Root is slightly smaller than flexible view so use terminal background color for flexible view's background");
         // Root is just slightly smaller than flexibleView, by less than the size of a character.
         // Set flexible view's color to the default background color for tmux tabs.
         NSColor *bgColor;
@@ -1343,6 +1345,10 @@ static void SetAgainstGrainDim(BOOL isVertical, NSSize *dest, CGFloat value) {
 
 - (void)closeSession:(PTYSession *)session {
     [[self parentWindow] closeSession:session];
+}
+
+- (void)softCloseSession:(PTYSession *)session {
+    [[self realParentWindow] softCloseSession:session];
 }
 
 - (void)terminateAllSessions {
@@ -1980,8 +1986,8 @@ static void SetAgainstGrainDim(BOOL isVertical, NSSize *dest, CGFloat value) {
     NSSize size;
     DLog(@"    calculating session size based on %dx%d cells", columns, rows);
     DLog(@"    cell size is %@", NSStringFromSize(NSMakeSize(charWidth, lineHeight)));
-    size.width = columns * charWidth + [iTermAdvancedSettingsModel terminalMargin] * 2;
-    size.height = rows * lineHeight + [iTermAdvancedSettingsModel terminalVMargin] * 2;
+    size.width = columns * charWidth + [iTermPreferences intForKey:kPreferenceKeySideMargins] * 2;
+    size.height = rows * lineHeight + [iTermPreferences intForKey:kPreferenceKeyTopBottomMargins] * 2;
     DLog(@"    size for content is %@", NSStringFromSize(size));
     BOOL hasScrollbar = [term scrollbarShouldBeVisible];
     DLog(@"    term=%@, hasScrollbar=%@, scrollerStyle=%@, NSScroller.preferredScrollerStyle=%@", term, @(hasScrollbar), @([term scrollerStyle]), @([NSScroller preferredScrollerStyle]));
@@ -2015,8 +2021,8 @@ static void SetAgainstGrainDim(BOOL isVertical, NSSize *dest, CGFloat value) {
 - (NSSize)_minSessionSize:(SessionView*)sessionView {
     NSSize size;
     PTYSession *session = [self sessionForSessionView:sessionView];
-    size.width = kVT100ScreenMinColumns * [[session textview] charWidth] + [iTermAdvancedSettingsModel terminalMargin] * 2;
-    size.height = kVT100ScreenMinRows * [[session textview] lineHeight] + [iTermAdvancedSettingsModel terminalVMargin] * 2;
+    size.width = kVT100ScreenMinColumns * [[session textview] charWidth] + [iTermPreferences intForKey:kPreferenceKeySideMargins] * 2;
+    size.height = kVT100ScreenMinRows * [[session textview] lineHeight] + [iTermPreferences intForKey:kPreferenceKeyTopBottomMargins] * 2;
 
     BOOL hasScrollbar = [parentWindow_ scrollbarShouldBeVisible];
     NSSize scrollViewSize =
@@ -2379,8 +2385,8 @@ static void SetAgainstGrainDim(BOOL isVertical, NSSize *dest, CGFloat value) {
                             style:[parentWindow_ scrollerStyle]];
     NSSize size = [[aSession view] maximumPossibleScrollViewContentSize];
     DLog(@"Max size is %@", [NSValue valueWithSize:size]);
-    int width = (size.width - [iTermAdvancedSettingsModel terminalMargin] * 2) / [[aSession textview] charWidth];
-    int height = (size.height - [iTermAdvancedSettingsModel terminalVMargin] * 2) / [[aSession textview] lineHeight];
+    int width = (size.width - [iTermPreferences intForKey:kPreferenceKeySideMargins] * 2) / [[aSession textview] charWidth];
+    int height = (size.height - [iTermPreferences intForKey:kPreferenceKeyTopBottomMargins] * 2) / [[aSession textview] lineHeight];
     PtyLog(@"fitSessionToCurrentViewSize %@ gives %d rows", [NSValue valueWithSize:size], height);
     if (width <= 0) {
         XLog(@"WARNING: Session has %d width", width);
@@ -2486,14 +2492,7 @@ static void SetAgainstGrainDim(BOOL isVertical, NSSize *dest, CGFloat value) {
         }
     }
     if (count > 0) {
-        if (@available(macOS 10.13, *)) {
-            // Issue 6115. It turns red for values over 26. When I drop 10.12 support I can adjust
-            // the slider to not go above 26. But it's super slow before you get
-          // to 26, so let's limit it to 24. Issue 6138.
-            return MIN(24, sum / count);
-        } else {
-            return sum / count;
-        }
+        return MIN(iTermMaxBlurRadius(), sum / count);
     } else {
         // This shouldn't actually happen, but better safe than divide by zero.
         return 2.0;
@@ -2521,7 +2520,8 @@ static void SetAgainstGrainDim(BOOL isVertical, NSSize *dest, CGFloat value) {
                                      idMap:(NSMutableDictionary<NSNumber *, SessionView *> *)idMap
                                isMaximized:(BOOL)isMaximized
                                   contents:(BOOL)contents
-                                   encoder:(id<iTermEncoderAdapter>)encoder{
+                                   encoder:(id<iTermEncoderAdapter>)encoder {
+    DLog(@"Encode view %@", view);
     if (isMaximized) {
         encoder[TAB_ARRANGEMENT_IS_MAXIMIZED] = @YES;
     }
@@ -2556,13 +2556,16 @@ static void SetAgainstGrainDim(BOOL isVertical, NSSize *dest, CGFloat value) {
                                                    contents:contents
                                                     encoder:encoder];
         }];
+        DLog(@"Done encoding splitter view %@", view);
         return YES;
     }
     SessionView *sessionView = (SessionView*)view;
     PTYSession *session = [self sessionForSessionView:sessionView];
     if (!session) {
+        DLog(@"Failed to find session for view %@", view);
         return NO;
     }
+    DLog(@"Will encode session %@", session);
     encoder[TAB_ARRANGEMENT_VIEW_TYPE] = VIEW_TYPE_SESSIONVIEW;
     encoder[TAB_ARRANGEMENT_SESSIONVIEW_FRAME] = [PTYTab frameToDict:[view frame]];
     [encoder encodeDictionaryWithKey:TAB_ARRANGEMENT_SESSION
@@ -3045,6 +3048,7 @@ static void SetAgainstGrainDim(BOOL isVertical, NSSize *dest, CGFloat value) {
 - (BOOL)encodeArrangementNodeWithContents:(BOOL)includeContents
                       fromArrangementNode:(NSDictionary *)node
                                   encoder:(id<iTermEncoderAdapter>)encoder {
+    DLog(@"Encode arragnement for %@ from node %@", self, node);
     if ([node[TAB_ARRANGEMENT_VIEW_TYPE] isEqual:VIEW_TYPE_SPLITTER]) {
         // Add everything in node except SUBVIEWS
         [node enumerateKeysAndObjectsUsingBlock:^(id  _Nonnull key, id  _Nonnull obj, BOOL * _Nonnull stop) {
@@ -3147,10 +3151,12 @@ static void SetAgainstGrainDim(BOOL isVertical, NSSize *dest, CGFloat value) {
 - (BOOL)encodeWithContents:(BOOL)contents
             constructIdMap:(BOOL)constructIdMap
                    encoder:(id<iTermEncoderAdapter>)encoder {
+    DLog(@"Encode tab %@", self);
     encoder[TAB_GUID] = _guid;
     encoder[TAB_ARRANGEMENT_TITLE_OVERRIDE] = self.titleOverride.length ? self.titleOverride : nil;
 
     if (isMaximized_) {
+        DLog(@"Tab is maximized");
         // We never construct id map in this case because it must already exist.
         assert(!constructIdMap);
         assert(savedArrangement_);
@@ -3181,6 +3187,7 @@ static void SetAgainstGrainDim(BOOL isVertical, NSSize *dest, CGFloat value) {
     if (constructIdMap) {
         assert(idMap_);
     }
+    DLog(@"Will encode each view in tab");
     return [encoder encodeDictionaryWithKey:TAB_ARRANGEMENT_ROOT
                                  generation:iTermGenerationAlwaysEncode
                                       block:^BOOL(id<iTermEncoderAdapter>  _Nonnull encoder) {
@@ -3281,8 +3288,8 @@ typedef struct {
             parseTree[kLayoutDictPixelWidthKey] = @(size.width);
             parseTree[kLayoutDictPixelHeightKey] = @(size.height);
 
-            const NSSize maximumSize = NSMakeSize(size.width + cellSize.width - 1,
-                                                  size.height + cellSize.height - 1);
+            const NSSize maximumSize = NSMakeSize(size.width + cellSize.width,
+                                                  size.height + cellSize.height);
             parseTree[kLayoutDictMaximumPixelWidthKey] = @(maximumSize.width);
             parseTree[kLayoutDictMaximumPixelHeightKey] = @(maximumSize.height);
             return (iTermSizeRange){ size, maximumSize };
@@ -3573,6 +3580,9 @@ typedef struct {
 
     if ([parseTree[kLayoutDictTabOpenedManually] boolValue]) {
         [term addTabAtAutomaticallyDeterminedLocation:theTab];
+    } else if (parseTree[kLayoutDictTabIndex]) {
+        // Disinter a tab, adding it at a specified index.
+        [term insertTab:theTab atIndex:[parseTree[kLayoutDictTabIndex] intValue]];
     } else {
         [term appendTab:theTab];
     }
@@ -3630,8 +3640,8 @@ typedef struct {
                                                            controlSize:NSControlSizeRegular
                                                          scrollerStyle:session.view.scrollview.scrollerStyle];
 
-            int chars = forHeight ? (contentSize.height - [iTermAdvancedSettingsModel terminalVMargin] * 2) / cellSize.height :
-                                    (contentSize.width - [iTermAdvancedSettingsModel terminalMargin] * 2) / cellSize.width;
+            int chars = forHeight ? (contentSize.height - [iTermPreferences intForKey:kPreferenceKeyTopBottomMargins] * 2) / cellSize.height :
+                                    (contentSize.width - [iTermPreferences intForKey:kPreferenceKeySideMargins] * 2) / cellSize.width;
             [intervalMap incrementNumbersBy:chars
                                     inRange:[IntRange rangeWithMin:minPos size:size]];
         }
@@ -3750,8 +3760,8 @@ typedef struct {
         // NOTE: At the time of writing tmux tabs can’t have per-pane status bars. Should that ever
         // change, this line of code might prevent a bug.
         const CGFloat statusBarHeight = sessionView.showBottomStatusBar ? iTermGetStatusBarHeight() : 0;
-        const CGSize margins = NSMakeSize([iTermAdvancedSettingsModel terminalMargin] * 2,
-                                          [iTermAdvancedSettingsModel terminalVMargin] * 2);
+        const CGSize margins = NSMakeSize([iTermPreferences intForKey:kPreferenceKeySideMargins] * 2,
+                                          [iTermPreferences intForKey:kPreferenceKeyTopBottomMargins] * 2);
         return (PTYTabDecorationSize) {
             .points = NSMakeSize(scrollViewDecorationSize.width + margins.width,
                                  titleBarHeight + statusBarHeight + margins.height),
@@ -3836,8 +3846,8 @@ typedef struct {
     NSSize cellSize = [PTYTab cellSizeForBookmark:[self.tmuxController profileForWindow:self.tmuxWindow]];
     NSArray<SessionView *> *allSessionViews = self.isMaximized ? @[ self.activeSession.view ] : [self sessionViews];
 
-    const CGSize margins = NSMakeSize([iTermAdvancedSettingsModel terminalMargin] * 2,
-                                      [iTermAdvancedSettingsModel terminalVMargin] * 2);
+    const CGSize margins = NSMakeSize([iTermPreferences intForKey:kPreferenceKeySideMargins] * 2,
+                                      [iTermPreferences intForKey:kPreferenceKeyTopBottomMargins] * 2);
     const CGFloat dividerThickness = root_.dividerThickness;
     DLog(@"Margins are %@, divider thickness is %@, cell size is %@", NSStringFromSize(margins), @(dividerThickness), NSStringFromSize(cellSize));
 
@@ -4696,7 +4706,7 @@ typedef struct {
 }
 
 - (void)maximize {
-    DLog(@"maximize");
+    DLog(@"maximize %@", self);
     for (PTYSession *session in [self sessions]) {
         session.savedRootRelativeOrigin = [self rootRelativeOriginOfSession:session];
     }
@@ -4953,6 +4963,12 @@ typedef struct {
     }
 
     if (((PTYTab *)session1.delegate)->lockedSession_ || ((PTYTab *)session2.delegate)->lockedSession_) {
+        return;
+    }
+    if (session1.isTmuxClient &&
+        session2.isTmuxClient &&
+        session1.tmuxController == session2.tmuxController) {
+        [session1.tmuxController swapPane:session1.tmuxPane withPane:session2.tmuxPane];
         return;
     }
     if ([session1 isTmuxClient] ||
@@ -6032,6 +6048,7 @@ typedef struct {
 
 // Note this is a notification handler
 - (void)updateUseMetal NS_AVAILABLE_MAC(10_11) {
+    DLog(@"begin");
     const BOOL resizing = self.realParentWindow.windowIsResizing;
     const BOOL powerOK = [[iTermPowerManager sharedInstance] metalAllowed];
     __block iTermMetalUnavailableReason sessionReason = iTermMetalUnavailableReasonNone;
@@ -6223,10 +6240,18 @@ typedef struct {
 }
 
 - (void)sessionDoubleClickOnTitleBar:(PTYSession *)session {
-    if (self.isMaximized) {
+    [self toggleMaximizeSession:session];
+}
+
+- (void)toggleMaximizeSession:(PTYSession *)session {
+    if (session.isTmuxClient) {
+        [session toggleTmuxZoom];
+    } else if ([self hasMaximizedPane]) {
         [self unmaximize];
     } else {
-        [self setActiveSession:session];
+        if (self.activeSession != session) {
+            [self setActiveSession:session];
+        }
         [self maximize];
     }
 }
@@ -6284,10 +6309,12 @@ typedef struct {
 
 - (VT100GridSize)sessionTmuxSizeWithProfile:(Profile *)profile {
     if ([iTermPreferences useTmuxProfile]) {
+        DLog(@"Return size from profile %@", profile);
         return VT100GridSizeMake([[profile objectForKey:KEY_COLUMNS] intValue],
                                  [[profile objectForKey:KEY_ROWS] intValue]);
     } else {
         NSSize frameSize = tabView_.frame.size;
+        DLog(@"Compute size from frame %@", NSStringFromSize(frameSize));
         PTYSession *anySession = self.sessions.firstObject;
 
         NSSize contentSize = [NSScrollView contentSizeForFrameSize:frameSize
@@ -6297,8 +6324,8 @@ typedef struct {
                                                        controlSize:NSControlSizeRegular
                                                      scrollerStyle:anySession.view.scrollview.scrollerStyle];
         NSSize cellSize = [PTYTab cellSizeForBookmark:profile];
-        return VT100GridSizeMake((contentSize.width - [iTermAdvancedSettingsModel terminalMargin] * 2) / cellSize.width,
-                                 (contentSize.height - [iTermAdvancedSettingsModel terminalVMargin] * 2) / cellSize.height);
+        return VT100GridSizeMake((contentSize.width - [iTermPreferences intForKey:kPreferenceKeySideMargins] * 2) / cellSize.width,
+                                 (contentSize.height - [iTermPreferences intForKey:kPreferenceKeyTopBottomMargins] * 2) / cellSize.height);
     }
 }
 
@@ -6428,7 +6455,7 @@ typedef struct {
     [self.delegate tabEditSnippets:self];
 }
 
-- (NSImage *)sessionBackgroundImage {
+- (iTermImageWrapper *)sessionBackgroundImage {
     return [self.delegate tabBackgroundImage];
 }
 
@@ -6447,7 +6474,7 @@ typedef struct {
 }
 
 - (void)session:(PTYSession *)session
-setBackgroundImage:(NSImage *)image
+setBackgroundImage:(iTermImageWrapper *)image
            mode:(iTermBackgroundImageMode)imageMode
 backgroundColor:(NSColor *)backgroundColor {
     if (session != self.activeSession) {
@@ -6458,6 +6485,12 @@ backgroundColor:(NSColor *)backgroundColor {
 
 - (id<iTermSwipeHandler>)sessionSwipeHandler {
     return self.delegate;
+}
+
+- (void)sessionDisableFocusFollowsMouseAtCurrentLocation {
+    for (PTYSession *session in self.sessions) {
+        [session.textview refuseFirstResponderAtCurrentMouseLocation];
+    }
 }
 
 #pragma mark - iTermObject

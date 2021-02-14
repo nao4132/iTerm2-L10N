@@ -38,6 +38,18 @@ static CGFloat desiredHeight = 135;
     _vev.layer.borderWidth = 1;
 }
 
+- (void)setFont:(NSFont *)font {
+    _largeComposerViewController.textView.font = font;
+}
+
+- (void)setHost:(VT100RemoteHost *)host workingDirectory:(NSString *)pwd shell:(NSString *)shell tmuxController:(nonnull TmuxController *)tmuxController {
+    [self view];
+    _largeComposerViewController.host = host;
+    _largeComposerViewController.workingDirectory = pwd;
+    _largeComposerViewController.shell = shell;
+    _largeComposerViewController.tmuxController = tmuxController;
+}
+
 - (void)updateFrame {
     NSRect newFrame = self.view.frame;
     newFrame.origin.y = self.view.superview.frame.size.height;
@@ -78,7 +90,6 @@ static CGFloat desiredHeight = 135;
 }
 
 - (void)composerTextViewDidResignFirstResponder {
-    [self.delegate minimalComposer:self sendCommand:@""];
 }
 
 @end

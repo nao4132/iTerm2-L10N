@@ -39,7 +39,7 @@ NSString *const kPreferenceKeyLoadPrefsFromCustomFolder = @"LoadPrefsFromCustomF
 // This pref was originally a suppressable warning plus a user default, which is why it's in two
 // parts.
 
-// 0 = Save, 1 = Lose changes
+// 0 = on quit, 1 = never, 2 = always
 NSString *const kPreferenceKeyNeverRemindPrefsChangesLostForFileSelection = @"NoSyncNeverRemindPrefsChangesLostForFile_selection";
 
 // YES = apply preference from above key, NO = ask on exit if changes exist
@@ -77,6 +77,8 @@ NSString *const kPreferenceKeyTabStyle_Deprecated = @"TabStyle";  // Pre-10.14
 NSString *const kPreferenceKeyTabStyle = @"TabStyleWithAutomaticOption";  // Pre-10.14
 NSString *const kPreferenceKeyTabPosition = @"TabViewType";
 NSString *const kPreferenceKeyStatusBarPosition = @"StatusBarPosition";
+NSString *const kPreferenceKeySideMargins = @"TerminalMargin";
+NSString *const kPreferenceKeyTopBottomMargins = @"TerminalVMargin";
 NSString *const kPreferenceKeyHideTabBar = @"HideTab";
 NSString *const kPreferenceKeyHideTabNumber = @"HideTabNumber";
 NSString *const kPreferenceKeyPreserveWindowSizeWhenTabBarVisibilityChanges = @"PreserveWindowSizeWhenTabBarVisibilityChanges";
@@ -164,6 +166,7 @@ NSString *const kPreferenceKeyDefaultToolbeltWidth = @"Default Toolbelt Width";
 NSString *const kPreferenceKeySizeChangesAffectProfile = @"Size Changes Affect Profile";
 NSString *const kPreferenceKeyActions = @"Actions";
 NSString *const kPreferenceKeySnippets = @"Snippets";
+NSString *const kPreferenceKeyHTMLTabTitles = @"HTMLTabTitles";
 // NOTE: If you update this list, also update preferences.py.
 
 static NSMutableDictionary *gObservers;
@@ -345,6 +348,8 @@ static NSString *sPreviousVersion;
                   
                   kPreferenceKeyTabPosition: @(TAB_POSITION_TOP),
                   kPreferenceKeyStatusBarPosition: @(iTermStatusBarPositionTop),
+                  kPreferenceKeyTopBottomMargins: @2,
+                  kPreferenceKeySideMargins: @5,
                   kPreferenceKeyHideTabBar: @YES,
                   kPreferenceKeyHideTabNumber: @NO,
                   kPreferenceKeyPreserveWindowSizeWhenTabBarVisibilityChanges: @NO,
@@ -425,6 +430,7 @@ static NSString *sPreviousVersion;
                   kPreferenceKeyLeftTabBarWidth: @150,
                   kPreferenceKeyDefaultToolbeltWidth: @250,
                   kPreferenceKeySizeChangesAffectProfile: @NO,
+                  kPreferenceKeyHTMLTabTitles: @NO
               };
     }
     return dict;

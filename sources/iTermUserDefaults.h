@@ -32,7 +32,9 @@ typedef NS_ENUM(NSUInteger, iTermAppleWindowTabbingMode) {
 @property (class, nonatomic) BOOL haveExplainedHowToAddTouchbarControls;
 @property (class, nonatomic) BOOL ignoreSystemWindowRestoration;
 @property (class, nonatomic) NSUInteger globalSearchMode;
-
+@property (class, nonatomic) BOOL addTriggerInstant;
+@property (class, nonatomic) BOOL addTriggerUpdateProfile;
+@property (class, nonatomic, copy) NSString *lastSystemPythonVersionRequirement;
 @end
 
 NS_ASSUME_NONNULL_END

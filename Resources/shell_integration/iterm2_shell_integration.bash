@@ -34,6 +34,27 @@ ITERM_SHELL_INTEGRATION_INSTALLED=Yes
 # (including various custom escape sequences).
 ITERM_PREV_PS1="$PS1"
 
+# A note on execution. When you invoke a command at an interactive prompt the following steps are taken:
+#
+# 1. The DEBUG trap runs.
+#   It calls __bp_preexec_invoke_exec
+#     It runs any registered preexec_functions, including __iterm2_preexec
+# 2. The command you executed runs.
+# 3. PROMPT_COMMAND runs.
+#   It runs __bp_precmd_invoke_cmd, which is inserted as the first command in PROMPT_COMMAND.
+#     It calls any registered precmd_functions
+#   Then, pre-existing PROMPT_COMMANDs run
+# 4. The prompt is shown.
+#
+# __iterm2_prompt_command used to be run from precmd_functions but then a pre-existing
+# PROMPT_COMMAND could clobber the PS1 it modifies. Instead, add __iterm2_prompt_command as the last
+# of the "preexisting" PROMPT_COMMANDs so it will be the very last thing done before the prompt is
+# shown (unless someone amends PROMPT_COMMAND, but that is on them).
+if [[ -n "$PROMPT_COMMAND" ]]; then
+    PROMPT_COMMAND+=$'\n'
+fi;
+PROMPT_COMMAND+='__iterm2_prompt_command'
+
 # The following chunk of code, bash-preexec.sh, is licensed like this:
 # The MIT License
 #
@@ -433,8 +454,12 @@ function iterm2_end_osc {
 }
 
 function iterm2_print_state_data() {
+  local _iterm2_hostname="${iterm2_hostname}"
+  if [ -z "${iterm2_hostname:-}" ]; then
+    _iterm2_hostname=$(hostname -f 2>/dev/null)
+  fi
   iterm2_begin_osc
-  printf "1337;RemoteHost=%s@%s" "$USER" "$iterm2_hostname"
+  printf "1337;RemoteHost=%s@%s" "$USER" "$_iterm2_hostname"
   iterm2_end_osc
 
   iterm2_begin_osc
@@ -481,17 +506,20 @@ function iterm2_prompt_suffix() {
 
 function iterm2_print_version_number() {
   iterm2_begin_osc
-  printf "1337;ShellIntegrationVersion=15;shell=bash"
+  printf "1337;ShellIntegrationVersion=16;shell=bash"
   iterm2_end_osc
 }
 
 
 # If hostname -f is slow on your system, set iterm2_hostname before sourcing this script.
+# On macOS we run `hostname -f` every time because it is fast.
 if [ -z "${iterm2_hostname:-}" ]; then
-  iterm2_hostname=$(hostname -f 2>/dev/null)
-  # some flavors of BSD (i.e. NetBSD and OpenBSD) don't have the -f option
-  if [ $? -ne 0 ]; then
-    iterm2_hostname=$(hostname)
+  if [ "$(uname)" != "Darwin" ]; then
+    iterm2_hostname=$(hostname -f 2>/dev/null)
+    # some flavors of BSD (i.e. NetBSD and OpenBSD) don't have the -f option
+    if [ $? -ne 0 ]; then
+      iterm2_hostname=$(hostname)
+    fi
   fi
 fi
 
@@ -515,7 +543,9 @@ __iterm2_preexec() {
     __bp_set_ret_value "$__iterm2_last_ret_value" "$__bp_last_argument_prev_command"
 }
 
-function __iterm2_precmd () {
+# Prints the current directory and hostname control sequences. Modifies PS1 to
+# add the FinalTerm A and B codes to locate the prompt.
+function __iterm2_prompt_command () {
     __iterm2_last_ret_value="$?"
 
     # Work around a bug in CentOS 7.2 where preexec doesn't run if you press
@@ -525,8 +555,6 @@ function __iterm2_precmd () {
         __iterm2_preexec ""
     fi
     iterm2_ran_preexec=""
-
-
 
     # This is an iTerm2 addition to try to work around a problem in the
     # original preexec.bash.
@@ -598,9 +626,8 @@ function __iterm2_precmd () {
     __bp_set_ret_value "$__iterm2_last_ret_value" "$__bp_last_argument_prev_command"
 }
 
-# Install my functions
+# Install my function
 preexec_functions+=(__iterm2_preexec)
-precmd_functions+=(__iterm2_precmd)
 
 iterm2_print_state_data
 iterm2_print_version_number

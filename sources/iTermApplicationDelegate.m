@@ -118,6 +118,7 @@
 #import "PTYTextView.h"
 #import "PTYWindow.h"
 #import "QLPreviewPanel+iTerm.h"
+#import "TmuxControllerRegistry.h"
 #import "TmuxDashboardController.h"
 #import "ToastWindowController.h"
 #import "VT100Terminal.h"
@@ -239,7 +240,7 @@ static BOOL hasBecomeActive = NO;
         _untitledWindowStateMachine.delegate = self;
         if ([iTermAdvancedSettingsModel useRestorableStateController] &&
             ![[NSApplication sharedApplication] isRunningUnitTests]) {
-            _restorableStateController = [[iTermRestorableStateController alloc] init];
+            _restorableStateController = [iTermRestorableStateController sharedInstance];
             _restorableStateController.delegate = self;
         }
         // Add ourselves as an observer for notifications.
@@ -379,7 +380,8 @@ static BOOL hasBecomeActive = NO;
             return NO;
         }
     } else if ([menuItem action] == @selector(saveCurrentWindowAsArrangement:) ||
-               [menuItem action] == @selector(newSessionWithSameProfile:)) {
+               [menuItem action] == @selector(newSessionWithSameProfile:) ||
+               [menuItem action] == @selector(newWindowWithSameProfile:)) {
         return [[iTermController sharedInstance] currentTerminal] != nil;
     } else if ([menuItem action] == @selector(toggleFullScreenTabBar:)) {
         [menuItem setState:[iTermPreferences boolForKey:kPreferenceKeyShowFullscreenTabBar] ? NSControlStateValueOn : NSControlStateValueOff];
@@ -429,6 +431,9 @@ static BOOL hasBecomeActive = NO;
     } else if (menuItem.action == @selector(promptToConvertTabsToSpacesWhenPasting:)) {
         menuItem.state = [iTermPasteHelper promptToConvertTabsToSpacesWhenPasting] ? NSControlStateValueOn : NSControlStateValueOff;
         return YES;
+    } else if (menuItem.action == @selector(newTmuxWindow:) ||
+               menuItem.action == @selector(newTmuxTab:)) {
+        return [[TmuxControllerRegistry sharedInstance] numberOfClients];
     } else {
         return YES;
     }
@@ -770,6 +775,15 @@ static BOOL hasBecomeActive = NO;
         accessory.frame = NSMakeRect(0, 0, accessory.intrinsicContentSize.width, accessory.intrinsicContentSize.height);
         accessory.requestLayout = ^{
             [alert layout];
+            if (@available(macOS 10.16, *)) {
+                // FB8897296:
+                // Prior to Big Sur, you could call [NSAlert layout] on an already-visible NSAlert
+                // to have it change its size to accommodate an accessory view controller whose
+                // frame changed.
+                //
+                // On Big Sur, it no longer works. Instead, you must call NSAlert.layout *twice*.
+                [alert layout];
+            }
         };
         alert.accessoryView = accessory;
 
@@ -818,7 +832,7 @@ static BOOL hasBecomeActive = NO;
 
 - (BOOL)applicationOpenUntitledFile:(NSApplication *)theApplication {
     DLog(@"Open untitled file");
-    if ([PseudoTerminalRestorer shouldIgnoreOpenUntitledFile] &&
+    if ([iTermRestorableStateController shouldIgnoreOpenUntitledFile] &&
         _restorableStateController.numberOfWindowsRestored > 0) {
         DLog(@"Already restored one of our own windows so not opening an untitled file during window state restoration.");
         return NO;
@@ -1208,6 +1222,7 @@ static BOOL hasBecomeActive = NO;
     [NSApp invalidateRestorableState];
     [[NSApp windows] makeObjectsPerformSelector:@selector(invalidateRestorableState)];
     _sparkleRestarting = YES;
+    iTermRestorableStateController.forceSaveState = YES;
 }
 
 - (void)itermDidDecodeWindowRestorableState:(NSNotification *)notification {
@@ -1369,6 +1384,7 @@ static BOOL hasBecomeActive = NO;
         ![[NSApplication sharedApplication] isRunningUnitTests]) {
         ranAutoLaunchScripts = [self.scriptsMenuController runAutoLaunchScriptsIfNeeded];
     }
+    DLog(@"ranAutoLaunchScripts=%@", @(ranAutoLaunchScripts));
 
     if ([WindowArrangements defaultArrangementName] == nil &&
         [WindowArrangements arrangementWithName:LEGACY_DEFAULT_ARRANGEMENT_NAME] != nil) {
@@ -1379,6 +1395,10 @@ static BOOL hasBecomeActive = NO;
         // Open bookmarks window at startup.
         [[iTermProfilesWindowController sharedInstance] showWindow:nil];
     }
+
+    DLog(@"terminals=%@", [[iTermController sharedInstance] terminals]);
+    DLog(@"profileHotKeys=%@", [[iTermHotKeyController sharedInstance] profileHotKeys]);
+    DLog(@"buriedSessions=%@", [[iTermBuriedSessions sharedInstance] buriedSessions]);
 
     if ([iTermPreferences boolForKey:kPreferenceKeyOpenArrangementAtStartup]) {
         // Open the saved arrangement at startup.
@@ -1646,9 +1666,16 @@ static BOOL hasBecomeActive = NO;
     }
 }
 
+- (IBAction)newWindowWithSameProfile:(id)sender
+{
+    [[iTermController sharedInstance] newSessionWithSameProfile:sender
+                                                      newWindow:YES];
+}
+
 - (IBAction)newSessionWithSameProfile:(id)sender
 {
-    [[iTermController sharedInstance] newSessionWithSameProfile:sender];
+    [[iTermController sharedInstance] newSessionWithSameProfile:sender
+                                                      newWindow:NO];
 }
 
 - (IBAction)newSession:(id)sender
@@ -1670,6 +1697,26 @@ static BOOL hasBecomeActive = NO;
 
 - (IBAction)arrangeSplitPanesEvenly:(id)sender {
     [[[[iTermController sharedInstance] currentTerminal] currentTab] arrangeSplitPanesEvenly];
+}
+
+- (IBAction)newTmuxWindow:(id)sender {
+    for (PseudoTerminal *term in [[iTermController sharedInstance] terminals]) {
+        TmuxController *controller = [[term uniqueTmuxControllers] firstObject];
+        if (controller) {
+            [term newTmuxWindow:nil];
+            return;
+        }
+    }
+}
+
+- (IBAction)newTmuxTab:(id)sender {
+    for (PseudoTerminal *term in [[iTermController sharedInstance] terminals]) {
+        TmuxController *controller = [[term uniqueTmuxControllers] firstObject];
+        if (controller) {
+            [term newTmuxTab:nil];
+            return;
+        }
+    }
 }
 
 - (IBAction)showPrefWindow:(id)sender {

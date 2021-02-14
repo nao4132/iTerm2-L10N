@@ -16,6 +16,21 @@
 #import "DebugLogging.h"
 #import "iTermAdvancedSettingsModel.h"
 
+static CGFloat RoundTowardZero(CGFloat value) {
+    if (value > 0) {
+        return floor(value);
+    } else {
+        return ceil(value);
+    }
+}
+
+static CGFloat RoundAwayFromZero(CGFloat value) {
+    if (value > 0) {
+        return ceil(value);
+    } else  {
+        return floor(value);
+    }
+}
 
 @implementation iTermScrollAccumulator {
     CGFloat _accumulatedDeltaY;
@@ -41,7 +56,12 @@
 
 // Get a delta Y out of the event with the most precision available and a consistent interpretation.
 - (CGFloat)adjustedDeltaYForEvent:(NSEvent *)event {
+    DLog(@"scrollingDeltaY=%@ deltaY=%@ lineHeight=%@", @(event.scrollingDeltaY), @(event.deltaY), @(_lineHeight));
     if (event.hasPreciseScrollingDeltas) {
+        if ([iTermAdvancedSettingsModel fastTrackpad]) {
+            // This is based on what Terminal.app does. See issue 9427.
+            return RoundAwayFromZero(event.deltaY);
+        }
         return event.scrollingDeltaY / _lineHeight;
     } else {
         return event.scrollingDeltaY;
@@ -104,14 +124,6 @@
 
 - (void)reset {
     _accumulatedDeltaY = 0;
-}
-
-static CGFloat RoundTowardZero(CGFloat value) {
-    if (value > 0) {
-        return floor(value);
-    } else {
-        return ceil(value);
-    }
 }
 
 - (CGFloat)legacyDeltaYForEvent:(NSEvent *)theEvent lineHeight:(CGFloat)lineHeight {

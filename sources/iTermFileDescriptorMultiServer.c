@@ -148,6 +148,10 @@ static void FreeChild(int i) {
     FDLog(LOG_DEBUG, "Free child %d", i);
     iTermMultiServerChild *child = &children[i];
     free((char *)child->tty);
+    if (child->masterFd >= 0) {
+        close(child->masterFd);
+        child->masterFd = -1;
+    }
     iTermMultiServerClientOriginatedMessageFree(&child->messageWithLaunchRequest);
     child->tty = NULL;
 }
@@ -157,11 +161,11 @@ static void RemoveChild(int i) {
     assert(i < numberOfChildren);
 
     FDLog(LOG_DEBUG, "Remove child %d", i);
+    FreeChild(i);
     if (numberOfChildren == 1) {
         free(children);
         children = NULL;
     } else {
-        FreeChild(i);
         const int afterCount = numberOfChildren - i - 1;
         memmove(children + i,
                 children + i + 1,
@@ -554,7 +558,6 @@ static int HandleWait(int fd, iTermMultiServerRequestWait *wait) {
 
 #pragma mark - Requests
 
-#if BETA
 static void HexDump(iTermClientServerProtocolMessage *message) {
     char buffer[80];
     const unsigned char *bytes = (const unsigned char *)message->message.msg_iov[0].iov_base;
@@ -574,7 +577,6 @@ static void HexDump(iTermClientServerProtocolMessage *message) {
     }
     FDLog(LOG_DEBUG, "- End hex dump of message -");
 }
-#endif
 
 static int ReadRequest(int fd, iTermMultiServerClientOriginatedMessage *out) {
     iTermClientServerProtocolMessage message;
@@ -588,11 +590,9 @@ static int ReadRequest(int fd, iTermMultiServerClientOriginatedMessage *out) {
     memset(out, 0, sizeof(*out));
 
     status = iTermMultiServerProtocolParseMessageFromClient(&message, out);
-#if BETA
-    HexDump(&message);
-#endif
     if (status) {
         FDLog(LOG_ERR, "Parse failed with status %d", status);
+        HexDump(&message);
     } else {
         FDLog(LOG_DEBUG, "Parsed message from client:");
         iTermMultiServerProtocolLogMessageFromClient(out);
@@ -989,38 +989,6 @@ static int iTermFileDescriptorMultiServerDaemonize(void) {
     return 0;
 }
 
-static void iTermFileDescriptorMultiServerConnectToWindowServer(void) {
-    // Use GetCurrentProcess() to force a connection to the window server. This gets us killed on
-    // log out. Child process become broken because their Aqua namespace session has disappeared.
-    // For example, `whoami` will print a number instead of a name. Better to die than live less
-    // than your best life.
-    //
-    // For more on these mysteries see:
-    // Technical Note TN2083 - Daemons and Agents
-    //   http://mirror.informatimago.com/next/developer.apple.com/technotes/tn2005/tn2083.html
-    //
-    // There is also an informative comment in shell_launcher.c.
-    //
-    // The approach taken in shell_launcher.c, to move the process from the Aqua per-session
-    // namespace to the per-user namespace was clever but had a lot of unintended consequences.
-    // For example, it broke PAM hacks that let you use touch ID for sudo. It broke launching
-    // Cocoa apps from the command line (sometimes! Not for me, but for the guy next to me at work).
-    // The costs of "random things don't work sometimes" is higher than the benefit of sessions
-    // surviving log out-log in.
-    //
-    // GetCurrentProcess() is deprecated, and Apple wants you to use
-    // [NSRunningApplication currentApplication], instead. I don't want to take on the overhead of
-    // the obj-c runtime, so I'll keep using this deprecated API until it actually breaks.
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-    ProcessSerialNumber psn;
-    GetCurrentProcess(&psn);
-#pragma clang diagnostic pop
-
-    // Do this to remove the dock icon.
-    TransformProcessType(&psn, kProcessTransformToUIElementApplication);
-}
-
 static void CleanUp(void) {
     FDLog(LOG_DEBUG, "Cleaning up to exit");
     if (!gPath) {
@@ -1032,14 +1000,9 @@ static void CleanUp(void) {
 }
 
 static int iTermFileDescriptorMultiServerRun(char *path, int socketFd, int writeFD, int readFD) {
-    // I have turned off connectToWindowServer because it seems to be a bad idea. For one thing,
-    // Activity Monitor shows an iTerm2 process that is not responding. It also might be responsible
-    // for breaking Applescript (issue 9000, 8986).
-    const int connectToWindowServer = 0;
+    const int daemonize = 0;
 
-    if (connectToWindowServer) {
-        iTermFileDescriptorMultiServerConnectToWindowServer();
-    } else {
+    if (daemonize) {
         iTermFileDescriptorMultiServerDaemonize();
     }
 

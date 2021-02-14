@@ -15,6 +15,7 @@ NS_ASSUME_NONNULL_BEGIN
 // This is exposed because it's used to set the capacity of mixed-size buffer pools.
 extern const NSInteger iTermMetalDriverMaximumNumberOfFramesInFlight;
 
+@class iTermImageWrapper;
 @class iTermMetalRendererTransientState;
 
 NS_CLASS_AVAILABLE(10_11, NA)
@@ -23,12 +24,14 @@ NS_CLASS_AVAILABLE(10_11, NA)
 @property (nonatomic, readonly) CGFloat scale;
 @property (nonatomic, readonly) BOOL hasBackgroundImage;
 @property (nonatomic, readonly) NSEdgeInsets extraMargins;
+@property (nonatomic, readonly) CGFloat maximumExtendedDynamicRangeColorComponentValue;
 
 - (instancetype)init NS_UNAVAILABLE;
 - (instancetype)initWithViewportSize:(vector_uint2)viewportSize
                                scale:(CGFloat)scale
                   hasBackgroundImage:(BOOL)hasBackgroundImage
-                        extraMargins:(NSEdgeInsets)extraMargins NS_DESIGNATED_INITIALIZER;
+                        extraMargins:(NSEdgeInsets)extraMargins
+maximumExtendedDynamicRangeColorComponentValue:(CGFloat)maximumExtendedDynamicRangeColorComponentValue NS_DESIGNATED_INITIALIZER;
 @end
 
 NS_CLASS_AVAILABLE(10_11, NA)
@@ -136,8 +139,8 @@ NS_CLASS_AVAILABLE(10_11, NA)
                fragmentBuffers:(NSDictionary<NSNumber *, id<MTLBuffer>> *)fragmentBuffers
                       textures:(NSDictionary<NSNumber *, id<MTLTexture>> *)textures;
 
-- (nullable id<MTLTexture>)textureFromImage:(NSImage *)image context:(nullable iTermMetalBufferPoolContext *)context;
-- (nullable id<MTLTexture>)textureFromImage:(NSImage *)image context:(nullable iTermMetalBufferPoolContext *)context pool:(nullable iTermTexturePool *)pool;
+- (nullable id<MTLTexture>)textureFromImage:(iTermImageWrapper *)image context:(nullable iTermMetalBufferPoolContext *)context;
+- (nullable id<MTLTexture>)textureFromImage:(iTermImageWrapper *)image context:(nullable iTermMetalBufferPoolContext *)context pool:(nullable iTermTexturePool *)pool;
 
 - (id<MTLRenderPipelineState>)newPipelineWithBlending:(nullable iTermMetalBlending *)blending
                                        vertexFunction:(id<MTLFunction>)vertexFunction

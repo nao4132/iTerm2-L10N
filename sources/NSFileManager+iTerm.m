@@ -134,6 +134,12 @@ NSString * const DirectoryLocationDomain = @"DirectoryLocationDomain";
     return result;
 }
 
+- (NSString *)spacelessAppSupportWithoutCreatingLink {
+    NSString *dotdir = [self homeDirectoryDotDir];
+    NSString *nospaces = [dotdir stringByAppendingPathComponent:@"AppSupport"];
+    return nospaces;
+}
+
 - (NSString *)libraryDirectoryFor:(NSString *)app {
     NSError *error;
     NSString *result = [self findOrCreateDirectory:NSLibraryDirectory
@@ -144,6 +150,25 @@ NSString * const DirectoryLocationDomain = @"DirectoryLocationDomain";
         ELog(@"Unable to find or create application support directory:\n%@", error);
     }
     return result;
+}
+
+- (NSString *)spacelessAppSupportCreatingLink {
+    NSError *error;
+    NSString *realAppSupport = [self findOrCreateDirectory:NSApplicationSupportDirectory
+                                                  inDomain:NSUserDomainMask
+                                       appendPathComponent:nil
+                                                     error:&error];
+    NSString *linkName = [self spacelessAppSupportWithoutCreatingLink];
+
+    NSString *executableName =
+        [[[NSBundle mainBundle] infoDictionary] objectForKey:(id)kCFBundleExecutableKey];
+    NSString *realFolder = [realAppSupport stringByAppendingPathComponent:executableName];
+
+    [[NSFileManager defaultManager] createSymbolicLinkAtPath:linkName
+                                         withDestinationPath:realFolder
+                                                       error:nil];
+
+    return linkName;
 }
 
 - (NSString *)legacyApplicationSupportDirectory {
@@ -166,12 +191,26 @@ NSString * const DirectoryLocationDomain = @"DirectoryLocationDomain";
     return [[self applicationSupportDirectory] stringByAppendingPathComponent:@"Scripts"];
 }
 
+- (NSString *)scriptsPathWithoutSpaces {
+    NSString *modernPath = [[self spacelessAppSupportWithoutCreatingLink] stringByAppendingPathComponent:@"Scripts"];
+    return modernPath;
+}
+
+- (NSString *)scriptsPathWithoutSpacesCreatingLink {
+    NSString *modernPath = [[self spacelessAppSupportCreatingLink] stringByAppendingPathComponent:@"Scripts"];
+    return modernPath;
+}
+
 - (NSString *)legacyAutolaunchScriptPath {
     return [[self scriptsPath] stringByAppendingPathComponent:@"AutoLaunch.scpt"];
 }
 
 - (NSString *)autolaunchScriptPath {
-    return [[self scriptsPath] stringByAppendingPathComponent:@"AutoLaunch"];
+    return [[self scriptsPathWithoutSpaces] stringByAppendingPathComponent:@"AutoLaunch"];
+}
+
+- (NSString *)autolaunchScriptPathCreatingLink {
+    return [[self scriptsPathWithoutSpacesCreatingLink] stringByAppendingPathComponent:@"AutoLaunch"];
 }
 
 - (NSString *)quietFilePath {
@@ -209,6 +248,65 @@ NSString * const DirectoryLocationDomain = @"DirectoryLocationDomain";
 - (NSString *)desktopDirectory {
     NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDesktopDirectory, NSUserDomainMask, YES);
     return [paths firstObject];
+}
+
+- (NSString *)pathToExistingDirectoryCreatingIfNeeded:(NSString *)dotdir error:(out NSError **)errorPtr {
+    BOOL isdir = NO;
+
+    // Try to create ~/.config/iterm2 if needed
+    if (![self fileExistsAtPath:dotdir isDirectory:&isdir]) {
+        NSError *error = nil;
+        [self createDirectoryAtPath:dotdir withIntermediateDirectories:YES attributes:nil error:&error];
+        if (error) {
+            DLog(@"Couldn't create %@: %@", dotdir, error);
+            if (errorPtr) {
+                *errorPtr = error;
+            }
+            return nil;
+        }
+    } else if (!isdir) {
+        if (errorPtr) {
+            *errorPtr = [NSError errorWithDomain:@"com.iterm2.createDir" code:1 userInfo:@{ NSLocalizedDescriptionKey: @"File exists but is not a directory." }];
+        }
+        return nil;
+    }
+    return dotdir;
+}
+
+- (NSString *)pathToFirstDirectoryCreatingIfNeeded:(NSArray<NSString *> *)options error:(NSError **)errorPtr {
+    NSMutableArray<NSString *> *errors = [NSMutableArray array];
+    for (NSString *option in options) {
+        NSError *error = nil;
+        NSString *result = [self pathToExistingDirectoryCreatingIfNeeded:option error:&error];
+        if (result) {
+            return result;
+        }
+        [errors addObject:[NSString stringWithFormat:@"%@: %@", option, error.localizedDescription]];
+    }
+    if (errorPtr) {
+        *errorPtr = [NSError errorWithDomain:@"com.iterm2.createDir" code:2 userInfo:@{ NSLocalizedDescriptionKey: [errors componentsJoinedByString:@"\n"] }];
+    }
+    return nil;
+}
+
+- (NSString *)homeDirectoryDotDir {
+    NSString *homedir = NSHomeDirectory();
+    NSString *dotConfigIterm2 = [[homedir stringByAppendingPathComponent:@".config"] stringByAppendingPathComponent:@"iterm2"];
+    NSString *dotIterm2 = [homedir stringByAppendingPathComponent:@".iterm2"];
+    NSArray<NSString *> *options = @[ dotConfigIterm2, dotIterm2 ];
+    NSError *error = nil;
+    NSString *result = [self pathToFirstDirectoryCreatingIfNeeded:options error:&error];
+
+    if (!result && error) {
+        [iTermWarning showWarningWithTitle:[NSString stringWithFormat:@"There was a problem finding or creating the config directory:\n%@", error.localizedDescription]
+                                   actions:@[ @"OK" ]
+                                 accessory:nil
+                                identifier:@"NoSyncErrorCreatingConfigFolder"
+                               silenceable:kiTermWarningTypePersistent
+                                   heading:@"Problem Creating Config Folder"
+                                    window:nil];
+    }
+    return result;
 }
 
 - (BOOL)directoryIsWritable:(NSString *)dir

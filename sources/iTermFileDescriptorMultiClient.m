@@ -49,6 +49,11 @@ NSString *const iTermFileDescriptorMultiClientErrorDomain = @"iTermFileDescripto
     return self;
 }
 
+- (NSString *)description {
+    return [NSString stringWithFormat:@"<%@: %p %@>", NSStringFromClass([self class]),
+            self, _socketPath];
+}
+
 #pragma mark - APIs
 
 - (pid_t)serverPID {
@@ -91,7 +96,9 @@ NSString *const iTermFileDescriptorMultiClientErrorDomain = @"iTermFileDescripto
                                   pwd:(const char *)pwd
                              ttyState:(iTermTTYState)ttyState
                              callback:(iTermMultiClientLaunchCallback *)callback {
+    DLog(@"begin");
     [_thread dispatchSync:^(iTermFileDescriptorMultiClientState * _Nullable state) {
+        DLog(@"dispatched");
         [self launchChildWithExecutablePath:path
                                        argv:argv
                                 environment:environment
@@ -450,6 +457,7 @@ static unsigned long long MakeUniqueID(void) {
                              ttyState:(iTermTTYState)ttyState
                                 state:(iTermFileDescriptorMultiClientState *)state
                              callback:(iTermMultiClientLaunchCallback *)callback {
+    DLog(@"begin");
     const unsigned long long uniqueID = MakeUniqueID();
     iTermMultiServerClientOriginatedMessage message = {
         .type = iTermMultiServerRPCTypeLaunch,
@@ -480,6 +488,7 @@ static unsigned long long MakeUniqueID(void) {
 
     [self send:&message state:state callback:[_thread newCallbackWithBlock:^(iTermFileDescriptorMultiClientState *state,
                                                                              NSNumber *result) {
+        DLog(@"called back");
         const BOOL ok = result.boolValue;
         if (ok) {
             DLog(@"Wrote launch request successfully.");
@@ -487,8 +496,11 @@ static unsigned long long MakeUniqueID(void) {
         }
 
         DLog(@"Failed to write launch request.");
-        [state.pendingLaunches removeObjectForKey:@(uniqueID)];
-        [callback invokeWithObject:[iTermResult withError:[self connectionLostError]]];
+        if (state.pendingLaunches[@(uniqueID)]) {
+            DLog(@"Invoke callback with connection-lost error.");
+            [state.pendingLaunches removeObjectForKey:@(uniqueID)];
+            [callback invokeWithObject:[iTermResult withError:[self connectionLostError]]];
+        }
     }]];
 }
 
@@ -615,12 +627,14 @@ static unsigned long long MakeUniqueID(void) {
     [child addWaitCallback:waitCallback];
 
     __weak __typeof(self) weakSelf = self;
-    [self send:&message state:state callback:[_thread newCallbackWithBlock:^(iTermFileDescriptorMultiClientState *state,
+    iTermCallback<id, NSNumber *> *sendCallback =
+    [_thread newCallbackWithBlock:^(iTermFileDescriptorMultiClientState *state,
                                                                              NSNumber *value) {
         [weakSelf didWriteWaitRequestWithStatus:value.boolValue
                                           child:child
                                           state:state];
-    }]];
+    }];
+    [self send:&message state:state callback:sendCallback];
 }
 
 - (void)didWriteWaitRequestWithStatus:(BOOL)sendOK
@@ -655,7 +669,7 @@ static unsigned long long MakeUniqueID(void) {
     } else {
         result = [iTermResult withObject:@(wait.status)];
     }
-    [child invokeWaitCallback:result];
+    [child invokeAllWaitCallbacks:result];
 }
 
 #pragma mark - Termination
@@ -693,10 +707,30 @@ static unsigned long long MakeUniqueID(void) {
     NSDictionary *infoDictionary = [[NSBundle bundleForClass:[self class]] infoDictionary];
     NSString *versionNumber = infoDictionary[(NSString *)kCFBundleVersionKey];
     NSString *filename = [NSString stringWithFormat:@"iTermServer-%@", versionNumber];
-    return [[[NSFileManager defaultManager] applicationSupportDirectory] stringByAppendingPathComponent:filename];
+    NSString *appSupport = [[NSFileManager defaultManager] applicationSupportDirectory];
+    NSString *regularPath = [appSupport stringByAppendingPathComponent:filename];
+    if ([[NSFileManager defaultManager] isExecutableFileAtPath:regularPath]) {
+        return regularPath;
+    }
+    if (![[NSFileManager defaultManager] directoryIsWritable:appSupport]) {
+        NSString *dotDir = [[NSFileManager defaultManager] homeDirectoryDotDir];
+        NSString *alternatePath = [dotDir stringByAppendingPathComponent:filename];
+        if (!alternatePath) {
+            return nil;
+        }
+        if ([[NSFileManager defaultManager] isExecutableFileAtPath:alternatePath]) {
+            return alternatePath;
+        }
+        if (![[NSFileManager defaultManager] directoryIsWritable:dotDir]) {
+            return nil;
+        }
+        return alternatePath;
+    }
+    return regularPath;
 }
 
 - (void)showError:(NSError *)error message:(NSString *)message badURL:(NSURL *)url {
+    DLog(@"message: %@ error: %@ url: %@", message, error, url);
     dispatch_async(dispatch_get_main_queue(), ^{
         static iTermRateLimitedUpdate *rateLimit;
         static dispatch_once_t onceToken;
@@ -705,8 +739,10 @@ static unsigned long long MakeUniqueID(void) {
             rateLimit.minimumInterval = 2;
         });
         [rateLimit performRateLimitedBlock:^{
-            [[iTermNotificationController sharedInstance] notify:@"Problem Starting iTerm2 Daemon"
-                                                 withDescription:message];
+            NSAlert *alert = [[NSAlert alloc] init];
+            alert.messageText = @"Problem Starting iTerm2 Daemon";
+            alert.informativeText = message;
+            [alert runModal];
         }];
     });
 }
@@ -715,6 +751,12 @@ static unsigned long long MakeUniqueID(void) {
 // wild speculation on why this is important.
 - (NSString *)serverPathCopyingIfNeeded {
     NSString *desiredPath = [self serverPath];
+    if (!desiredPath) {
+        [self showError:nil
+                message:[NSString stringWithFormat:@"Neither ~/Library/Application Support/iTerm2 nor ~/.iterm2 are writable directories. This prevents the session restoration server from running. Please correct the problem and restart iTerm2."]
+                 badURL:nil];
+        return nil;
+    }
     NSFileManager *fileManager = [NSFileManager defaultManager];
 
     // Does the server already exist where we need it to be?
@@ -726,7 +768,7 @@ static unsigned long long MakeUniqueID(void) {
                                                  error:&error];
         if (error) {
             [self showError:error
-                    message:[NSString stringWithFormat:@"Could not copy %@ to %@", sourcePath, desiredPath]
+                    message:[NSString stringWithFormat:@"Could not copy %@ to %@: %@", sourcePath, desiredPath, error.localizedDescription]
                      badURL:[NSURL fileURLWithPath:desiredPath]];
             return nil;
         }
@@ -822,13 +864,14 @@ static unsigned long long MakeUniqueID(void) {
     state.readFD = -1;
     state.writeFD = -1;
 
-    [state.pendingLaunches enumerateKeysAndObjectsUsingBlock:
+    NSDictionary<NSNumber *, iTermFileDescriptorMultiClientPendingLaunch *> *pendingLaunches = [state.pendingLaunches copy];
+    [state.pendingLaunches removeAllObjects];
+    [pendingLaunches enumerateKeysAndObjectsUsingBlock:
      ^(NSNumber * _Nonnull uniqueID,
        iTermFileDescriptorMultiClientPendingLaunch * _Nonnull pendingLaunch,
        BOOL * _Nonnull stop) {
         [pendingLaunch cancelWithError:[self connectionLostError]];
     }];
-    [state.pendingLaunches removeAllObjects];
 
     [state.children enumerateObjectsUsingBlock:
      ^(iTermFileDescriptorMultiClientChild * _Nonnull child,
@@ -1125,7 +1168,9 @@ static void HexDump(NSData *data) {
 - (void)send:(iTermMultiServerClientOriginatedMessage *)message
        state:(iTermFileDescriptorMultiClientState *)state
     callback:(iTermCallback<id, NSNumber *> *)callback {
+    DLog(@"begin");
     if (state.writeFD < 0) {
+        DLog(@"no write fd");
         [callback invokeWithObject:@NO];
         return;
     }
@@ -1163,6 +1208,7 @@ static void HexDump(NSData *data) {
 
     __weak __typeof(self) weakSelf = self;
     [state whenWritable:^(iTermFileDescriptorMultiClientState * _Nullable state) {
+        DLog(@"called back");
         [weakSelf tryWrite:data
                      state:state
                   callback:callback];
@@ -1186,8 +1232,11 @@ static void HexDump(NSData *data) {
     const ssize_t bytesWritten = iTermFileDescriptorClientWrite(state.writeFD,
                                                                 data.bytes,
                                                                 data.length);
-    DLog(@"Wrote %@/%@", @(bytesWritten), @(data.length));
-    if (bytesWritten < 0) {
+    const NSInteger dataLength = data.length;
+    const int savedErrno = errno;
+    ITAssertWithMessage(bytesWritten <= dataLength, @"Data length is %@ but wrote %@. errno is %d",  @(dataLength), @(bytesWritten), savedErrno);
+    DLog(@"Wrote %@/%@ error=%s", @(bytesWritten), @(dataLength), strerror(savedErrno));
+    if (bytesWritten < 0 && errno != EAGAIN) {
         DLog(@"Write failed to %@: %s", _socketPath, strerror(errno));
         [callback invokeWithObject:@NO];
         return;
@@ -1199,7 +1248,7 @@ static void HexDump(NSData *data) {
         return;
     }
 
-    if (bytesWritten == data.length) {
+    if (bytesWritten == dataLength) {
         [callback invokeWithObject:@YES];
         return;
     }
@@ -1207,7 +1256,9 @@ static void HexDump(NSData *data) {
     DLog(@"Queue attempt to write in the future.");
     __weak __typeof(self) weakSelf = self;
     [state whenWritable:^(iTermFileDescriptorMultiClientState * _Nullable state) {
-        [weakSelf tryWrite:[data subdataFromOffset:bytesWritten]
+        ITAssertWithMessage(bytesWritten <= dataLength, @"Data length is %@ but wrote %@.",
+                            @(dataLength), @(bytesWritten));
+        [weakSelf tryWrite:[data subdataFromOffset:MAX(0, bytesWritten)]  // NOTE: bytesWritten can be negative if we get EAGAIN
                      state:state
                   callback:callback];
     }];

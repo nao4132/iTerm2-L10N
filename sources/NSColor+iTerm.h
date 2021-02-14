@@ -27,6 +27,36 @@ static inline float SIMDPerceivedBrightness(vector_float4 x) {
     return simd_dot(x, y);
 }
 
+// Note: these are in 0…1. These represent LINEAR values. NSColor has sRGB values which are not linear.
+typedef struct {
+    CGFloat r;
+    CGFloat g;
+    CGFloat b;
+} iTermRGBColor;
+
+// Note: nonlinear values, like NSColor
+typedef struct {
+    CGFloat r;
+    CGFloat g;
+    CGFloat b;
+} iTermSRGBColor;
+
+typedef struct {
+    CGFloat l;  // 0…100
+    CGFloat a;  // -100…100
+    CGFloat b;  // -100…100
+} iTermLABColor;
+
+iTermRGBColor iTermLinearizeSRGB(iTermSRGBColor srgb);
+iTermSRGBColor iTermCompressRGB(iTermRGBColor rgb);
+
+iTermLABColor iTermLABFromSRGB(iTermSRGBColor srgb);
+iTermSRGBColor iTermSRGBFromLAB(iTermLABColor lab);
+
+// Distance will be in 0-1. Warning: this doesn't work very well. For example,
+// ((l=15.6, a=29.6, b=24.0) = srgb (.31,.05,0) has a distance from pure black of .41
+CGFloat iTermLABDistance(iTermLABColor lhs, iTermLABColor rhs);
+
 @interface NSColor (iTerm)
 
 @property(nonatomic, readonly) CGFloat perceivedBrightness;
@@ -68,6 +98,9 @@ CGFloat PerceivedBrightness(CGFloat r, CGFloat g, CGFloat b);
                 minimumContrast:(CGFloat)minimumContrast;
 
 - (int)nearestIndexIntoAnsi256ColorTable;
+
+- (iTermLABColor)labColor;
++ (instancetype)withLABColor:(iTermLABColor)lab;
 
 // Returns colors for the standard 8-bit ansi color codes. Only indices between 16 and 255 are
 // supported.

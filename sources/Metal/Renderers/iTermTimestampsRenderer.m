@@ -9,6 +9,7 @@
 
 #import "FutureMethods.h"
 #import "iTermGraphicsUtilities.h"
+#import "iTermSharedImageStore.h"
 #import "iTermTexturePool.h"
 #import "iTermTimestampDrawHelper.h"
 
@@ -123,7 +124,8 @@
                       self.antialiased);
     [_drawHelper drawRow:row
                inContext:[NSGraphicsContext currentContext]
-                   frame:NSMakeRect(0, 0, size.width, size.height)];
+                   frame:NSMakeRect(0, 0, size.width, size.height)
+           virtualOffset:0];
     [image unlockFocus];
 
     return image;
@@ -191,7 +193,7 @@
         if (!pooledTexture) {
             NSImage *image = [tState imageForRow:row];
             iTermMetalBufferPoolContext *context = tState.poolContext;
-            id<MTLTexture> texture = [self->_cellRenderer textureFromImage:image
+            id<MTLTexture> texture = [self->_cellRenderer textureFromImage:[iTermImageWrapper withImage:image]
                                                                    context:context
                                                                       pool:self->_texturePool];
             assert(texture);

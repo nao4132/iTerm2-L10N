@@ -76,6 +76,7 @@ NSString *const kTerminalStateUnicodeVersionStack = @"Unicode Version Stack";
 NSString *const kTerminalStateURL = @"URL";
 NSString *const kTerminalStateURLParams = @"URL Params";
 NSString *const kTerminalStateReportKeyUp = @"Report Key Up";
+NSString *const kTerminalStateMetaSendsEscape = @"Meta Sends Escape";
 NSString *const kTerminalStateSendModifiers = @"Send Modifiers";
 
 @interface VT100Terminal ()
@@ -338,6 +339,7 @@ static const int kMaxScreenRows = 4096;
     self.autorepeatMode = YES;
     self.keypadMode = NO;
     self.reportKeyUp = NO;
+    self.metaSendsEscape = NO;
     self.insertMode = NO;
     self.sendReceiveMode = NO;
     self.bracketedPasteMode = NO;
@@ -363,10 +365,17 @@ static const int kMaxScreenRows = 4096;
     [self resetSavedCursorPositions];
     [delegate_ terminalShowPrimaryBuffer];
     self.softAlternateScreenMode = NO;
+    [self resetSendModifiersWithSideEffects:NO];
+    [self.delegate terminalDidChangeSendModifiers];
+}
+
+- (void)resetSendModifiersWithSideEffects:(BOOL)sideEffects {
     for (int i = 0; i < NUM_MODIFIABLE_RESOURCES; i++) {
         _sendModifiers[i] = @-1;
     }
-    [self.delegate terminalDidChangeSendModifiers];
+    if (sideEffects) {
+        [self.delegate terminalDidChangeSendModifiers];
+    }
 }
 
 - (void)gentleReset {
@@ -375,12 +384,17 @@ static const int kMaxScreenRows = 4096;
 }
 
 - (void)resetByUserRequest:(BOOL)userInitiated {
-    [self resetAllowingResize:YES preservePrompt:userInitiated resetParser:userInitiated];
+    [self resetAllowingResize:YES preservePrompt:userInitiated resetParser:userInitiated modifyContent:YES];
+}
+
+- (void)resetForRelaunch {
+    [self resetAllowingResize:NO preservePrompt:NO resetParser:YES modifyContent:NO];
 }
 
 - (void)resetAllowingResize:(BOOL)canResize
              preservePrompt:(BOOL)preservePrompt
-                resetParser:(BOOL)resetParser {
+                resetParser:(BOOL)resetParser
+              modifyContent:(BOOL)modifyContent {
     if (canResize && _columnMode) {
         [delegate_ terminalSetWidth:80];
     }
@@ -389,11 +403,11 @@ static const int kMaxScreenRows = 4096;
     if (resetParser) {
         [_parser reset];
     }
-    [delegate_ terminalResetPreservingPrompt:preservePrompt];
+    [delegate_ terminalResetPreservingPrompt:preservePrompt modifyContent:modifyContent];
 }
 
 - (void)resetForTmuxUnpause {
-    [self resetAllowingResize:NO preservePrompt:NO resetParser:YES];
+    [self resetAllowingResize:NO preservePrompt:NO resetParser:YES modifyContent:YES];
 }
 
 - (void)setWraparoundMode:(BOOL)mode {
@@ -647,6 +661,10 @@ static const int kMaxScreenRows = 4096;
                 } else {
                     self.mouseFormat = MOUSE_FORMAT_XTERM;
                 }
+                break;
+
+            case 1036:
+                self.metaSendsEscape = mode;
                 break;
 
             case 1337:
@@ -1311,6 +1329,7 @@ static const int kMaxScreenRows = 4096;
     self.keypadMode = NO;
 
     self.reportKeyUp = NO;
+    self.metaSendsEscape = NO;
 
     // Set WRAPROUND to initial value
     self.wraparoundMode = YES;
@@ -2074,10 +2093,7 @@ static const int kMaxScreenRows = 4096;
 
         case VT100CSI_RESET_MODIFIERS:
             if (token.csi->count == 0) {
-                for (int i = 0; i < NUM_MODIFIABLE_RESOURCES; i++) {
-                    _sendModifiers[i] = @-1;
-                }
-                [self.delegate terminalDidChangeSendModifiers];
+                [self resetSendModifiersWithSideEffects:YES];
                 break;
             }
             int resource = token.csi->p[0];
@@ -2089,10 +2105,7 @@ static const int kMaxScreenRows = 4096;
 
         case VT100CSI_SET_MODIFIERS: {
             if (token.csi->count == 0) {
-                for (int j = 0; j < NUM_MODIFIABLE_RESOURCES; j++) {
-                    _sendModifiers[j] = @-1;
-                }
-                [self.delegate terminalDidChangeSendModifiers];
+                [self resetSendModifiersWithSideEffects:YES];
                 break;
             }
             const int resource = token.csi->p[0];
@@ -3109,6 +3122,9 @@ static iTermDECRPMSetting VT100TerminalDECRPMSettingFromBoolean(BOOL flag) {
         case 1015:
             return VT100TerminalDECRPMSettingFromBoolean(self.mouseFormat == MOUSE_FORMAT_URXVT);
 
+        case 1036:
+            return VT100TerminalDECRPMSettingFromBoolean(self.metaSendsEscape);
+
         case 1337:
             return VT100TerminalDECRPMSettingFromBoolean(self.reportKeyUp);
 
@@ -3250,6 +3266,7 @@ static iTermDECRPMSetting VT100TerminalDECRPMSettingFromBoolean(BOOL flag) {
            kTerminalStateCursorModeKey: @(self.cursorMode),
            kTerminalStateKeypadModeKey: @(self.keypadMode),
            kTerminalStateReportKeyUp: @(self.reportKeyUp),
+           kTerminalStateMetaSendsEscape: @(self.metaSendsEscape),
            kTerminalStateSendModifiers: _sendModifiers ?: @[],
            kTerminalStateAllowKeypadModeKey: @(self.allowKeypadMode),
            kTerminalStateAllowPasteBracketing: @(self.allowPasteBracketing),
@@ -3300,6 +3317,7 @@ static iTermDECRPMSetting VT100TerminalDECRPMSettingFromBoolean(BOOL flag) {
     self.cursorMode = [dict[kTerminalStateCursorModeKey] boolValue];
     self.keypadMode = [dict[kTerminalStateKeypadModeKey] boolValue];
     self.reportKeyUp = [dict[kTerminalStateReportKeyUp] boolValue];
+    self.metaSendsEscape = [dict[kTerminalStateMetaSendsEscape] boolValue];
     if ([dict[kTerminalStateSendModifiers] isKindOfClass:[NSArray class]]) {
         self.sendModifiers = [[dict[kTerminalStateSendModifiers] mutableCopy] autorelease];
     }

@@ -19,6 +19,7 @@
 #import "iTermMarkRenderer.h"
 #import "iTermMetalPerFrameStateConfiguration.h"
 #import "iTermMetalPerFrameStateRow.h"
+#import "iTermPreferences.h"
 #import "iTermSelection.h"
 #import "iTermSmartCursorColor.h"
 #import "iTermTextDrawingHelper.h"
@@ -108,7 +109,7 @@ typedef struct {
 
     NSMutableArray<iTermMetalPerFrameStateRow *> *_rows;
     NSMutableArray<iTermIndicatorDescriptor *> *_indicators;
-    NSImage *_backgroundImage;
+    iTermImageWrapper *_backgroundImage;
     NSDictionary<NSNumber *, NSIndexSet *> *_rowToAnnotationRanges;  // Row on screen to characters with annotation underline on that row.
     NSArray<iTermHighlightedRow *> *_highlightedRows;
     NSTimeInterval _startTime;
@@ -412,7 +413,7 @@ typedef struct {
     if (@available(macOS 10.14, *)) {
         vmargin = 0;
     } else {
-        vmargin = [iTermAdvancedSettingsModel terminalVMargin];
+        vmargin = [iTermPreferences intForKey:kPreferenceKeyTopBottomMargins];
     }
     NSRect frame = NSMakeRect(0, vmargin, textView.visibleRect.size.width, textView.visibleRect.size.height);
     [textView.indicatorsHelper enumerateTopRightIndicatorsInFrame:frame andDraw:NO block:^(NSString *identifier, NSImage *image, NSRect rect) {
@@ -659,7 +660,7 @@ ambiguousIsDoubleWidth:(BOOL)ambiguousIsDoubleWidth
 }
 
 // Private queue
-- (NSImage *)metalBackgroundImageGetMode:(nullable iTermBackgroundImageMode *)mode {
+- (iTermImageWrapper *)metalBackgroundImageGetMode:(nullable iTermBackgroundImageMode *)mode {
     if (mode) {
         *mode = _configuration->_backgroundImageMode;
     }
@@ -750,12 +751,9 @@ ambiguousIsDoubleWidth:(BOOL)ambiguousIsDoubleWidth
             backgroundRLE[previousRLE].count++;
             unprocessedBackgroundColor = lastUnprocessedBackgroundColor;
         } else {
-            BOOL enableBlending = YES;
-            if (@available(macOS 10.14, *)) {
-                enableBlending = NO;
-            }
+            BOOL isDefaultBackgroundColor = NO;
             unprocessedBackgroundColor = [self unprocessedColorForBackgroundColorKey:&backgroundKey
-                                                                      enableBlending:enableBlending];
+                                                                        isDefault:&isDefaultBackgroundColor];
             lastUnprocessedBackgroundColor = unprocessedBackgroundColor;
             // The unprocessed color is needed for minimum contrast computation for text color.
             backgroundColor = [_configuration->_colorMap fastProcessedBackgroundColorForBackgroundColor:unprocessedBackgroundColor];
@@ -766,7 +764,6 @@ ambiguousIsDoubleWidth:(BOOL)ambiguousIsDoubleWidth
         }
         lastBackgroundKey = backgroundKey;
         attributes[x].backgroundColor = backgroundColor;
-        attributes[x].backgroundColor.w = 1;
         attributes[x].annotation = annotated;
 
         const BOOL characterIsDrawable = iTermTextDrawingHelperIsCharacterDrawable(&line[x],
@@ -958,9 +955,10 @@ ambiguousIsDoubleWidth:(BOOL)ambiguousIsDoubleWidth
 }
 
 - (vector_float4)unprocessedColorForBackgroundColorKey:(iTermBackgroundColorKey *)colorKey
-                                        enableBlending:(BOOL)enableBlending {
+                                             isDefault:(BOOL *)isDefault {
     vector_float4 color = { 0, 0, 0, 0 };
     CGFloat alpha = _configuration->_transparencyAlpha;
+    *isDefault = NO;
     if (colorKey->selected) {
         color = [self selectionColorForCurrentFocus];
         if (_configuration->_transparencyAffectsOnlyDefaultBackgroundColor) {
@@ -977,8 +975,7 @@ ambiguousIsDoubleWidth:(BOOL)ambiguousIsDoubleWidth
             .isMatch = NO,
             .image = NO
         };
-        return [self unprocessedColorForBackgroundColorKey:&temp
-                                            enableBlending:enableBlending];
+        return [self unprocessedColorForBackgroundColorKey:&temp isDefault:isDefault];
     } else if (colorKey->isMatch) {
         color = (vector_float4){ 1, 1, 0, 1 };
     } else {
@@ -1001,6 +998,7 @@ ambiguousIsDoubleWidth:(BOOL)ambiguousIsDoubleWidth
                                  faint:NO
                           isBackground:NO];
         } else {
+            *isDefault = defaultBackground;
             // Use the regular background color.
             color = [self colorForCode:colorKey->bgColor
                                  green:colorKey->bgGreen
@@ -1009,21 +1007,9 @@ ambiguousIsDoubleWidth:(BOOL)ambiguousIsDoubleWidth
                                   bold:NO
                                  faint:NO
                           isBackground:YES];
-        }
-
-        if (defaultBackground && _backgroundImage) {
-            if (enableBlending) {
-                // Legacy
-                alpha = 1 - _configuration->_backgroundImageBlend;
-            } else {
-                // 10.14+
-                alpha = iTermAlphaValueForTopView(1 - _configuration->_transparencyAlpha,
-                                                  _configuration->_backgroundImageBlend);
+            if (defaultBackground) {
+                alpha = 0;
             }
-        } else if (!_configuration->_reverseVideo && defaultBackground && !enableBlending) {
-            // 10.14+
-            alpha = iTermAlphaValueForTopView(1 - _configuration->_transparencyAlpha,
-                                              _configuration->_backgroundImageBlend);
         }
     }
     color.w = alpha;

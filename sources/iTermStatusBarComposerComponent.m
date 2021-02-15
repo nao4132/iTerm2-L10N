@@ -12,10 +12,12 @@
 #import "iTermShellHistoryController.h"
 #import "iTermsStatusBarComposerViewController.h"
 #import "iTermVariableScope.h"
+#import "iTermVariables.h"
 #import "NSArray+iTerm.h"
 #import "NSDictionary+iTerm.h"
 #import "NSImage+iTerm.h"
 #import "PTYSession.h"
+#import "VT100RemoteHost.h"
 
 @interface iTermStatusBarComposerComponent() <iTermsStatusBarComposerViewControllerDelegate>
 @end
@@ -113,6 +115,12 @@
 
 - (NSView *)statusBarComponentView {
     [self updateForTerminalBackgroundColor];
+
+    VT100RemoteHost *remoteHost = [[VT100RemoteHost alloc] init];
+    remoteHost.hostname = [self.scope valueForVariableName:iTermVariableKeySessionHostname];
+    remoteHost.username = [self.scope valueForVariableName:iTermVariableKeySessionUsername];
+
+    [self.viewController setHost:remoteHost];
     return self.viewController.view;
 }
 
@@ -175,6 +183,9 @@
     }
 }
 
+- (void)statusBarComposerRevealComposer:(iTermsStatusBarComposerViewController *)composer {
+    [self.delegate statusBarComponentComposerRevealComposer:self];
+}
 #pragma mark - Notifications
 
 - (void)commandHistoryDidChange:(NSNotification *)notification {

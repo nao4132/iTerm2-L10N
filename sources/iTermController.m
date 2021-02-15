@@ -321,7 +321,7 @@ static iTermController *gSharedInstance;
 - (void)noAction:(id)sender {
 }
 
-- (void)newSessionWithSameProfile:(id)sender {
+- (void)newSessionWithSameProfile:(id)sender newWindow:(BOOL)newWindow {
     Profile *bookmark = nil;
     if (_frontTerminalWindowController) {
         bookmark = [[_frontTerminalWindowController currentSession] profile];
@@ -332,12 +332,14 @@ static iTermController *gSharedInstance;
         NSString *guid = [ProfileModel freshGuid];
         bookmark = [bookmark dictionaryBySettingObject:guid forKey:KEY_GUID];
     }
+    PseudoTerminal *windowController = (newWindow) ? nil : _frontTerminalWindowController;
     [iTermSessionLauncher launchBookmark:bookmark
-                              inTerminal:_frontTerminalWindowController
-                      respectTabbingMode:NO
+                              inTerminal:windowController
+                      respectTabbingMode:newWindow
                               completion:^(PTYSession *session) {
         if (divorced) {
             [session divorceAddressBookEntryFromPreferences];
+            [session refreshOverriddenFields];
         }
     }];
 }
@@ -1042,7 +1044,9 @@ replaceInitialDirectoryForSessionWithGUID:(NSString *)guid
     if ([iTermProfilePreferences boolForKey:KEY_HIDE_AFTER_OPENING inProfile:profile]) {
         [term hideAfterOpening];
     }
-    if (term.windowType != WINDOW_TYPE_LION_FULL_SCREEN) {
+    if (term.windowType == WINDOW_TYPE_LION_FULL_SCREEN) {
+        [term delayedEnterFullscreen];
+    } else {
         iTermProfileHotKey *profileHotKey =
         [[iTermHotKeyController sharedInstance] didCreateWindowController:term
                                                               withProfile:profile];
@@ -1163,10 +1167,13 @@ replaceInitialDirectoryForSessionWithGUID:(NSString *)guid
 }
 
 - (PseudoTerminal *)terminalWithGuid:(NSString *)guid {
+    DLog(@"Search for terminal with guid %@", guid);
     for (PseudoTerminal *term in [self terminals]) {
         if ([[term terminalGuid] isEqualToString:guid]) {
+            DLog(@"Found it");
             return term;
         }
+        DLog(@"%@", term.terminalGuid);
     }
     return nil;
 }

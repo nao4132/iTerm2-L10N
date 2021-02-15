@@ -6,12 +6,15 @@
 //
 
 #import "iTermBackgroundDrawingHelper.h"
+
+#import "iTermSharedImageStore.h"
+#import "iTermVirtualOffset.h"
 #import "SessionView.h"
 
 typedef struct {
     NSRect solidBackgroundColorRect;
     
-    NSImage *image;
+    iTermImageWrapper *image;
     NSRect imageDestinationRect;
     NSRect imageSourceRect;
     NSRect boxes[2];
@@ -27,7 +30,8 @@ typedef struct {
                         dirtyRect:(NSRect)dirtyRect
            visibleRectInContainer:(NSRect)visibleRectInContainer
            blendDefaultBackground:(BOOL)blendDefaultBackground
-                             flip:(BOOL)shouldFlip {
+                             flip:(BOOL)shouldFlip
+                    virtualOffset:(CGFloat)virtualOffset {
     const BOOL debug = NO;
     const iTermBackgroundDraws draws = [self drawsForBackgroundImageInView:view
                                                                  dirtyRect:dirtyRect
@@ -38,7 +42,7 @@ typedef struct {
     const float alpha = [self.delegate backgroundDrawingHelperUseTransparency] ? (1.0 - [self.delegate backgroundDrawingHelperTransparency]) : 1.0;
     if (!draws.image) {
         [[[self.delegate backgroundDrawingHelperDefaultBackgroundColor] colorWithAlphaComponent:alpha] set];
-        NSRectFillUsingOperation(draws.solidBackgroundColorRect, NSCompositingOperationCopy);
+        iTermRectFillUsingOperation(draws.solidBackgroundColorRect, NSCompositingOperationCopy, virtualOffset);
         return;
     }
 
@@ -50,50 +54,57 @@ typedef struct {
     }
 
     NSRect (^flip)(NSRect) = ^NSRect(NSRect r) {
-        return NSMakeRect(r.origin.x, draws.image.size.height - r.origin.y - r.size.height, r.size.width, r.size.height);
+        return NSMakeRect(r.origin.x,
+                          draws.image.image.size.height - r.origin.y - r.size.height,
+                          r.size.width,
+                          r.size.height);
     };
     NSRect (^identity)(NSRect) = ^NSRect(NSRect r) {
         return r;
     };
     NSRect (^transform)(NSRect) = shouldFlip ? flip : identity;
     
-    [draws.image drawInRect:draws.imageDestinationRect
-                   fromRect:transform(draws.imageSourceRect)
-                  operation:operation
-                   fraction:alpha
-             respectFlipped:YES
-                      hints:nil];
+    [draws.image.image it_drawInRect:draws.imageDestinationRect
+                            fromRect:transform(draws.imageSourceRect)
+                           operation:operation
+                            fraction:alpha
+                      respectFlipped:YES
+                               hints:nil
+                       virtualOffset:virtualOffset];
     // Draw letterboxes/pillarboxes
     NSColor *defaultBackgroundColor = [self.delegate backgroundDrawingHelperDefaultBackgroundColor];
     [defaultBackgroundColor set];
-    NSRectFillUsingOperation(draws.boxes[0], NSCompositingOperationSourceOver);
-    NSRectFillUsingOperation(draws.boxes[1], NSCompositingOperationSourceOver);
+    iTermRectFillUsingOperation(draws.boxes[0], NSCompositingOperationSourceOver, virtualOffset);
+    iTermRectFillUsingOperation(draws.boxes[1], NSCompositingOperationSourceOver, virtualOffset);
     
     if (blendDefaultBackground) {
         // Blend default background color over background image.
         [[defaultBackgroundColor colorWithAlphaComponent:1 - [self.delegate backgroundDrawingHelperBlending]] set];
-        NSRectFillUsingOperation(draws.imageRect, NSCompositingOperationSourceOver);
+        iTermRectFillUsingOperation(draws.imageRect, NSCompositingOperationSourceOver, virtualOffset);
     }
     
     if (debug) {
+        const NSRect adjustedRect = NSRectSubtractingVirtualOffset(dirtyRect, virtualOffset);
         NSBezierPath *path = [NSBezierPath bezierPath];
-        [path moveToPoint:dirtyRect.origin];
-        [path lineToPoint:NSMakePoint(NSMaxX(dirtyRect), NSMaxY(dirtyRect))];
+        [path moveToPoint:adjustedRect.origin];
+        [path lineToPoint:NSMakePoint(NSMaxX(adjustedRect), NSMaxY(adjustedRect))];
         [[NSColor redColor] set];
         [path setLineWidth:1];
         [path stroke];
-        NSFrameRect(dirtyRect);
+        iTermFrameRect(dirtyRect, virtualOffset);
         NSRect localRect = [container convertRect:dirtyRect fromView:view];
         NSString *s = [NSString stringWithFormat:@"rect=%@ local=%@ src=%@ dst=%@",
-                       NSStringFromRect(dirtyRect),
-                       NSStringFromRect(localRect),
+                       NSStringFromRect(NSRectSubtractingVirtualOffset(dirtyRect, virtualOffset)),
+                       NSStringFromRect(NSRectSubtractingVirtualOffset(localRect, virtualOffset)),
                        NSStringFromRect(NSIntegralRect(draws.imageSourceRect)),
                        NSStringFromRect(NSIntegralRect(draws.imageDestinationRect))];
 
         [[NSColor whiteColor] set];
-        NSRectFill(NSMakeRect(100, dirtyRect.origin.y+20, 600, 24));
+        iTermRectFill(NSMakeRect(100, dirtyRect.origin.y+20, 600, 24), virtualOffset);
 
-        [s drawAtPoint:NSMakePoint(100, dirtyRect.origin.y+20) withAttributes:@{ NSForegroundColorAttributeName: [NSColor blackColor] }];
+        [s it_drawAtPoint:NSMakePoint(100, dirtyRect.origin.y+20)
+           withAttributes:@{ NSForegroundColorAttributeName: [NSColor blackColor]}
+            virtualOffset:virtualOffset];
     }
 }
 
@@ -103,7 +114,7 @@ typedef struct {
                                visibleRectInContainer:(NSRect)windowVisibleAreaRect
                                blendDefaultBackground:(BOOL)blendDefaultBackground {
     iTermBackgroundDraws result;
-    NSImage *backgroundImage = [self.delegate backgroundDrawingHelperImage];
+    iTermImageWrapper *backgroundImage = [self.delegate backgroundDrawingHelperImage];
     result.image = backgroundImage;
     if (!backgroundImage && blendDefaultBackground) {
         // No image, so just draw background color.
@@ -117,7 +128,7 @@ typedef struct {
         NSRect dirtyRectInAdjustedContainerCoords = dirtyRectInContainerCoords;
         dirtyRectInAdjustedContainerCoords.origin.x -= windowVisibleAreaRect.origin.x;
         dirtyRectInAdjustedContainerCoords.origin.y -= windowVisibleAreaRect.origin.y;
-        NSImage *image;
+        iTermImageWrapper *image;
         NSRect sourceRect;
         result.boxes[0] = NSZeroRect;
         result.boxes[1] = NSZeroRect;
@@ -127,21 +138,21 @@ typedef struct {
         switch ([self.delegate backgroundDrawingHelperBackgroundImageMode]) {
             case iTermBackgroundImageModeStretch:
                 image = backgroundImage;
-                sourceRect = [self sourceRectForImageSize:image.size
+                sourceRect = [self sourceRectForImageSize:image.image.size
                                                  viewSize:windowVisibleAreaRect.size
                                           destinationRect:dirtyRectInAdjustedContainerCoords];
                 break;
                 
             case iTermBackgroundImageModeTile:
                 image = [self patternedImageForViewOfSize:windowVisibleAreaRect.size];
-                sourceRect = [self sourceRectForImageSize:image.size
+                sourceRect = [self sourceRectForImageSize:image.image.size
                                                  viewSize:windowVisibleAreaRect.size
                                           destinationRect:dirtyRectInAdjustedContainerCoords];
                 break;
                 
             case iTermBackgroundImageModeScaleAspectFill:
                 image = backgroundImage;
-                sourceRect = [self scaleAspectFillSourceRectForImageSize:image.size
+                sourceRect = [self scaleAspectFillSourceRectForImageSize:image.image.size
                                                              contentRect:windowVisibleAreaRect
                                                          destinationRect:dirtyRectInAdjustedContainerCoords];
                 break;
@@ -150,7 +161,7 @@ typedef struct {
                 image = backgroundImage;
                 // TODO: The analyze complained about this dead store, which suggests I'm assing the wrong argument for dirtyRect below.
                 // dirtyRectInAdjustedContainerCoords = NSIntersectionRect(dirtyRectInAdjustedContainerCoords, containerView.bounds);
-                sourceRect = [iTermBackgroundDrawingHelper scaleAspectFitSourceRectForForImageSize:image.size
+                sourceRect = [iTermBackgroundDrawingHelper scaleAspectFitSourceRectForForImageSize:image.image.size
                                                                                    destinationRect:windowVisibleAreaRect
                                                                                          dirtyRect:dirtyRectInContainerCoords
                                                                                           drawRect:&drawRect
@@ -177,21 +188,21 @@ typedef struct {
 
 #pragma mark - Private
 
-- (NSImage *)patternedImageForViewOfSize:(NSSize)size {
+- (iTermImageWrapper *)patternedImageForViewOfSize:(NSSize)size {
     // If there is a tiled background image, tessellate _backgroundImage onto
     // _patternedImage, which will be the source for future background image
     // drawing operations.
     if (!_patternedImage || !NSEqualSizes(_patternedImage.size, size)) {
         _patternedImage = [[NSImage alloc] initWithSize:size];
         [_patternedImage lockFocus];
-        NSColor *pattern = [NSColor colorWithPatternImage:[self.delegate backgroundDrawingHelperImage]];
+        NSColor *pattern = [NSColor colorWithPatternImage:[[self.delegate backgroundDrawingHelperImage] image]];
         [pattern drawSwatchInRect:NSMakeRect(0,
                                              0,
                                              _patternedImage.size.width,
                                              _patternedImage.size.height)];
         [_patternedImage unlockFocus];
     }
-    return _patternedImage;
+    return [iTermImageWrapper withImage:_patternedImage];
 }
 
 - (NSRect)sourceRectForImageSize:(NSSize)imageSize

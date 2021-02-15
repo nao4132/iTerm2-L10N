@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.Cocoa.XIB" version="3.0" toolsVersion="16097" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES">
+<document type="com.apple.InterfaceBuilder3.Cocoa.XIB" version="3.0" toolsVersion="17701" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES">
     <dependencies>
         <deployment identifier="macosx"/>
-        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="16097"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="17701"/>
     </dependencies>
     <objects>
         <customObject id="-2" userLabel="File's Owner" customClass="NSApplication">
@@ -50,7 +50,8 @@
                                     <action selector="copyPerformanceStats:" target="201" id="Q9K-AS-x9Q"/>
                                 </connections>
                             </menuItem>
-                            <menuItem title="Capture GPU Frame" identifier="Capture Metal Frame" id="8KO-hG-xdC">
+                            <menuItem title="Capture GPU Frame" keyEquivalent="G" identifier="Capture Metal Frame" id="8KO-hG-xdC">
+                                <modifierMask key="keyEquivalentModifierMask" control="YES" option="YES" command="YES"/>
                                 <connections>
                                     <action selector="captureNextMetalFrame:" target="-1" id="vR7-q7-IN8"/>
                                 </connections>
@@ -131,6 +132,12 @@
                             <menuItem title="New Window" alternate="YES" keyEquivalent="n" identifier="New Window" id="872">
                                 <connections>
                                     <action selector="newWindow:" target="201" id="873"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="New Window with Current Profile" keyEquivalent="N" identifier="New Window with Current Profile" id="LR1-f6-Fa9">
+                                <modifierMask key="keyEquivalentModifierMask" option="YES" command="YES"/>
+                                <connections>
+                                    <action selector="newWindowWithSameProfile:" target="201" id="oHG-Sj-1ym"/>
                                 </connections>
                             </menuItem>
                             <menuItem title="New Tab" keyEquivalent="t" identifier="New Tab" id="867">
@@ -356,6 +363,12 @@ DQ
                                 <modifierMask key="keyEquivalentModifierMask" option="YES" command="YES"/>
                                 <connections>
                                     <action selector="copyWithStyles:" target="-1" id="B2X-kC-nrq"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Copy with Control Sequences" alternate="YES" identifier="Copy with Control Sequences" id="GT8-oj-uFO">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="copyWithControlSequences:" target="-1" id="mvT-2h-6oO"/>
                                 </connections>
                             </menuItem>
                             <menuItem title="Copy Mode" keyEquivalent="C" identifier="Copy Mode" id="CQc-0U-rfn">
@@ -855,6 +868,15 @@ DQ
                             <menuItem isSeparatorItem="YES" id="908">
                                 <modifierMask key="keyEquivalentModifierMask" command="YES"/>
                             </menuItem>
+                            <menuItem title="Add Trigger…" identifier="Add Trigger" id="xcL-dd-3m4">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="addTrigger:" target="-1" id="iVb-tZ-MfQ"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="2Gf-zh-GWz">
+                                <modifierMask key="keyEquivalentModifierMask" command="YES"/>
+                            </menuItem>
                             <menuItem title="Reset" keyEquivalent="r" identifier="Reset" id="907">
                                 <connections>
                                     <action selector="reset:" target="-1" id="909"/>
@@ -1224,6 +1246,12 @@ DQ
                                 <modifierMask key="keyEquivalentModifierMask"/>
                                 <connections>
                                     <action selector="arrangeSplitPanesEvenly:" target="201" id="eE4-2D-fTq"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Move Session to Window" identifier="Arrange Split Panes Evenly" id="Hlz-4M-IYw">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="moveSessionToWindow:" target="-1" id="wG5-71-6aQ"/>
                                 </connections>
                             </menuItem>
                             <menuItem isSeparatorItem="YES" id="1466">

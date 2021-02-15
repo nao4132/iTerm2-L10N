@@ -55,8 +55,9 @@
     runner.completion = ^(int status) {
         completion(status == 0);
     };
-    runner.outputHandler = ^(NSData *data) {
+    runner.outputHandler = ^(NSData *data, void (^completion)(void)) {
         DLog(@"%@", [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding]);
+        completion();
     };
     DLog(@"Running %@ %@", runner.command, [runner.arguments componentsJoinedByString:@" "]);
     [runner run];
@@ -200,7 +201,12 @@
     while (inData.length) {
         @autoreleasepool {
             DLog(@"runCommand: Read %@", inData);
-            [self didReadData:inData];
+            dispatch_group_t group = dispatch_group_create();
+            dispatch_group_enter(group);
+            [self didReadData:inData completion:^{
+                dispatch_group_leave(group);
+            }];
+            dispatch_group_wait(group, DISPATCH_TIME_FOREVER);
             if (!self.outputHandler) {
                 DLog(@"%@: %@", [task.arguments componentsJoinedByString:@" "],
                      [[NSString alloc] initWithData:inData encoding:NSUTF8StringEncoding]);
@@ -244,12 +250,13 @@
     });
 }
 
-- (void)didReadData:(NSData *)inData {
+- (void)didReadData:(NSData *)inData completion:(void (^)(void))completion {
     if (!self.outputHandler) {
+        completion();
         return;
     }
     dispatch_async(dispatch_get_main_queue(), ^{
-        self.outputHandler(inData);
+        self.outputHandler(inData, completion);
     });
 }
 
@@ -259,11 +266,15 @@
     NSMutableData *_output;
 }
 
-- (void)didReadData:(NSData *)inData {
+- (void)didReadData:(NSData *)inData completion:(void (^)(void))completion {
     dispatch_async(dispatch_get_main_queue(), ^{
         [self saveData:inData];
+        if (!self.outputHandler) {
+            completion();
+            return;
+        }
+        self.outputHandler(inData, completion);
     });
-    [super didReadData:inData];
 }
 
 - (void)saveData:(NSData *)inData {

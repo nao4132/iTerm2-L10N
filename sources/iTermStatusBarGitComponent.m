@@ -14,8 +14,8 @@
 #import "iTermCommandRunner.h"
 #import "iTermController.h"
 #import "iTermGitPoller.h"
-#import "iTermGitState.h"
-#import "iTermLocalHostNameGuesser.h"
+#import "iTermGitState+MainApp.h"
+#import "iTermSlowOperationGateway.h"
 #import "iTermTextPopoverViewController.h"
 #import "iTermVariableReference.h"
 #import "iTermVariableScope.h"
@@ -24,6 +24,7 @@
 #import "NSArray+iTerm.h"
 #import "NSDate+iTerm.h"
 #import "NSDictionary+iTerm.h"
+#import "NSHost+iTerm.h"
 #import "NSImage+iTerm.h"
 #import "NSStringITerm.h"
 #import "NSObject+iTerm.h"
@@ -204,7 +205,7 @@ static const NSTimeInterval iTermStatusBarGitComponentDefaultCadence = 2;
 }
 
 - (BOOL)onLocalhost {
-    NSString *localhostName = [[iTermLocalHostNameGuesser sharedInstance] name];
+    NSString *localhostName = [NSHost fullyQualifiedDomainName];
     NSString *currentHostname = self.scope.hostname;
     DLog(@"git poller current hostname is %@, localhost is %@", currentHostname, localhostName);
     return [localhostName isEqualToString:currentHostname];
@@ -249,6 +250,22 @@ static const NSTimeInterval iTermStatusBarGitComponentDefaultCadence = 2;
     }
     if (!self.pollerReady) {
         return nil;
+    }
+    switch (self.currentState.repoState) {
+        case iTermGitRepoStateNone:
+            break;
+        case iTermGitRepoStateMerge:
+            return [self attributedStringWithString:@"Merging"];
+        case iTermGitRepoStateRevert:
+            return [self attributedStringWithString:@"Reverting"];
+        case iTermGitRepoStateCherrypick:
+            return [self attributedStringWithString:@"Cherrypicking"];
+        case iTermGitRepoStateBisect:
+            return [self attributedStringWithString:@"Bisecting"];
+        case iTermGitRepoStateRebase:
+            return [self attributedStringWithString:@"Rebasing"];
+        case iTermGitRepoStateApply:
+            return [self attributedStringWithString:@"Applying"];
     }
     static NSAttributedString *upImage;
     static NSAttributedString *downImage;
@@ -436,7 +453,8 @@ static const NSTimeInterval iTermStatusBarGitComponentDefaultCadence = 2;
     iTermGitState *state = self.currentState.copy;
     NSString *directory = _gitPoller.currentDirectory;
     __weak __typeof(self) weakSelf = self;
-    [self fetchRecentBranchesWithTimeout:0.5 completion:^(NSArray<NSString *> *branches) {
+    const NSInteger maxCount = 7;
+    [self fetchRecentBranchesWithTimeout:0.5 count:maxCount + 1 completion:^(NSArray<NSString *> *branches) {
         NSMenu *menu = [[NSMenu alloc] init];
         iTermGitMenuItemContext *(^addItem)(NSString *, SEL, BOOL) = ^iTermGitMenuItemContext *(NSString *title, SEL selector, BOOL enabled) {
             NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:title
@@ -466,7 +484,7 @@ static const NSTimeInterval iTermStatusBarGitComponentDefaultCadence = 2;
                 @selector(pull:),
                 !state.dirty);
         [menu addItem:[NSMenuItem separatorItem]];
-        for (NSString *branch in [branches it_arrayByKeepingFirstN:7]) {
+        for (NSString *branch in [branches it_arrayByKeepingFirstN:maxCount]) {
             if (branch.length == 0) {
                 continue;
             }
@@ -507,33 +525,20 @@ static const NSTimeInterval iTermStatusBarGitComponentDefaultCadence = 2;
     [runner runWithTimeout:timeout];
 }
 
-static NSArray<NSString *> *NonEmptyLinesInString(NSString *output) {
-    NSArray<NSString *> *branches = [output componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]];
-    return [branches mapWithBlock:^id(NSString *branch) {
-        NSString *trimmed = [branch stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-        if (trimmed.length == 0) {
-            return nil;
-        }
-        return trimmed;
+- (void)fetchRecentBranchesWithTimeout:(NSTimeInterval)timeout
+                                 count:(NSInteger)maxCount
+                            completion:(void (^)(NSArray<NSString *> *branches))completion {
+    if (!self.onLocalhost) {
+        completion(@[]);
+        return;
+    }
+    [[iTermSlowOperationGateway sharedInstance] fetchRecentBranchesAt:_gitPoller.currentDirectory
+                                                                count:maxCount
+                                                           completion:^(NSArray<NSString *> * _Nonnull branches) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            completion(branches);
+        });
     }];
-}
-
-- (void)fetchRecentBranchesWithTimeout:(NSTimeInterval)timeout completion:(void (^)(NSArray<NSString *> *branches))completion {
-    NSArray *args = @[ @"for-each-ref",
-                       @"--count=30",
-                       @"--sort=-committerdate",
-                       @"refs/heads/",
-                       @"--format=%(refname:short)" ];
-    [self runGitCommandWithArguments:args
-                             timeout:timeout
-                          completion:
-     ^(NSString * _Nullable output, int status) {
-         if (status != 0 || output == nil) {
-             completion(@[]);
-             return;
-         }
-         completion(NonEmptyLinesInString(output));
-     }];
 }
 
 - (void)showPopover {
@@ -582,8 +587,9 @@ static NSArray<NSString *> *NonEmptyLinesInString(NSString *output) {
     iTermTextPopoverViewController *popoverVC = _popoverVC;
     __weak __typeof(_logRunner) weakLogRunner = _logRunner;
     __block BOOL stopped = NO;
-    _logRunner.outputHandler = ^(NSData *data) {
+    _logRunner.outputHandler = ^(NSData *data, void (^completion)(void)) {
         if (stopped) {
+            completion();
             return;
         }
         [popoverVC appendString:[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding]];
@@ -592,6 +598,7 @@ static NSArray<NSString *> *NonEmptyLinesInString(NSString *output) {
             [popoverVC appendString:@"\n[Truncated]\n"];
             [weakLogRunner terminate];
         }
+        completion();
     };
     [_logRunner runWithTimeout:5];
 }
@@ -700,7 +707,7 @@ static NSArray<NSString *> *NonEmptyLinesInString(NSString *output) {
 
 #pragma mark - iTermGitPollerDelegate
 
-- (BOOL)gitPollerShouldPoll:(iTermGitPoller *)poller {
+- (BOOL)gitPollerShouldPoll:(iTermGitPoller *)poller after:(NSDate * _Nullable)lastPoll {
     if ([self.delegate statusBarComponentIsInSetupUI:self]) {
         DLog(@"Don't poll: in setup UI");
         return NO;
@@ -709,9 +716,28 @@ static NSArray<NSString *> *NonEmptyLinesInString(NSString *output) {
         DLog(@"Don't poll: not visible");
         return NO;
     }
+    if (lastPoll == nil) {
+        DLog(@"First poll. Return YES.");
+        return YES;
+    }
 
-    DLog(@"returning YES");
-    return YES;
+    const iTermActivityInfo activityInfo = [self.delegate statusBarComponentActivityInfo:self];
+    NSDate *lastNewline = [NSDate it_dateWithTimeSinceBoot:activityInfo.lastNewline];
+    // Add a 3 second grace period since git takes a moment to update. You might only pick up
+    // the change on the second check after pressing enter.
+    if ([lastNewline compare:[lastPoll dateByAddingTimeInterval:-3]] == NSOrderedDescending) {
+        DLog(@"Newline sent since last poll-3: returning YES");
+        return YES;
+    }
+    const NSTimeInterval pollIntervalWhenInactive = 60;
+    NSDate *lastActivity = [NSDate it_dateWithTimeSinceBoot:activityInfo.lastActivity];
+    if ([[NSDate date] timeIntervalSinceDate:lastPoll] > pollIntervalWhenInactive &&
+        [lastActivity compare:lastPoll] == NSOrderedDescending) {
+        DLog(@"Activity since last poll more than %@ seconds ago: return YES", @(pollIntervalWhenInactive));
+        return YES;
+    }
+    DLog(@"Don't poll. lastPoll=%@ lastNewline=%@ lastActivity=%@", lastPoll, lastNewline, lastActivity);
+    return NO;
 }
 
 @end

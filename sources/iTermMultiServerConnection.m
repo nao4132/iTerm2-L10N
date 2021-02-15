@@ -258,7 +258,7 @@
     NSString *appSupportPath = [[NSFileManager defaultManager] applicationSupportDirectory];
     NSString *normalFilename = [NSString stringWithFormat:@"iterm2-daemon-%d.socket", number];
     NSURL *normalURL = [[NSURL fileURLWithPath:appSupportPath] URLByAppendingPathComponent:normalFilename];
-    if ([self pathIsSafe:normalURL.path]) {
+    if ([self pathIsSafe:normalURL.path] && [[NSFileManager defaultManager] directoryIsWritable:appSupportPath]) {
         return normalURL.path;
     }
 
@@ -350,8 +350,11 @@
                 initialPwd:(const char *)initialPwd
                 newEnviron:(const char **)newEnviron
                   callback:(iTermCallback<id, iTermResult<iTermFileDescriptorMultiClientChild *> *> *)callback {
+    DLog(@"begin");
     [_thread dispatchAsync:^(iTermMultiServerPerConnectionState * _Nullable state) {
+        DLog(@"dispatched");
         if (!state.client) {
+            DLog(@"No client");
             NSError *error = [NSError errorWithDomain:iTermFileDescriptorMultiClientErrorDomain
                                                  code:iTermFileDescriptorMultiClientErrorCodeConnectionLost
                                              userInfo:nil];
@@ -408,24 +411,25 @@
 - (void)fileDescriptorMultiClient:(iTermFileDescriptorMultiClient *)client
                 childDidTerminate:(iTermFileDescriptorMultiClientChild *)child {
     const pid_t pid = child.pid;
+    iTermCallback *callback = [iTermThread.main newCallbackWithBlock:^(iTermMainThreadState *_Nonnull state,
+                                                                       iTermResult<NSNumber *> *result) {
+             [result handleObject:
+              ^(NSNumber * _Nonnull statusNumber) {
+                 DLog(@"Child with pid %d terminated with status %d", pid, statusNumber.intValue);
+
+                 // Post a notification that causes the task to be removed from the task notifier. Note that
+                 // this is usually unnecessary because the file descriptor will return 0 before we finish
+                 // round-tripping on Wait. This is a backstop in case of the unexpected.
+                 [[iTermMultiServerChildDidTerminateNotification notificationWithProcessID:child.pid
+                                                                         terminationStatus:child.terminationStatus] post];
+             } error:
+              ^(NSError * _Nonnull error) {
+                 DLog(@"Failed to wait on child with pid %d: %@", pid, error);
+             }];
+    }];
     [client waitForChild:child
       removePreemptively:NO
-                callback:[iTermThread.main newCallbackWithBlock:^(iTermMainThreadState *_Nonnull state,
-                                                                  iTermResult<NSNumber *> *result) {
-        [result handleObject:
-         ^(NSNumber * _Nonnull statusNumber) {
-            DLog(@"Child with pid %d terminated with status %d", pid, statusNumber.intValue);
-
-            // Post a notification that causes the task to be removed from the task notifier. Note that
-            // this is usually unnecessary because the file descriptor will return 0 before we finish
-            // round-tripping on Wait. This is a backstop in case of the unexpected.
-            [[iTermMultiServerChildDidTerminateNotification notificationWithProcessID:child.pid
-                                                                    terminationStatus:child.terminationStatus] post];
-        } error:
-         ^(NSError * _Nonnull error) {
-            DLog(@"Failed to wait on child with pid %d: %@", pid, error);
-        }];
-    }]];
+                callback:callback];
 }
 
 @end

@@ -28,30 +28,27 @@
 
 
 #import "TextViewWrapper.h"
+
+#import "DebugLogging.h"
 #import "iTermAdvancedSettingsModel.h"
+#import "iTermPreferences.h"
+#import "NSObject+iTerm.h"
+#import "NSView+iTerm.h"
 #import "PTYTextView.h"
 
 @implementation TextViewWrapper {
     PTYTextView *child_;
-    BOOL _needsClear;
 }
 
 - (instancetype)initWithFrame:(NSRect)frameRect {
     self = [super initWithFrame:frameRect];
     if (self) {
-        if (@available(macOS 10.14, *)) {
-            [[NSNotificationCenter defaultCenter] addObserver:self
-                                                     selector:@selector(scrollViewDidScroll:)
-                                                         name:NSViewBoundsDidChangeNotification
-                                                       object:nil];
-        }
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(scrollViewDidScroll:)
+                                                     name:NSViewBoundsDidChangeNotification
+                                                   object:nil];
     }
     return self;
-}
-
-- (void)dealloc {
-    [[NSNotificationCenter defaultCenter] removeObserver:self];
-    [super dealloc];
 }
 
 // This is a hack to fix an apparent bug in macOS 10.14 beta 3. I would like to remove it when it's no longer needed.
@@ -64,27 +61,16 @@
     [self setNeedsDisplay:YES];
 }
 
-- (void)drawRect:(NSRect)bogusRect {
-    // The passed-in rect tends to be 0x0 but respecting it leaves visible
-    // parts undrawn. Some day macOS 10.0's features will work correctly but
-    // I'm not holding my breath.
-    NSRect rect = self.enclosingScrollView.documentVisibleRect;
-    rect.size.height = [iTermAdvancedSettingsModel terminalVMargin];
-    if (_useMetal) {
-        if (@available(macOS 10.14, *)) {
-            return;
-        }
-        if (!_needsClear) {
-            return;
-        }
-    }
-    [child_.delegate textViewDrawBackgroundImageInView:self
-                                              viewRect:rect
-                                blendDefaultBackground:YES];
+// For some reason this view just doesn't work with layers when using the legacy renderer. When it
+// has a layer it becomes opaque black, as of macOS 11.1.
+- (void)drawRect:(NSRect)dirtyRect {
+    NSColor *color = [self it_backgroundColorOfEnclosingTerminalIfBackgroundColorViewHidden];
+    DLog(@"textViewWrapper: draw with color %@", color);
+    [color ?: [NSColor clearColor] set];
+    NSRectFill(dirtyRect);
 }
 
-- (void)addSubview:(NSView *)child
-{
+- (void)addSubview:(NSView *)child {
     [super addSubview:child];
     if ([child isKindOfClass:[PTYTextView class]]) {
       child_ = (PTYTextView *)child;
@@ -95,28 +81,25 @@
     }
 }
 
-- (void)willRemoveSubview:(NSView *)subview
-{
+- (void)willRemoveSubview:(NSView *)subview {
   if (subview == child_) {
     child_ = nil;
   }
   [super willRemoveSubview:subview];
 }
 
-- (NSRect)adjustScroll:(NSRect)proposedVisibleRect
-{
+- (NSRect)adjustScroll:(NSRect)proposedVisibleRect {
     return [child_ adjustScroll:proposedVisibleRect];
 }
 
-- (BOOL)isFlipped
-{
+- (BOOL)isFlipped {
     return YES;
 }
 
 - (void)resizeSubviewsWithOldSize:(NSSize)oldSize {
     NSRect rect = self.bounds;
-    rect.size.height -= [iTermAdvancedSettingsModel terminalVMargin];
-    rect.origin.y = [iTermAdvancedSettingsModel terminalVMargin];
+    rect.size.height -= [iTermPreferences intForKey:kPreferenceKeyTopBottomMargins];
+    rect.origin.y = [iTermPreferences intForKey:kPreferenceKeyTopBottomMargins];
     if (!NSEqualRects(child_.frame, rect)) {
         child_.frame = rect;
     }
@@ -125,9 +108,6 @@
 - (void)setUseMetal:(BOOL)useMetal {
     if (useMetal == _useMetal) {
         return;
-    }
-    if (useMetal) {
-        _needsClear = YES;
     }
     _useMetal = useMetal;
     [self setNeedsDisplay:YES];

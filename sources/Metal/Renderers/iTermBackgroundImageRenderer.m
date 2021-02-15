@@ -4,7 +4,9 @@
 #import "FutureMethods.h"
 #import "iTermAdvancedSettingsModel.h"
 #import "iTermBackgroundDrawingHelper.h"
+#import "iTermPreferences.h"
 #import "iTermShaderTypes.h"
+#import "iTermSharedImageStore.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -45,7 +47,7 @@ NS_ASSUME_NONNULL_BEGIN
     iTermMetalBufferPool *_box1Pool;
     iTermMetalBufferPool *_box2Pool;
     iTermBackgroundImageMode _mode;
-    NSImage *_image;
+    iTermImageWrapper *_image;
     id<MTLTexture> _texture;
     CGRect _frame;
     CGRect _containerFrame;
@@ -80,7 +82,7 @@ NS_ASSUME_NONNULL_BEGIN
     return iTermMetalFrameDataStatPqCreateBackgroundImageTS;
 }
 
-- (void)setImage:(NSImage *)image
+- (void)setImage:(iTermImageWrapper *)image
             mode:(iTermBackgroundImageMode)mode
            frame:(CGRect)frame
    containerRect:(CGRect)containerRect
@@ -209,7 +211,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)initializeTransientState:(iTermBackgroundImageRendererTransientState *)tState {
     tState.texture = _texture;
     tState.mode = _mode;
-    tState.imageSize = _image.size;
+    tState.imageSize = _image.image.size;
     tState.repeat = (_mode == iTermBackgroundImageModeTile);
     tState.frame = _frame;
     tState.defaultBackgroundColor = _color;
@@ -228,7 +230,7 @@ NS_ASSUME_NONNULL_BEGIN
         vmargin = 0;
         insets = NSEdgeInsetsZero;
     } else {
-        vmargin = [iTermAdvancedSettingsModel terminalVMargin] * scale;
+        vmargin = [iTermPreferences intForKey:kPreferenceKeyTopBottomMargins] * scale;
         insets = tState.edgeInsets;
     }
     const CGFloat topMargin = insets.bottom + vmargin;

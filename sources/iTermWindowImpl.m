@@ -5,6 +5,7 @@
 #endif
 
 @class iTermThemeFrame;
+@class NSTitlebarContainerView;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -31,9 +32,11 @@ NS_ASSUME_NONNULL_BEGIN
     NSTimeInterval _timeOfLastWindowTitleChange;
     BOOL _needsInvalidateShadow;
     BOOL _it_restorableStateInvalid;
+    BOOL _validatingMenuItems;
 #if BETA
     NSString *_lastAlphaChangeStack;
 #endif
+    BOOL _updatingDividerLayer;
 }
 
 @synthesize it_openingSheet;
@@ -53,6 +56,18 @@ NS_ASSUME_NONNULL_BEGIN
     if (self) {
         DLog(@"Invalidate cached occlusion: %@ %p", NSStringFromSelector(_cmd), self);
         [[iTermWindowOcclusionChangeMonitor sharedInstance] invalidateCachedOcclusion];
+        [self preventTitlebarDivider];
+    }
+    return self;
+}
+
+- (instancetype)initWithContentRect:(NSRect)contentRect styleMask:(NSWindowStyleMask)style backing:(NSBackingStoreType)backingStoreType defer:(BOOL)flag {
+    self = [super initWithContentRect:contentRect
+                            styleMask:style
+                              backing:backingStoreType
+                                defer:flag];
+    if (self) {
+        [self preventTitlebarDivider];
     }
     return self;
 }
@@ -71,6 +86,49 @@ ITERM_WEAKLY_REFERENCEABLE
 #endif
     [super dealloc];
 
+}
+
+- (void)preventTitlebarDivider {
+    if (@available(macOS 10.16, *)) {
+        static dispatch_once_t onceToken;
+        dispatch_once(&onceToken, ^{
+            static IMP originalImp;
+            originalImp =
+            [iTermSelectorSwizzler permanentlySwizzleSelector:@selector(_updateDividerLayerForController:animated:)
+                                                    fromClass:NSClassFromString(@"NSTitlebarContainerView")
+                                                    withBlock:^(id receiver, id controller, BOOL animated) {
+                void (*f)(id, SEL, id, BOOL) = (void (*)(id, SEL, id, BOOL))originalImp;
+                if (![controller respondsToSelector:@selector(window)]) {
+                    f(receiver, @selector(_updateDividerLayerForController:animated:), controller, animated);
+                    return;
+                }
+                NSWindow<PTYWindow> *window = (NSWindow<PTYWindow> *)[controller window];
+                if (![window conformsToProtocol:@protocol(PTYWindow)]) {
+                    f(receiver, @selector(_updateDividerLayerForController:animated:), controller, animated);
+                    return;
+                }
+
+                [window setUpdatingDividerLayer:YES];
+                f(receiver, @selector(_updateDividerLayerForController:animated:), controller, animated);
+                [window setUpdatingDividerLayer:NO];
+            }];
+        });
+    }
+}
+
+- (NSTitlebarSeparatorStyle)titlebarSeparatorStyle NS_AVAILABLE_MAC(10_16) {
+    if (_updatingDividerLayer) {
+        id<PTYWindow> ptywindow = (id<PTYWindow>)self;
+        if ([ptywindow.ptyDelegate terminalWindowShouldHaveTitlebarSeparator]) {
+            return NSTitlebarSeparatorStyleShadow;
+        }
+        return NSTitlebarSeparatorStyleNone;
+    }
+    return [super titlebarSeparatorStyle];
+}
+
+- (void)setUpdatingDividerLayer:(BOOL)value {
+    _updatingDividerLayer = value;
 }
 
 - (void)setDocumentEdited:(BOOL)documentEdited {
@@ -98,7 +156,10 @@ ITERM_WEAKLY_REFERENCEABLE
             return ![self.ptyDelegate anyFullScreen];
         }
     } else {
-        return [super validateMenuItem:item];
+        _validatingMenuItems = YES;
+        const BOOL result = [super validateMenuItem:item];
+        _validatingMenuItems = NO;
+        return result;
     }
 }
 
@@ -190,6 +251,7 @@ ITERM_WEAKLY_REFERENCEABLE
                 _minBlur = 1;
             }
         }
+        DLog(@"enable blur with radius %@ for window %@", @(MAX(_minBlur, radius)), self);
         function(con, [self windowNumber], (int)MAX(_minBlur, radius));
     } else {
         NSLog(@"Couldn't get blur function");
@@ -205,6 +267,7 @@ ITERM_WEAKLY_REFERENCEABLE
 
     CGSSetWindowBackgroundBlurRadiusFunction* function = GetCGSSetWindowBackgroundBlurRadiusFunction();
     if (function) {
+        DLog(@"disable blur for window %@", self);
         function(con, [self windowNumber], MAX(_minBlur, 0));
     }
 }
@@ -315,6 +378,7 @@ ITERM_WEAKLY_REFERENCEABLE
     [[iTermWindowOcclusionChangeMonitor sharedInstance] invalidateCachedOcclusion];
     self.it_becomingKey = YES;
     [super makeKeyAndOrderFront:sender];
+    [self.ptyDelegate ptyWindowDidMakeKeyAndOrderFront:self];
     self.it_becomingKey = NO;
 }
 
@@ -486,9 +550,20 @@ ITERM_WEAKLY_REFERENCEABLE
     return NSWindowTabbingModeDisallowed;
 }
 
+- (void)_moveToScreen:(id)sender {
+    if (![[THE_CLASS superclass] instancesRespondToSelector:_cmd]) {
+        return;
+    }
+    if ([sender isKindOfClass:[NSScreen class]]) {
+        [self.ptyDelegate terminalWindowWillMoveToScreen:sender];
+    }
+    [super _moveToScreen:sender];
+}
+
 - (void)setFrame:(NSRect)frameRect display:(BOOL)flag {
-    DLog(@"setFrame:%@ display:%@ maxy=%@ from\n%@",
+    DLog(@"setFrame:%@ display:%@ maxy=%@ of %@ from\n%@",
          NSStringFromRect(frameRect), @(flag), @(NSMaxY(frameRect)),
+          self.delegate,
          [NSThread callStackSymbols]);
     [super setFrame:frameRect display:flag];
 }
@@ -561,6 +636,10 @@ ITERM_WEAKLY_REFERENCEABLE
         _needsInvalidateShadow = NO;
         [self invalidateShadow];
     });
+}
+
+- (BOOL)isMovable {
+    return _validatingMenuItems || [super isMovable];
 }
 
 NS_ASSUME_NONNULL_END

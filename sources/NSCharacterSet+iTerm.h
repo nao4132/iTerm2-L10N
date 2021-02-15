@@ -10,6 +10,9 @@
 
 @interface NSCharacterSet (iTerm)
 
+// No code point less than this will be an emoji with a default emoji presentation.
+extern unichar iTermMinimumDefaultEmojiPresentationCodePoint;
+
 // See EastAsianWidth.txt in Unicode 6.0.
 
 // Full-width characters.
@@ -21,11 +24,20 @@
 // Zero-width spaces.
 + (instancetype)zeroWidthSpaceCharacterSetForUnicodeVersion:(NSInteger)version;
 
+// Characters with the Default_Ignorable_Code_Point derived property.
+// Includes things like zero-width spaces.
+// See issue 9368.
++ (instancetype)ignorableCharactersForUnicodeVersion:(NSInteger)version;
+
 + (instancetype)spacingCombiningMarksForUnicodeVersion:(int)version;
+
++ (instancetype)emojiAcceptingVS16;
 
 + (instancetype)codePointsWithOwnCell;
 
 + (NSCharacterSet *)urlCharacterSet;
 + (NSCharacterSet *)filenameCharacterSet;
++ (NSCharacterSet *)emojiWithDefaultEmojiPresentation;
++ (NSCharacterSet *)emojiWithDefaultTextPresentation;
 
 @end

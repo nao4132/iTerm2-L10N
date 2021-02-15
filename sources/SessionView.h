@@ -26,7 +26,9 @@
  */
 
 #import <Cocoa/Cocoa.h>
+#import "iTermBackgroundColorView.h"
 #import "iTermFindDriver.h"
+#import "iTermLegacyView.h"
 #import "iTermMetalDriver.h"
 #import "PTYScrollView.h"
 #import "PTYSession.h"
@@ -34,8 +36,8 @@
 #import "SplitSelectionView.h"
 
 @class iTermAnnouncementViewController;
-@class iTermBackgroundColorView;
 @class iTermFindDriver;
+@class iTermImageWrapper;
 @class iTermIncrementalMinimapView;
 @class iTermMetalDriver;
 @protocol iTermSearchResultsMinimapViewDelegate;
@@ -46,7 +48,7 @@
 
 extern NSString *const SessionViewWasSelectedForInspectionNotification;
 
-@protocol iTermSessionViewDelegate<iTermFindDriverDelegate, NSObject>
+@protocol iTermSessionViewDelegate<iTermFindDriverDelegate, iTermLegacyViewDelegate, NSObject>
 
 // Mouse entered the view.
 - (void)sessionViewMouseEntered:(NSEvent *)event;
@@ -68,11 +70,6 @@ extern NSString *const SessionViewWasSelectedForInspectionNotification;
 
 // Is this this view part of a visible tab?
 - (BOOL)sessionViewIsVisible;
-
-// Requests to draw part of the background image/color.
-- (void)sessionViewDrawBackgroundImageInView:(NSView *)view
-                                    viewRect:(NSRect)rect
-                      blendDefaultBackground:(BOOL)blendDefaultBackground;
 
 // Drag entered this view.
 - (NSDragOperation)sessionViewDraggingEntered:(id<NSDraggingInfo>)sender;
@@ -145,6 +142,8 @@ extern NSString *const SessionViewWasSelectedForInspectionNotification;
 - (iTermVariableScope *)sessionViewScope;
 
 - (BOOL)sessionViewUseSeparateStatusBarsPerPane;
+- (CGFloat)sessionViewTransparencyAlpha;
+- (NSRect)sessionViewFrameForLegacyView;
 
 @end
 
@@ -178,15 +177,16 @@ typedef NS_ENUM(NSUInteger, iTermSessionViewFindDriver) {
 @property(nonatomic, readonly) NSSize internalDecorationSize;
 @property(nonatomic, readonly) iTermSessionViewFindDriver findDriverType;
 @property(nonatomic, weak) id<iTermSearchResultsMinimapViewDelegate> searchResultsMinimapViewDelegate NS_AVAILABLE_MAC(10_14);
-@property(nonatomic, strong) NSImage *image;
+@property(nonatomic, strong) iTermImageWrapper *image;
 @property(nonatomic) iTermBackgroundImageMode imageMode;
+@property(nonatomic, readonly) BOOL statusBarIsInPaneTitleBar;
 
 // For macOS 10.14+ when subpixel AA is OFF, this draws the default background color. When there's
 // a background image it will be translucent to effect blending. When subpixel AA is ON or the OS
 // is 10.13 or earlier then this is hidden. It can't be used with subpixel AA because macOS isn't
 // able to take the color it's drawing over into account when choosing the subpixel colors and it
 // looks horrible.
-@property(nonatomic, strong) iTermBackgroundColorView *backgroundColorView NS_AVAILABLE_MAC(10_14);
+@property(nonatomic, strong) iTermSessionBackgroundColorView *backgroundColorView;
 
 // How far the metal view extends beyond the visible part of the viewport, such as under the title
 // bar or bottom per-pane status bar.
@@ -267,5 +267,6 @@ typedef NS_ENUM(NSUInteger, iTermSessionViewFindDriver) {
 - (void)tabColorDidChange;
 - (void)didBecomeVisible;
 - (void)showUnobtrusiveMessage:(NSString *)message;
+- (void)setSuppressLegacyDrawing:(BOOL)suppressLegacyDrawing;
 
 @end

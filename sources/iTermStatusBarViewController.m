@@ -370,6 +370,14 @@ static const CGFloat iTermStatusBarViewControllerBottomMargin = 0;
     [self.delegate statusBarResignFirstResponder];
 }
 
+- (void)statusBarComponentComposerRevealComposer:(id<iTermStatusBarComponent>)component {
+    [self.delegate statusBarRevealComposer];
+}
+
+- (iTermActivityInfo)statusBarComponentActivityInfo:(id<iTermStatusBarComponent>)component {
+    return [self.delegate statusBarActivityInfo];
+}
+
 - (void)statusBarComponent:(id<iTermStatusBarComponent>)component
       reportScriptingError:(NSError *)error
              forInvocation:(NSString *)invocation
@@ -391,6 +399,10 @@ static const CGFloat iTermStatusBarViewControllerBottomMargin = 0;
 
 - (void)statusBarContainerViewDisableStatusBar:(iTermStatusBarContainerView *)sender {
     [self.delegate statusBarDisable];
+}
+
+- (BOOL)statusBarContainerViewCanDragWindow:(iTermStatusBarContainerView *)sender {
+    return [self.delegate statusBarCanDragWindow];
 }
 
 - (void)statusBarContainerViewConfigureStatusBar:(iTermStatusBarContainerView *)sender {

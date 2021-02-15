@@ -27,6 +27,7 @@
 #import "iTermAdvancedSettingsModel.h"
 #import "iTermApplicationDelegate.h"
 #import "iTermController.h"
+#import "iTermSelectorSwizzler.h"
 #import "iTermWindowOcclusionChangeMonitor.h"
 #import "iTermPreferences.h"
 #import "iTermSessionLauncher.h"
@@ -43,6 +44,10 @@ const NSTimeInterval iTermWindowTitleChangeMinimumInterval = 0.1;
 - (NSView *)titlebarContainerView;
 @end
 
+@interface NSObject(PrivateNSTitlebarContainerView)
+- (void)_updateDividerLayerForController:(id)controller animated:(BOOL)animated;
+@end
+
 // Insane hacks inspired by Chrome.
 // This makes it possible to implement our own window dragging.
 // Absurdly, making the window title invisible does not stop it from being used
@@ -50,6 +55,7 @@ const NSTimeInterval iTermWindowTitleChangeMinimumInterval = 0.1;
 
 @interface NSWindow (PrivateAPI)
 + (Class)frameViewClassForStyleMask:(NSUInteger)windowStyle;
+- (void)_moveToScreen:(id)sender;
 @end
 
 @interface NSFrameView : NSView

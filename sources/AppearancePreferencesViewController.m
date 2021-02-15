@@ -65,6 +65,7 @@ NSString *const iTermProcessTypeDidChangeNotification = @"iTermProcessTypeDidCha
     IBOutlet NSButton *_showTabBarInFullscreen;
 
     IBOutlet NSButton *_stretchTabsToFillBar;
+    IBOutlet NSButton *_htmlTabTitles;
 
     // Show window number in title bar.
     IBOutlet NSButton *_windowNumber;
@@ -98,6 +99,14 @@ NSString *const iTermProcessTypeDidChangeNotification = @"iTermProcessTypeDidCha
 
     IBOutlet NSTabView *_tabView;
     NSRect _desiredFrame;
+
+    IBOutlet NSTextField *_sideMarginsLabel;
+    IBOutlet NSTextField *_sideMargins;
+    IBOutlet NSStepper *_sideMarginsStepper;
+
+    IBOutlet NSTextField *_topBottomMarginsLabel;
+    IBOutlet NSTextField *_topBottomMargins;
+    IBOutlet NSStepper *_topBottomMarginsStepper;
 }
 
 - (void)awakeFromNib {
@@ -140,6 +149,23 @@ NSString *const iTermProcessTypeDidChangeNotification = @"iTermProcessTypeDidCha
         [weakSelf updateProxyIconEnabled];
     };
 
+    info = [self defineControl:_sideMargins
+                           key:kPreferenceKeySideMargins
+                   relatedView:_sideMarginsLabel
+                          type:kPreferenceInfoTypeIntegerTextField];
+    [self associateStepper:_sideMarginsStepper withPreference:info];
+    info.onChange = ^{
+        [weakSelf postRefreshNotification];
+    };
+
+    info = [self defineControl:_topBottomMargins
+                           key:kPreferenceKeyTopBottomMargins
+                   relatedView:_topBottomMarginsLabel
+                          type:kPreferenceInfoTypeIntegerTextField];
+    info.onChange = ^{
+        [weakSelf postRefreshNotification];
+    };
+    [self associateStepper:_topBottomMarginsStepper withPreference:info];
 
     info = [self defineControl:_hideTab
                            key:kPreferenceKeyHideTabBar
@@ -276,6 +302,12 @@ NSString *const iTermProcessTypeDidChangeNotification = @"iTermProcessTypeDidCha
 
     info = [self defineControl:_stretchTabsToFillBar
                            key:kPreferenceKeyStretchTabsToFillBar
+                   relatedView:nil
+                          type:kPreferenceInfoTypeCheckbox];
+    info.onChange = ^() { [weakSelf postRefreshNotification]; };
+
+    info = [self defineControl:_htmlTabTitles
+                           key:kPreferenceKeyHTMLTabTitles
                    relatedView:nil
                           type:kPreferenceInfoTypeCheckbox];
     info.onChange = ^() { [weakSelf postRefreshNotification]; };

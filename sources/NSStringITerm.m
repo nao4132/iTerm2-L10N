@@ -28,10 +28,13 @@
 #import "DebugLogging.h"
 #import "iTermAdvancedSettingsModel.h"
 #import "iTermMalloc.h"
+#import "iTermOrderedDictionary.h"
+#import "iTermPreferences.h"
 #import "iTermSwiftyStringParser.h"
 #import "iTermTuple.h"
 #import "iTermVariableScope.h"
 #import "NSArray+iTerm.h"
+#import "NSAttributedString+PSM.h"
 #import "NSData+iTerm.h"
 #import "NSLocale+iTerm.h"
 #import "NSMutableAttributedString+iTerm.h"
@@ -353,7 +356,7 @@
         if (!inSingleQuotes && !inDoubleQuotes && isWhitespace) {
             if (!isFirstCharacterOfWord) {
                 if (!firstCharacterOfThisWordWasQuoted) {
-                    [result addObject:[currentValue stringByExpandingTildeInPath]];
+                    [result addObject:[currentValue stringByExpandingTildeInPathPreservingSlash]];
                 } else {
                     [result addObject:currentValue];
                 }
@@ -373,6 +376,20 @@
     }
 
     return result;
+}
+
+// For unknown reasons stringByExpandingTildeInPath removes terminal slashes. This method puts them
+// back. That is useful for completion suggestions.
+// ~                   -> /Users/example
+// ~/                  -> /Users/example/
+// /Users/example/foo  -> /Users/example/foo
+// /Users/example/foo/ -> /Users/example/foo/
+- (NSString *)stringByExpandingTildeInPathPreservingSlash {
+    NSString *candidate = [self stringByExpandingTildeInPath];
+    if ([self hasSuffix:@"/"] && ![candidate hasSuffix:@"/"]) {
+        return [candidate stringByAppendingString:@"/"];
+    }
+    return candidate;
 }
 
 - (NSString *)stringByReplacingBackreference:(int)n withString:(NSString *)s
@@ -1328,10 +1345,12 @@ static TECObjectRef CreateTECConverterForUTF8Variants(TextEncodingVariant varian
         range = [self rangeOfString:@"$$" options:NSLiteralSearch range:rangeToSearch];
         if (start < 0) {
             start = range.location;
+        } else if (range.location == NSNotFound) {
+            break;
         } else {
             NSRange capture = NSMakeRange(start, NSMaxRange(range) - start);
             NSString *string = [self substringWithRange:capture];
-            if (string.length > 4) {  // length of 4 implies $$$$, which should be interpreted as $$
+            if (string.length >= 4) {  // length of 4 implies $$$$, which should be interpreted as $$
                 [set addObject:string];
             }
             start = -1;
@@ -1723,7 +1742,7 @@ static TECObjectRef CreateTECConverterForUTF8Variants(TextEncodingVariant varian
         size.height += frameSize.height;
     }
 
-    return NSMakeRect(0, 0, size.width, size.height);
+    return NSMakeRect(0, 0, ceil(size.width), ceil(size.height));
 }
 
 - (void)it_drawInRect:(CGRect)rect attributes:(NSDictionary *)attributes {
@@ -1803,8 +1822,8 @@ static TECObjectRef CreateTECConverterForUTF8Variants(TextEncodingVariant varian
         froms = [[NSMutableArray alloc] init];
         tos = [[NSMutableArray alloc] init];
         for (int i = 0; i < numberOfControlCharacters; i++) {
-            char utf8[2] = { i, 0 };
-            NSString *from = [NSString stringWithUTF8String:utf8];
+            unichar c = i;
+            NSString *from = [NSString stringWithCharacters:&c length:1];
             NSString *to = [NSString stringWithFormat:@"\\u%04x", i];
             [froms addObject:from];
             [tos addObject:to];
@@ -2105,6 +2124,14 @@ static TECObjectRef CreateTECConverterForUTF8Variants(TextEncodingVariant varian
     const NSRange prefixRange = [self rangeOfString:prefix
                                             options:(NSAnchoredSearch | NSCaseInsensitiveSearch)];
     return prefixRange.location == 0;
+}
+
+- (NSString *)removingHTMLFromTabTitleIfNeeded {
+    if (![iTermPreferences boolForKey:kPreferenceKeyHTMLTabTitles]) {
+        return self;
+    }
+    NSAttributedString *attributedString = [NSAttributedString newAttributedStringWithHTML:self attributes:@{}];
+    return attributedString.string;
 }
 
 @end

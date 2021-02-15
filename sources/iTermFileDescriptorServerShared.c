@@ -156,11 +156,20 @@ ssize_t iTermFileDescriptorClientWrite(int fd, const void *buffer, size_t buffer
     ssize_t rc = -1;
     size_t totalWritten = 0;
     while (totalWritten < bufferSize) {
+        int savedErrno = 0;
         do {
             errno = 0;
-            rc = write(fd, buffer, bufferSize);
-        } while (rc == -1 && errno == EINTR);
+            const size_t bytesToWrite = bufferSize - totalWritten;
+            rc = write(fd, (unsigned char *)buffer + totalWritten, bytesToWrite);
+            savedErrno = errno;
+            FDLog(LOG_DEBUG, "write of %d bytes returned %d, errno=%d", (int)bufferSize, (int)rc, (int)savedErrno);
+        } while (rc == -1 && savedErrno == EINTR);
         if (rc <= 0) {
+            if (savedErrno == EAGAIN && totalWritten > 0) {
+                FDLog(LOG_DEBUG, "write: EAGAIN with totalWritten=%d", (int)totalWritten);
+                return totalWritten;
+            }
+            errno = savedErrno;
             return rc;
         }
         totalWritten += rc;
@@ -172,16 +181,22 @@ ssize_t iTermFileDescriptorServerSendMessageAndFileDescriptor(int connectionFd,
                                                               void *buffer,
                                                               size_t bufferSize,
                                                               int fdToSend) {
-    FDLog(LOG_DEBUG, "Send file descriptor %d and message of size %ld", fdToSend, (long)bufferSize);
-    if (bufferSize > IOV_MAX) {
-        // sendmsg wants to send the whole buffer atomically so it has a small upper bound on message
-        // size. The client-server protocol allows a message to be fragmented as long as the first
-        // one has the file descriptor.
-        //
-        // Send the prefix of the message with the file descriptor.
+    // sendmsg wants to send the whole buffer atomically so it has a small upper bound on message
+    // size. The client-server protocol allows a message to be fragmented as long as the first
+    // one has the file descriptor.
+    //
+    // Despite what the man page says, I have seen sendmsg fail with EMSGSIZE with a buffer
+    // size of IOV_MAX. My theory is that the control block can count against that limit in
+    // some circumstances.
+    //
+    // Furthermore, if you try to send an empty message, that will also fail with EMSGSIZE.
+    // So we set the limit to one byte.
+    const int maxBufferSize = 1;
+
+    if (bufferSize > maxBufferSize) {
         const ssize_t firstResult = iTermFileDescriptorServerSendMessageAndFileDescriptor(connectionFd,
                                                                                           buffer,
-                                                                                          IOV_MAX,
+                                                                                          maxBufferSize,
                                                                                           fdToSend);
         if (firstResult <= 0) {
             return firstResult;
@@ -193,7 +208,7 @@ ssize_t iTermFileDescriptorServerSendMessageAndFileDescriptor(int connectionFd,
         // Now write the remainder. Because this doesn't use sendmsg there's no size limit problem.
         int error = 0;
         const ssize_t secondResult = iTermFileDescriptorWriteImpl(connectionFd,
-                                                                  buffer + IOV_MAX,
+                                                                  buffer + maxBufferSize,
                                                                   remainingSize,
                                                                   &error);
         if (secondResult <= 0) {
@@ -223,10 +238,16 @@ ssize_t iTermFileDescriptorServerSendMessageAndFileDescriptor(int connectionFd,
     struct iovec iov[1];
     iov[0].iov_base = buffer;
     iov[0].iov_len = bufferSize;
-    message.msg_iov = iov;
-    message.msg_iovlen = 1;
+    if (bufferSize > 0) {
+        message.msg_iov = iov;
+        message.msg_iovlen = 1;
+    } else {
+        message.msg_iov = NULL;
+        message.msg_iovlen = 0;
+    }
 
-    FDLog(LOG_DEBUG, "Send message of length %d along with file descriptor %d", (int)bufferSize, fdToSend);
+    FDLog(LOG_DEBUG, "Send message of length %d, iovlen=%d along with file descriptor %d",
+          (int)bufferSize, (int)message.msg_iovlen, fdToSend);
 
     ssize_t rc = sendmsg(connectionFd, &message, 0);
     while (rc == -1 && errno == EINTR) {

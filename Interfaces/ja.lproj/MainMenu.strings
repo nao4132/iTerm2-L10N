@@ -2,7 +2,7 @@
 " " = " ";
 
 /* NSPanel (About iTerm) : <title:About iTerm> (oid:498) */
-"About iTerm" = "iTermについて";
+"About iTerm" = "About iTerm";
 
 /* NSMenuItem : <title:Bigger Font> (oid:804) */
 "Bigger Font" = "Bigger Font";
@@ -11,7 +11,7 @@
 "Bring All To Front" = "Bring All To Front";
 
 /* NSMenuItem : <title:Clear Buffer> (oid:217) */
-"Clear Buffer" = "バッファのクリア";
+"Clear Buffer" = "Clear Buffer";
 
 /* NSMenuItem : <title:Clear Scrollback Buffer> (oid:755) */
 "Clear Scrollback Buffer" = "Clear Scrollback Buffer";
@@ -41,7 +41,7 @@
 "Find Previous" = "Find Previous";
 
 /* NSMenuItem : <title:Find...> (oid:762) */
-"Find..." = "検索...";
+"Find..." = "Find...";
 
 /* NSTextField (FreeMono font is under GPL from http://savannah.nongnu.org/projects/freefont) : <title:FreeMono font is under GPL from http://savannah.nongnu.org/projects/freefont> (oid:757) */
 "FreeMono font is under GPL from http://savannah.nongnu.org/projects/freefont" = "FreeMono font is under GPL from http://savannah.nongnu.org/projects/freefont";

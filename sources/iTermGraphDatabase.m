@@ -94,6 +94,10 @@
             [self finishInitialization:state];
             state.loadComplete = YES;
         }];
+        [_thread dispatchAsync:^(iTermGraphDatabaseState *state) {
+            [state.db executeUpdate:@"pragma wal_checkpoint"];
+            [state.db executeUpdate:@"vacuum"];
+        }];
     }
     return self;
 }

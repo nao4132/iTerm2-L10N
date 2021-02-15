@@ -624,7 +624,7 @@ NSLog(@"Known bug: %s should be true, but %s is.", #expressionThatShouldBeTrue, 
                                  isPlainText:YES];
 }
 
-- (void)screenDidReset {
+- (void)screenDidResetAllowingContentModification:(BOOL)modifyContent {
 }
 
 - (void)screenPrintString:(NSString *)s {
@@ -912,7 +912,6 @@ NSLog(@"Known bug: %s should be true, but %s is.", #expressionThatShouldBeTrue, 
 
 - (void)screenReportKeyUpDidChange:(BOOL)reportKeyUp {
 }
-
 
 - (void)screenSetPreferredProxyIcon:(NSString *)value {
 }

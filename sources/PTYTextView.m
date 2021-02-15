@@ -19,7 +19,6 @@
 #import "iTermImageInfo.h"
 #import "iTermKeyboardHandler.h"
 #import "iTermLaunchServices.h"
-#import "iTermLocalHostNameGuesser.h"
 #import "iTermMetalClipView.h"
 #import "iTermMouseCursor.h"
 #import "iTermPreferences.h"
@@ -37,6 +36,7 @@
 #import "iTermTextViewAccessibilityHelper.h"
 #import "iTermURLActionHelper.h"
 #import "iTermURLStore.h"
+#import "iTermVirtualOffset.h"
 #import "iTermWebViewWrapperViewController.h"
 #import "iTermWarning.h"
 #import "MovePaneController.h"
@@ -196,18 +196,50 @@
 }
 
 + (NSSize)charSizeForFont:(NSFont *)aFont
-        horizontalSpacing:(double)hspace
-          verticalSpacing:(double)vspace {
+        horizontalSpacing:(CGFloat)hspace
+          verticalSpacing:(CGFloat)vspace {
     FontSizeEstimator* fse = [FontSizeEstimator fontSizeEstimatorForFont:aFont];
     NSSize size = [fse size];
+    size.width = ceil(size.width);
+    size.height = ceil(size.height + [aFont leading]);
     size.width = ceil(size.width * hspace);
-    size.height = ceil(vspace * ceil(size.height + [aFont leading]));
+    size.height = ceil(size.height * vspace);
     return size;
 }
 
 - (instancetype)initWithFrame:(NSRect)aRect colorMap:(iTermColorMap *)colorMap {
     self = [super initWithFrame:aRect];
     if (self) {
+        // This class has a complicated role.
+        //
+        // In the old days, it was responsible for drawing and input handling, like a normal view.
+        // Then the Metal renderer was added. Input handling logic is complex. This class was made
+        // alpha=0 when the Metal view was visible so that it could still receive mouse and keyboard and
+        // first responder etc. calls but leave drawing to Metal in a view behind the scrollview.
+        //
+        // Then it became clear that drawing in this view is fundamentally flawed. That's because
+        // almost everything is drawn in here. In particular, top and bottom margins. macOS really
+        // wants to cleverly draw a bit above and below the view to optimize scrolling by a small
+        // amount, but this is just impossible when you have margins like this view does. We can't
+        // overlay views on top of it to hide text that should be obscured by the margins because
+        // then transparent backgrounds would not work. The solution is akin to what we do with the
+        // Metal view: create a new view that actually draws terminal contents and put it behind the
+        // scrollview. Therefore, this view must never draw anything. The glue logic stays put
+        // though since this has all the right state for drawing. When the "legacy view" (which
+        // actually draws terminal contents when Metal is off) needs to draw it calls in to this
+        // view, which performs a draw. Because this is a super-tall view (since it is the
+        // scrollview's document view) the coordinate space in this view is different than in the
+        // legacy view. The "virtual offset" concept was introduced: this is the difference in
+        // coordinate space on the y axis. So the legacy view asks PTYTextView to be drawn in some
+        // rect; PTYTextView asks iTermTextDrawingHelper to draw, and provides a virtual offset that
+        // shifts all the draws down the Y axis until they will appear in the right place in the
+        // legacy view.
+        //
+        // Virtual offsets are plumbed down to a very low level because I do not trust graphics
+        // contexts to do translations. It might work; who knows? But I've been burned enough times
+        // to know I want to keep control over this because debugging it will be horrible. So every
+        // draw call (NSRectFill, etc.) does a last-second translation by the virtual offset.
+        [super setAlphaValue:0];
         [self resetMouseLocationToRefuseFirstResponderAt];
         _drawingHelper = [[iTermTextDrawingHelper alloc] init];
         if ([iTermAdvancedSettingsModel showTimestampsByDefault]) {
@@ -414,6 +446,7 @@
     }
     if ([item action]==@selector(copy:) ||
         [item action]==@selector(copyWithStyles:) ||
+        [item action]==@selector(copyWithControlSequences:) ||
         [item action]==@selector(performFindPanelAction:) ||
         ([item action]==@selector(print:) && [item tag] == 1)) { // print selection
         // These commands are allowed only if there is a selection.
@@ -651,7 +684,7 @@
 
 - (long long)absoluteScrollPosition {
     NSRect visibleRect = [self visibleRect];
-    long long localOffset = (visibleRect.origin.y + [iTermAdvancedSettingsModel terminalVMargin]) / [self lineHeight];
+    long long localOffset = (visibleRect.origin.y + [iTermPreferences intForKey:kPreferenceKeyTopBottomMargins]) / [self lineHeight];
     return localOffset + [_dataSource totalScrollbackOverflow];
 }
 
@@ -659,7 +692,7 @@
 {
     NSRect aFrame;
     aFrame.origin.x = 0;
-    aFrame.origin.y = (absOff - [_dataSource totalScrollbackOverflow]) * _lineHeight - [iTermAdvancedSettingsModel terminalVMargin];
+    aFrame.origin.y = (absOff - [_dataSource totalScrollbackOverflow]) * _lineHeight - [iTermPreferences intForKey:kPreferenceKeyTopBottomMargins];
     aFrame.size.width = [self frame].size.width;
     aFrame.size.height = _lineHeight * height;
     [self scrollRectToVisible: aFrame];
@@ -712,7 +745,7 @@
     [self withRelativeCoordRange:[_selection spanningAbsRange] block:^(VT100GridCoordRange range) {
         NSRect aFrame;
         aFrame.origin.x = 0;
-        aFrame.origin.y = range.start.y * _lineHeight - [iTermAdvancedSettingsModel terminalVMargin];  // allow for top margin
+        aFrame.origin.y = range.start.y * _lineHeight - [iTermPreferences intForKey:kPreferenceKeyTopBottomMargins];  // allow for top margin
         aFrame.size.width = [self frame].size.width;
         aFrame.size.height = (range.end.y - range.start.y + 1) * _lineHeight;
         [self scrollRectToVisible: aFrame];
@@ -731,7 +764,7 @@
 
 - (void)_scrollToCenterLine:(int)line {
     NSRect visible = [self visibleRect];
-    int visibleLines = (visible.size.height - [iTermAdvancedSettingsModel terminalVMargin] * 2) / _lineHeight;
+    int visibleLines = (visible.size.height - [iTermPreferences intForKey:kPreferenceKeyTopBottomMargins] * 2) / _lineHeight;
     int lineMargin = (visibleLines - 1) / 2;
     double margin = lineMargin * _lineHeight;
 
@@ -772,8 +805,7 @@
 #pragma mark - NSView
 
 - (void)setAlphaValue:(CGFloat)alphaValue {
-    DLog(@"Set textview alpha to %@", @(alphaValue));
-    [super setAlphaValue:alphaValue];
+    assert(NO);
 }
 
 // Overrides an NSView method.
@@ -846,7 +878,7 @@
     const int x = allowPartialLineRedraw ? range.location : 0;
     const int maxX = range.location + range.length;
 
-    dirtyRect.origin.x = [iTermAdvancedSettingsModel terminalMargin] + x * _charWidth;
+    dirtyRect.origin.x = [iTermPreferences intForKey:kPreferenceKeySideMargins] + x * _charWidth;
     dirtyRect.origin.y = y * _lineHeight;
     dirtyRect.size.width = allowPartialLineRedraw ? (maxX - x) * _charWidth : _dataSource.width;
     dirtyRect.size.height = _lineHeight;
@@ -869,7 +901,7 @@
     }
     int imeLines = ([_dataSource cursorX] - 1 + [self inputMethodEditorLength] + 1) / [_dataSource width] + 1;
 
-    NSRect imeRect = NSMakeRect([iTermAdvancedSettingsModel terminalMargin],
+    NSRect imeRect = NSMakeRect([iTermPreferences intForKey:kPreferenceKeySideMargins],
                                 ([_dataSource cursorY] - 1 + [_dataSource numberOfLines] - [_dataSource height]) * _lineHeight,
                                 [_dataSource width] * _charWidth,
                                 imeLines * _lineHeight);
@@ -930,7 +962,7 @@
 
 - (void)rightMouseDown:(NSEvent *)event {
     [_mouseHandler rightMouseDown:event
-                      superCaller:^{ [super otherMouseDragged:event]; }];
+                      superCaller:^{ [super rightMouseDown:event]; }];
 }
 
 - (void)rightMouseUp:(NSEvent *)event {
@@ -1095,7 +1127,9 @@
 
 #pragma mark - NSView Drawing
 
-- (void)drawRect:(NSRect)rect {
+// Draw in to another view which exactly coincides with the clip view, except it's inset on the top
+// and bottom by the margin heights.
+- (void)drawRect:(NSRect)rect inView:(NSView *)view {
     if (![_delegate textViewShouldDrawRect]) {
         // Metal code path in use
         [super drawRect:rect];
@@ -1110,9 +1144,16 @@
     }
     DLog(@"drawing document visible rect %@", NSStringFromRect(self.enclosingScrollView.documentVisibleRect));
 
-    const NSRect *rectArray;
+    const CGFloat virtualOffset = NSMinY(self.enclosingScrollView.documentVisibleRect) - [iTermPreferences intForKey:kPreferenceKeyTopBottomMargins];
+    const NSRect *constRectArray;
     NSInteger rectCount;
-    [self getRectsBeingDrawn:&rectArray count:&rectCount];
+    [view getRectsBeingDrawn:&constRectArray count:&rectCount];
+    NSMutableData *storage = [NSMutableData dataWithLength:sizeof(NSRect) * rectCount];
+    NSRect *rectArray = (NSRect *)[storage mutableBytes];
+    for (NSInteger i = 0; i < rectCount; i++) {
+        rectArray[i] = constRectArray[i];
+        rectArray[i].origin.y += virtualOffset;
+    }
 
     [self performBlockWithFlickerFixerGrid:^{
         // Initialize drawing helper
@@ -1123,10 +1164,12 @@
             _drawingHook(_drawingHelper);
         }
 
-        [_drawingHelper drawTextViewContentInRect:rect rectsPtr:rectArray rectCount:rectCount];
+        NSRect virtualRect = rect;
+        virtualRect.origin.y += virtualOffset;
+        [_drawingHelper drawTextViewContentInRect:virtualRect rectsPtr:rectArray rectCount:rectCount virtualOffset:virtualOffset];
 
-        [_indicatorsHelper drawInFrame:_drawingHelper.indicatorFrame];
-        [_drawingHelper drawTimestamps];
+        [_indicatorsHelper drawInFrame:NSRectSubtractingVirtualOffset(_drawingHelper.indicatorFrame, virtualOffset)];
+        [_drawingHelper drawTimestampsWithVirtualOffset:virtualOffset];
 
         // Not sure why this is needed, but for some reason this view draws over its subviews.
         for (NSView *subview in [self subviews]) {
@@ -1141,6 +1184,9 @@
         }
     }];
     [self maybeInvalidateWindowShadow];
+}
+
+- (void)drawRect:(NSRect)rect {
 }
 
 - (void)performBlockWithFlickerFixerGrid:(void (NS_NOESCAPE ^)(void))block {
@@ -1184,8 +1230,6 @@
                 self.layer = nil;
             }
         }
-        // This is necessary to avoid drawing artifacts when Metal is enabled.
-        self.alphaValue = suppressDrawing ? 0 : 1;
     }
     PTYScrollView *scrollView = (PTYScrollView *)self.enclosingScrollView;
     [scrollView.verticalScroller setNeedsDisplay:YES];
@@ -1306,10 +1350,10 @@
 // This is 2 except for just after the frame has changed and things are resizing.
 - (double)excess {
     NSRect visible = [self scrollViewContentSize];
-    visible.size.height -= [iTermAdvancedSettingsModel terminalVMargin] * 2;  // Height without top and bottom margins.
+    visible.size.height -= [iTermPreferences intForKey:kPreferenceKeyTopBottomMargins] * 2;  // Height without top and bottom margins.
     int rows = visible.size.height / _lineHeight;
     double usablePixels = rows * _lineHeight;
-    return MAX(visible.size.height - usablePixels + [iTermAdvancedSettingsModel terminalVMargin], [iTermAdvancedSettingsModel terminalVMargin]);  // Never have less than VMARGIN excess, but it can be more (if another tab has a bigger font)
+    return MAX(visible.size.height - usablePixels + [iTermPreferences intForKey:kPreferenceKeyTopBottomMargins], [iTermPreferences intForKey:kPreferenceKeyTopBottomMargins]);  // Never have less than VMARGIN excess, but it can be more (if another tab has a bigger font)
 }
 
 - (void)maybeInvalidateWindowShadow {
@@ -1429,7 +1473,7 @@
 - (NSRect)visibleContentRect {
     NSRect visibleRect = [[self enclosingScrollView] documentVisibleRect];
     visibleRect.size.height -= [self excess];
-    visibleRect.size.height -= [iTermAdvancedSettingsModel terminalVMargin];
+    visibleRect.size.height -= [iTermPreferences intForKey:kPreferenceKeyTopBottomMargins];
     return visibleRect;
 }
 
@@ -1560,8 +1604,8 @@
 
 - (void)setFont:(NSFont*)aFont
     nonAsciiFont:(NSFont *)nonAsciiFont
-    horizontalSpacing:(double)horizontalSpacing
-    verticalSpacing:(double)verticalSpacing {
+    horizontalSpacing:(CGFloat)horizontalSpacing
+    verticalSpacing:(CGFloat)verticalSpacing {
     NSSize sz = [PTYTextView charSizeForFont:aFont
                            horizontalSpacing:1.0
                              verticalSpacing:1.0];
@@ -1757,7 +1801,7 @@
 
 - (BOOL)_isTextBlinking {
     int width = [_dataSource width];
-    int lineStart = ([self visibleRect].origin.y + [iTermAdvancedSettingsModel terminalVMargin]) / _lineHeight;  // add VMARGIN because stuff under top margin isn't visible.
+    int lineStart = ([self visibleRect].origin.y + [iTermPreferences intForKey:kPreferenceKeyTopBottomMargins]) / _lineHeight;  // add VMARGIN because stuff under top margin isn't visible.
     int lineEnd = ceil(([self visibleRect].origin.y + [self visibleRect].size.height - [self excess]) / _lineHeight);
     if (lineStart < 0) {
         lineStart = 0;
@@ -2064,7 +2108,7 @@
     BOOL anyBlinkers = NO;
     // Visible chars that have changed selection status are dirty
     // Also mark blinking text as dirty if needed
-    int lineStart = ([self visibleRect].origin.y + [iTermAdvancedSettingsModel terminalVMargin]) / _lineHeight;  // add VMARGIN because stuff under top margin isn't visible.
+    int lineStart = ([self visibleRect].origin.y + [iTermPreferences intForKey:kPreferenceKeyTopBottomMargins]) / _lineHeight;  // add VMARGIN because stuff under top margin isn't visible.
     int lineEnd = ceil(([self visibleRect].origin.y + [self visibleRect].size.height - [self excess]) / _lineHeight);
     if (lineStart < 0) {
         lineStart = 0;
@@ -2252,14 +2296,14 @@
 }
 
 - (NSString *)selectedTextCappedAtSize:(int)maxBytes {
-    return [self selectedTextAttributed:NO cappedAtSize:maxBytes minimumLineNumber:0];
+    return [self selectedTextWithStyle:iTermCopyTextStylePlainText cappedAtSize:maxBytes minimumLineNumber:0];
 }
 
 // Does not include selected text on lines before |minimumLineNumber|.
-// Returns an NSAttributedString* if |attributed|, or an NSString* if not.
-- (id)selectedTextAttributed:(BOOL)attributed
-                cappedAtSize:(int)maxBytes
-           minimumLineNumber:(int)minimumLineNumber {
+// Returns an NSAttributedString* if style is iTermCopyTextStyleAttributed, or an NSString* if not.
+- (id)selectedTextWithStyle:(iTermCopyTextStyle)style
+               cappedAtSize:(int)maxBytes
+          minimumLineNumber:(int)minimumLineNumber {
     if (![_selection hasSelection]) {
         DLog(@"startx < 0 so there is no selected text");
         return nil;
@@ -2267,15 +2311,27 @@
     BOOL copyLastNewline = [iTermPreferences boolForKey:kPreferenceKeyCopyLastNewline];
     BOOL trimWhitespace = [iTermAdvancedSettingsModel trimWhitespaceOnCopy];
     id theSelectedText;
+    NSAttributedStringKey sgrAttribute = @"iTermSGR";
     NSDictionary *(^attributeProvider)(screen_char_t);
-    if (attributed) {
-        theSelectedText = [[[NSMutableAttributedString alloc] init] autorelease];
-        attributeProvider = ^NSDictionary *(screen_char_t theChar) {
-            return [self charAttributes:theChar];
-        };
-    } else {
-        theSelectedText = [[[NSMutableString alloc] init] autorelease];
-        attributeProvider = nil;
+    switch (style) {
+        case iTermCopyTextStyleAttributed:
+            theSelectedText = [[[NSMutableAttributedString alloc] init] autorelease];
+            attributeProvider = ^NSDictionary *(screen_char_t theChar) {
+                return [self charAttributes:theChar];
+            };
+            break;
+
+        case iTermCopyTextStylePlainText:
+            theSelectedText = [[[NSMutableString alloc] init] autorelease];
+            attributeProvider = nil;
+            break;
+
+        case iTermCopyTextStyleWithControlSequences:
+            theSelectedText = [[[NSMutableAttributedString alloc] init] autorelease];
+            attributeProvider = ^NSDictionary *(screen_char_t theChar) {
+                return @{ sgrAttribute: [self.dataSource sgrCodesForChar:theChar] };
+            };
+            break;
     }
 
     [_selection enumerateSelectedAbsoluteRanges:^(VT100GridAbsWindowedRange absRange, BOOL *stop, BOOL eol) {
@@ -2305,14 +2361,14 @@
                                       truncateTail:YES
                                  continuationChars:nil
                                             coords:nil];
-            if (attributed) {
+            if (attributeProvider != nil) {
                 [theSelectedText appendAttributedString:content];
             } else {
                 [theSelectedText appendString:content];
             }
-            NSString *contentString = attributed ? [content string] : content;
+            NSString *contentString = (attributeProvider != nil) ? [content string] : content;
             if (eol && ![contentString hasSuffix:@"\n"]) {
-                if (attributed) {
+                if (attributeProvider != nil) {
                     [theSelectedText iterm_appendString:@"\n"];
                 } else {
                     [theSelectedText appendString:@"\n"];
@@ -2321,18 +2377,32 @@
         }];
     }];
 
+    if (style == iTermCopyTextStyleWithControlSequences) {
+        NSAttributedString *attributedString = theSelectedText;
+        NSMutableString *string = [NSMutableString string];
+        [attributedString enumerateAttribute:sgrAttribute
+                                     inRange:NSMakeRange(0, attributedString.length)
+                                     options:0
+                                  usingBlock:^(NSSet *_Nullable value, NSRange range, BOOL * _Nonnull stop) {
+            NSString *code = [NSString stringWithFormat:@"%c[%@m", VT100CC_ESC, [value.allObjects componentsJoinedByString:@";"]];
+            [string appendString:code];
+            [string appendString:[attributedString.string substringWithRange:range]];
+        }];
+        return string;
+    }
+
     return theSelectedText;
 }
 
 - (NSString *)selectedTextCappedAtSize:(int)maxBytes
                      minimumLineNumber:(int)minimumLineNumber {
-    return [self selectedTextAttributed:NO
-                           cappedAtSize:maxBytes
-                      minimumLineNumber:minimumLineNumber];
+    return [self selectedTextWithStyle:iTermCopyTextStylePlainText
+                          cappedAtSize:maxBytes
+                     minimumLineNumber:minimumLineNumber];
 }
 
 - (NSAttributedString *)selectedAttributedTextWithPad:(BOOL)pad {
-    return [self selectedTextAttributed:YES cappedAtSize:0 minimumLineNumber:0];
+    return [self selectedTextWithStyle:iTermCopyTextStyleAttributed cappedAtSize:0 minimumLineNumber:0];
 }
 
 - (BOOL)_haveShortSelection {
@@ -2397,7 +2467,7 @@
     int width = [_dataSource width];
     if (locationInTextView.y == 0) {
         x = y = 0;
-    } else if (locationInTextView.x < [iTermAdvancedSettingsModel terminalMargin] && _selection.liveRange.coordRange.start.y < y) {
+    } else if (locationInTextView.x < [iTermPreferences intForKey:kPreferenceKeySideMargins] && _selection.liveRange.coordRange.start.y < y) {
         // complete selection of previous line
         x = width;
         y--;
@@ -2542,6 +2612,28 @@
     [[PasteboardHistory sharedInstance] save:[copyAttributedString string]];
 }
 
+- (IBAction)copyWithControlSequences:(id)sender {
+    DLog(@"-[PTYTextView copyWithControlSequences:] called");
+    DLog(@"%@", [NSThread callStackSymbols]);
+
+    NSString *copyString = [self selectedTextWithStyle:iTermCopyTextStyleWithControlSequences
+                                          cappedAtSize:-1
+                                     minimumLineNumber:0];
+
+    if ([iTermAdvancedSettingsModel disallowCopyEmptyString] && copyString.length == 0) {
+        DLog(@"Disallow copying empty string");
+        return;
+    }
+    DLog(@"Have selected text: “%@”. selection=%@", copyString, _selection);
+    if (copyString) {
+        NSPasteboard *pboard = [NSPasteboard generalPasteboard];
+        [pboard declareTypes:[NSArray arrayWithObject:NSPasteboardTypeString] owner:self];
+        [pboard setString:copyString forType:NSPasteboardTypeString];
+    }
+
+    [[PasteboardHistory sharedInstance] save:copyString];
+}
+
 - (void)paste:(id)sender {
     DLog(@"Checking if delegate %@ can paste", _delegate);
     if ([_delegate respondsToSelector:@selector(paste:)]) {
@@ -2583,6 +2675,12 @@
                     return NO;
                 } else {
                     [stringToPaste appendString:@"cd "];
+                    filenames = [filenames mapWithBlock:^NSString *(NSString *filename) {
+                        if ([[NSFileManager defaultManager] itemIsDirectory:[filename stringByResolvingSymlinksInPath]]) {
+                            return filename;
+                        }
+                        return [filename stringByDeletingLastPathComponent];
+                    }];
                     pasteNewline = YES;
                 }
             }
@@ -2825,7 +2923,7 @@
                 (PTYNoteViewController *)noteView.delegate.noteViewController;
             VT100GridCoordRange coordRange = [_dataSource coordRangeOfNote:note];
             if (coordRange.end.y >= 0) {
-                [note setAnchor:NSMakePoint(coordRange.end.x * _charWidth + [iTermAdvancedSettingsModel terminalMargin],
+                [note setAnchor:NSMakePoint(coordRange.end.x * _charWidth + [iTermPreferences intForKey:kPreferenceKeySideMargins],
                                             (1 + coordRange.end.y) * _lineHeight)];
             }
         }
@@ -3239,7 +3337,7 @@
     // drag from center of the image
     NSPoint dragPoint = [self convertPoint:[theEvent locationInWindow] fromView:nil];
 
-    VT100GridCoord coord = VT100GridCoordMake((dragPoint.x - [iTermAdvancedSettingsModel terminalMargin]) / _charWidth,
+    VT100GridCoord coord = VT100GridCoordMake((dragPoint.x - [iTermPreferences intForKey:kPreferenceKeySideMargins]) / _charWidth,
                                               dragPoint.y / _lineHeight);
     screen_char_t* theLine = [_dataSource getLineAtIndex:coord.y];
     if (theLine &&
@@ -3254,7 +3352,7 @@
                                                             coord.y - pos.y);
 
         // Compute the pixel coordinate of the image's top left point
-        NSPoint imageTopLeftPoint = NSMakePoint(imageCellOrigin.x * _charWidth + [iTermAdvancedSettingsModel terminalMargin],
+        NSPoint imageTopLeftPoint = NSMakePoint(imageCellOrigin.x * _charWidth + [iTermPreferences intForKey:kPreferenceKeySideMargins],
                                                 imageCellOrigin.y * _lineHeight);
 
         // Compute the distance from the click location to the image's origin
@@ -3642,7 +3740,7 @@
     int y = [_dataSource cursorY] - 1;
     int x = [_dataSource cursorX] - 1;
 
-    NSRect rect=NSMakeRect(x * _charWidth + [iTermAdvancedSettingsModel terminalMargin],
+    NSRect rect=NSMakeRect(x * _charWidth + [iTermPreferences intForKey:kPreferenceKeySideMargins],
                            (y + [_dataSource numberOfLines] - [_dataSource height] + 1) * _lineHeight,
                            _charWidth * theRange.length,
                            _lineHeight);
@@ -3721,6 +3819,7 @@
                      withOffset:(int)offset
                       inContext:(FindContext*)context
                 multipleResults:(BOOL)multipleResults {
+    DLog(@"begin self=%@ aString=%@ dataSource=%@", self, aString, _dataSource);
     [_dataSource setFindString:aString
               forwardDirection:direction
                           mode:mode
@@ -3743,7 +3842,7 @@
 }
 
 - (NSRect)frameForCoord:(VT100GridCoord)coord {
-    return NSMakeRect(MAX(0, floor(coord.x * _charWidth + [iTermAdvancedSettingsModel terminalMargin])),
+    return NSMakeRect(MAX(0, floor(coord.x * _charWidth + [iTermPreferences intForKey:kPreferenceKeySideMargins])),
                       MAX(0, coord.y * _lineHeight),
                       _charWidth,
                       _lineHeight);
@@ -3794,6 +3893,7 @@
               mode:(iTermFindMode)mode
         withOffset:(int)offset
 scrollToFirstResult:(BOOL)scrollToFirstResult {
+    DLog(@"begin self=%@ aString=%@", self, aString);
     [_findOnPageHelper findString:aString
                  forwardDirection:direction
                              mode:mode
@@ -3805,6 +3905,7 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
 }
 
 - (void)clearHighlights:(BOOL)resetContext {
+    DLog(@"begin");
     [_findOnPageHelper clearHighlights];
     if (resetContext) {
         [_findOnPageHelper resetCopiedFindContext];
@@ -3884,7 +3985,7 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
     int lineStart = [_dataSource numberOfLines] - [_dataSource height];
     int cursorX = [_dataSource cursorX] - 1;
     int cursorY = [_dataSource cursorY] - 1;
-    return NSMakeRect([iTermAdvancedSettingsModel terminalMargin] + cursorX * _charWidth,
+    return NSMakeRect([iTermPreferences intForKey:kPreferenceKeySideMargins] + cursorX * _charWidth,
                       (lineStart + cursorY) * _lineHeight,
                       _charWidth,
                       _lineHeight);
@@ -4254,7 +4355,7 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
     int height = [_dataSource height];
     rect.origin.y = numLines - height;
     rect.origin.y *= _lineHeight;
-    rect.origin.x = [iTermAdvancedSettingsModel terminalMargin];
+    rect.origin.x = [iTermPreferences intForKey:kPreferenceKeySideMargins];
     rect.size.width = _charWidth * [_dataSource width];
     rect.size.height = _lineHeight * [_dataSource height];
     return rect;
@@ -4367,8 +4468,9 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
 #pragma mark - iTermTextDrawingHelperDelegate
 
 - (void)drawingHelperDrawBackgroundImageInRect:(NSRect)rect
-                        blendDefaultBackground:(BOOL)blend {
-    [_delegate textViewDrawBackgroundImageInView:self viewRect:rect blendDefaultBackground:blend];
+                        blendDefaultBackground:(BOOL)blend
+                                 virtualOffset:(CGFloat)virtualOffset {
+    [_delegate textViewDrawBackgroundImageInView:self viewRect:rect blendDefaultBackground:blend virtualOffset:virtualOffset];
 }
 
 - (VT100ScreenMark *)drawingHelperMarkOnLine:(int)line {
@@ -4618,7 +4720,7 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
     NSRect windowRect = [self.window convertRectFromScreen:screenRect];
     NSPoint locationInTextView = [self convertPoint:windowRect.origin fromView:nil];
     NSRect visibleRect = [[self enclosingScrollView] documentVisibleRect];
-    int x = (locationInTextView.x - [iTermAdvancedSettingsModel terminalMargin] - visibleRect.origin.x) / _charWidth;
+    int x = (locationInTextView.x - [iTermPreferences intForKey:kPreferenceKeySideMargins] - visibleRect.origin.x) / _charWidth;
     int y = locationInTextView.y / _lineHeight;
     return VT100GridCoordMake(x, [self accessibilityHelperAccessibilityLineNumberForLineNumber:y]);
 }
@@ -4626,7 +4728,7 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
 - (NSRect)accessibilityHelperFrameForCoordRange:(VT100GridCoordRange)coordRange {
     coordRange.start.y = [self accessibilityHelperLineNumberForAccessibilityLineNumber:coordRange.start.y];
     coordRange.end.y = [self accessibilityHelperLineNumberForAccessibilityLineNumber:coordRange.end.y];
-    NSRect result = NSMakeRect(MAX(0, floor(coordRange.start.x * _charWidth + [iTermAdvancedSettingsModel terminalMargin])),
+    NSRect result = NSMakeRect(MAX(0, floor(coordRange.start.x * _charWidth + [iTermPreferences intForKey:kPreferenceKeySideMargins])),
                                MAX(0, coordRange.start.y * _lineHeight),
                                MAX(0, (coordRange.end.x - coordRange.start.x) * _charWidth),
                                MAX(0, (coordRange.end.y - coordRange.start.y + 1) * _lineHeight));
@@ -4687,9 +4789,9 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
 }
 
 - (NSString *)accessibilityHelperSelectedText {
-    return [self selectedTextAttributed:NO
-                           cappedAtSize:0
-                      minimumLineNumber:[self accessibilityHelperLineNumberForAccessibilityLineNumber:0]];
+    return [self selectedTextWithStyle:iTermCopyTextStylePlainText
+                          cappedAtSize:0
+                     minimumLineNumber:[self accessibilityHelperLineNumberForAccessibilityLineNumber:0]];
 }
 
 - (NSURL *)accessibilityHelperCurrentDocumentURL {
@@ -5026,7 +5128,7 @@ allowDragBeforeMouseDown:(BOOL)allowDragBeforeMouseDown
 
 - (CGFloat)mouseHandler:(PTYMouseHandler *)mouseHandler accumulateVerticalScrollFromEvent:(NSEvent *)event {
     PTYScrollView *scrollView = (PTYScrollView *)self.enclosingScrollView;
-    return [scrollView accumulateVerticalScrollFromEvent:event];
+    return [self scrollDeltaYAdjustedForMouseReporting:[scrollView accumulateVerticalScrollFromEvent:event]];
 }
 
 - (void)mouseHandler:(PTYMouseHandler *)handler
@@ -5113,10 +5215,23 @@ dragSemanticHistoryWithEvent:(NSEvent *)event
     return [self.delegate textViewSwipeHandler];
 }
 
+- (CGFloat)scrollDeltaYAdjustedForMouseReporting:(CGFloat)deltaY {
+    if (![iTermAdvancedSettingsModel fastTrackpad]) {
+        return deltaY;
+    }
+    // This value is used for mouse reporting and we need to report lines, not pixels.
+    const CGFloat frac = deltaY / self.enclosingScrollView.verticalLineScroll;
+    if (frac < 0) {
+        return floor(frac);
+    }
+    return ceil(frac);
+}
+
 - (CGFloat)mouseHandlerAccumulatedDeltaY:(PTYMouseHandler *)sender
                                 forEvent:(NSEvent *)event {
-    return [_scrollAccumulator deltaYForEvent:event
-                                   lineHeight:self.enclosingScrollView.verticalLineScroll];
+    const CGFloat deltaY = [_scrollAccumulator deltaYForEvent:event
+                                                   lineHeight:self.enclosingScrollView.verticalLineScroll];
+    return [self scrollDeltaYAdjustedForMouseReporting:deltaY];
 }
 
 - (long long)mouseHandlerTotalScrollbackOverflow:(nonnull PTYMouseHandler *)sender {

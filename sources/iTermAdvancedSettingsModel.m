@@ -60,10 +60,13 @@ static inline id iTermAdvancedSettingsModelInverseTransformInt(int value) {
     return @(value);
 }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-function"
 static inline int iTermAdvancedSettingsModelTransformNonnegativeInt(id object) {
     int value = [object intValue];
     return MAX(0, value);
 }
+#pragma clang diagnostic pop
 
 static inline double iTermAdvancedSettingsModelTransformFloat(id object) {
     return [object doubleValue];
@@ -211,6 +214,8 @@ DEFINE_INT(minimumTabDragDistance, 10, SECTION_TABS @"How far must the mouse mov
 DEFINE_BOOL(tabTitlesUseSmartTruncation, YES, SECTION_TABS @"Use “smart truncation” for tab titles.\nIf a tab‘s title is too long to fit, ellipsize the start of the title if more tabs have unique suffixes than prefixes in a given window.");
 DEFINE_BOOL(middleClickClosesTab, YES, SECTION_TABS @"Should middle-click on a tab in the tab bar close the tab?");
 DEFINE_FLOAT(coloredSelectedTabOutlineStrength, 0.5, SECTION_TABS @"How prominent should the outline around the selected tab be drawn when there are colored tabs in a window?\nTakes a value in 0 to 3, where 0 means no outline and 3 means a very prominent outline.");
+DEFINE_FLOAT(minimalEdgeDragSize, 12, SECTION_TABS @"In the Minimal theme, you can drag tabs by a region on the edge near the window border. This gives the size of that region.");
+DEFINE_FLOAT(compactEdgeDragSize, 10, SECTION_TABS @"In the Compact theme, you can drag tabs by a region on the edge near the window border. This gives the size of that region.");
 DEFINE_FLOAT(minimalTabStyleBackgroundColorDifference, 0.05, SECTION_TABS @"In the Minimal theme, how different should the background color of the selected tab be from the others?\nTakes a value in 0 to 1, where 0 is no difference and 1 very different.");
 DEFINE_FLOAT(minimalTabStyleOutlineStrength, 0.2, SECTION_TABS @"In the Minimal theme, how prominent should the tab outline be?\nTakes a value in 0 to 1, where 0 is invisible and 1 is very prominent");
 DEFINE_FLOAT(minimalSplitPaneDividerProminence, 0.15, SECTION_TABS @"In the Minimal theme, how prominent should split pane dividers be?\nTakes a value in 0 to 1, where 0 is invisible and 1 is very prominent");
@@ -229,6 +234,7 @@ DEFINE_BOOL(useCustomTabBarFontSize, NO, SECTION_TABS @"Use custom font size for
 DEFINE_FLOAT(customTabBarFontSize, 11.0, SECTION_TABS @"Custom tab label font size\nFor this to take effect, turn on “Use custom font size for tab labels?”.");
 DEFINE_FLOAT(minimalSelectedTabUnderlineProminence, 1, SECTION_TABS @"Prominence of selected tab underline indicator in the Minimal theme when there is at least one colored tab.");
 DEFINE_BOOL(allowInteractiveSwipeBetweenTabs, YES, SECTION_TABS @"Allow two-finger interactive swipe between tabs?\nThe system preference Trackpad > More Gestures > Swipe between pages controls this globally. When “swipe with two fingers” is enabled, you can change this setting to “No” to prevent swiping between tabs in iTerm2.");
+DEFINE_BOOL(selectsTabsOnMouseDown, YES, SECTION_TABS @"Select tabs on mouse-down?\nChanging this setting will not affect existing windows.");
 
 #pragma mark Mouse
 
@@ -345,8 +351,6 @@ DEFINE_STRING(downloadsDirectory, @"", SECTION_GENERAL @"Downloads folder.\nIf s
 DEFINE_BOOL(noSyncSuppressDownloadConfirmation, NO, SECTION_GENERAL @"Suppress confirmation of terminal-initiated downloads?");
 DEFINE_FLOAT(pointSizeOfTimeStamp, 10, SECTION_GENERAL @"Point size for timestamps");
 DEFINE_BOOL(showTimestampsByDefault, NO, SECTION_GENERAL @"Show timestamps by default?");
-DEFINE_NONNEGATIVE_INT(terminalMargin, 5, SECTION_GENERAL @"Width of left and right margins in terminal panes\nHow much space to leave between the left and right edges of the terminal.\nYou must restart iTerm2 after modifying this property. Saved window arrangements should be re-created.");
-DEFINE_INT(terminalVMargin, 2, SECTION_GENERAL @"Height of top and bottom margins in terminal panes\nHow much space to leave between the top and bottom edges of the terminal.\nYou must restart iTerm2 after modifying this property. Saved window arrangements should be re-created.");
 DEFINE_STRING(viewManPageCommand, @"man %@ || sleep 3", SECTION_GENERAL @"Command to view man pages.\nUsed when you press the man page button on the touch bar. %@ is replaced with the command. End the command with & to avoid opening an iTerm2 window (e.g., if you're launching an external viewer).");
 DEFINE_BOOL(hideStuckTooltips, YES, SECTION_GENERAL @"Hide stuck tooltips.\nWhen you hide iTerm2 using a hotkey while a tooltip is fading out it gets stuck because of an OS bug. Work around it with a nasty hack by enabling this feature.")
 DEFINE_BOOL(openFileOverridesSendText, YES, SECTION_GENERAL @"Should opening a script with iTerm2 disable the default profile's “Send Text at Start” setting?\nIf you use “open iTerm2 file.command” or drag a script onto iTerm2's icon and this setting is enabled then the script will be executed in lieu of the profile's “Send Text at Start” setting. If this setting is off then both will be executed.");
@@ -373,6 +377,7 @@ DEFINE_BOOL(loadFromFindPasteboard, YES, SECTION_GENERAL @"Synchronize search qu
 DEFINE_STRING(dynamicProfilesPath, @"", SECTION_GENERAL @"Path to folder with dynamic profiles.\nWhen empty, ~/Library/Application Support/iTerm2/DynamicProfiles will be used. You must restart iTerm2 after modifying this setting.");
 DEFINE_STRING(gitSearchPath, @"", SECTION_GENERAL @"$PATH used when running git for the status bar component.\nChange this to use a custom install of git. You must restart iTerm2 for a change here to take effect.");
 DEFINE_FLOAT(gitTimeout, 4, SECTION_GENERAL @"Timeout in seconds when running git for the status bar component.");
+DEFINE_BOOL(workAroundBigSurBug, NO, SECTION_GENERAL @"Work around Big Sur bug where a white line flashes at the top of the screen in full screen mode.");
 
 #pragma mark - Drawing
 
@@ -402,6 +407,9 @@ DEFINE_BOOL(useLowPowerGPUWhenUnplugged, NO, SECTION_DRAWING @"Metal renderer us
 DEFINE_BOOL(underlineHyperlinks, YES, SECTION_DRAWING @"Underline OSC 8 hyperlinks");
 DEFINE_BOOL(solidUnderlines, NO, SECTION_DRAWING @"Use solid underlines?\nWhen disabled, underlines break near text that would intersect them.");
 DEFINE_BOOL(showMetalFPSmeter, NO, SECTION_DRAWING @"Show FPS meter\nRequires Metal renderer");
+DEFINE_BOOL(hdrCursor, NO, SECTION_DRAWING @"HDR cursor\nExperimental. Half-baked. Probably don't use this.");
+DEFINE_FLOAT(metalRedrawPeriod, 0.5, SECTION_DRAWING @"GPU renderer redraws at least this often, in seconds.\nThis is to work around a problem where the GPU renderer encounters a lot of latency when drawing for the first time after a short period of inactivity. Set this to a big number to render it ineffectual.");
+DEFINE_BOOL(animateGraphStatusBarComponents, YES, SECTION_DRAWING @"Animate graph-based status bar components?\nTurn this off to reduce CPU/GPU usage in WindowServer.");
 
 #pragma mark - Semantic History
 
@@ -449,6 +457,8 @@ DEFINE_BOOL(NoSyncSuppressRestartSessionConfirmationAlert, NO, SECTION_SESSION @
 DEFINE_BOOL(showAutomaticProfileSwitchingBanner, YES, SECTION_SESSION @"Show a “Switched to profile” message when Automatic Profile Switching activates.");
 DEFINE_BOOL(autoLockSessionNameOnEdit, YES, SECTION_SESSION @"Auto-lock sesison name after editing it.");
 DEFINE_FLOAT(timeoutForDaemonAttachment, 10, SECTION_SESSION @"How long to wait when trying to attach to an iTerm daemon at startup when restoring windows (in seconds)?");
+DEFINE_BOOL(logTimestampsWithPlainText, YES, SECTION_SESSION @"When logging plain text, include timestamps for each line?");
+DEFINE_STRING(composerClearSequence, @"0x15 0x0b", SECTION_SESSION @"Hex codes to send to clear the command line when entering the composer.\n0x15 is ^U, 0x0b is ^K.");
 
 #pragma mark - Windows
 
@@ -469,6 +479,9 @@ DEFINE_BOOL(restoreWindowsWithinScreens, YES, SECTION_WINDOWS @"When restoring a
 DEFINE_FLOAT(extraSpaceBeforeCompactTopTabBar, 0, SECTION_WINDOWS @"Amount of extra space (in points) between stoplight buttons and inline tab bar.\nThis only takes effect for the Compact and Minimal themes when the tab bar is visible and located at the top of the window.");
 DEFINE_BOOL(workAroundMultiDisplayOSBug, YES, SECTION_WINDOWS @"Work around a macOS bug where the OS moves windows to the first display for no good reason.");
 DEFINE_BOOL(disableDocumentedEditedIndicator, NO, SECTION_WINDOWS @"Disable documented edited indicator (black dot in close button)");
+DEFINE_BOOL(showWindowTitleWhenTabBarInvisible, YES, SECTION_WINDOWS @"Show window title when the tab bar is not visible?\nWhen disabled, the tab's title will be shown where the window title would normally go.");
+DEFINE_BOOL(squareWindowCorners, NO, SECTION_WINDOWS @"Windows have square corners.\nThis is only for users who have already hacked macOS to remove rounded corners. You must restart iTerm2 after changing this setting for it to take effect.");
+DEFINE_BOOL(useShortcutAccessoryViewController, YES, SECTION_WINDOWS @"Show window number in titlebar accessory?");
 
 #pragma mark tmux
 
@@ -482,6 +495,7 @@ DEFINE_BOOL(useBlackFillerColorForTmuxInFullScreen, NO, SECTION_TMUX @"Use black
 DEFINE_SETTABLE_OPTIONAL_BOOL(tmuxWindowsShouldCloseAfterDetach, TmuxWindowsShouldCloseAfterDetach, nil, SECTION_TMUX @"Close tmux windows after detaching?\nThis only takes effect when “Prefs > Profiles > Session > After a session ends” is set to “No Action”.");
 DEFINE_BOOL(disableTmuxWindowPositionRestoration, NO, SECTION_TMUX @"Disable window position restoration in tmux integration.");
 DEFINE_BOOL(disableTmuxWindowResizing, YES, SECTION_TMUX @"Don't automatically resize tmux windows");
+DEFINE_BOOL(anonymousTmuxWindowsOpenInCurrentWindow, YES, SECTION_TMUX @"Should new tmux windows not created by iTerm2 open in the current window?\nIf set to No, they will open in new windows.");
 
 #pragma mark Warnings
 
@@ -605,6 +619,9 @@ DEFINE_BOOL(showLocationsInScrollbar, YES, SECTION_EXPERIMENTAL @"Show search re
 DEFINE_BOOL(allowTabbarInTitlebarAccessoryBigSur, NO, SECTION_EXPERIMENTAL @"Make the tab bar a titlebar accessory view in Big Sur?");
 DEFINE_BOOL(storeStateInSqlite, YES, SECTION_EXPERIMENTAL @"Store window restoration state in SQLite");
 DEFINE_BOOL(useNewContentFormat, YES, SECTION_EXPERIMENTAL @"Save unlimited amount of window contents.\nThis is going to be slow unless you enable SQLite-based window restoration too.");
+DEFINE_BOOL(vs16Supported, NO, SECTION_EXPERIMENTAL @"Support variation selector 16 making emoji fullwidth?");
+DEFINE_BOOL(fastTrackpad, YES, SECTION_EXPERIMENTAL @"Trackpad scrolls fast?\nSet to No for legacy scrolling speed.");
+DEFINE_BOOL(supportDecsetMetaSendsEscape, YES_IF_BETA_ELSE_NO, SECTION_EXPERIMENTAL @"Support DECSET 1036?\nThis allows apps in the terminal to control whether the option key sends esc+ or acts like a regular option key.");
 
 #pragma mark - Scripting
 #define SECTION_SCRIPTING @"Scripting: "

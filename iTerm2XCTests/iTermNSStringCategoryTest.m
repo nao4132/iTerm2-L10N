@@ -457,7 +457,7 @@
 
 - (void)testDoubleDollarVariables_EscapedCaptures {
     NSString *s = @"blah $$$$ blah $$$$ baz";
-    NSSet *expected = [NSSet setWithArray:@[ ]];
+    NSSet *expected = [NSSet setWithArray:@[ @"$$$$" ]];
     NSSet *actual = [s doubleDollarVariables];
     XCTAssertEqualObjects(actual, expected);
 }
@@ -465,6 +465,13 @@
 - (void)testDoubleDollarVariables_OneBigCapture {
     NSString *s = @"$$ foo bar baz $$";
     NSSet *expected = [NSSet setWithArray:@[ @"$$ foo bar baz $$" ]];
+    NSSet *actual = [s doubleDollarVariables];
+    XCTAssertEqualObjects(actual, expected);
+}
+
+- (void)testDoubleDollarVariables_Unterminated {
+    NSString *s = @"echo $$";
+    NSSet *expected = [NSSet setWithArray:@[ ]];
     NSSet *actual = [s doubleDollarVariables];
     XCTAssertEqualObjects(actual, expected);
 }
@@ -571,6 +578,12 @@
 - (void)testReplaceControlCharactersWithCaretLetter_MixOfRegularAndControlCharacters {
     NSString *actual = [[NSString stringWithFormat:@"12%c34%c56", 1, 2] stringByReplacingControlCharactersWithCaretLetter];
     XCTAssertEqualObjects(actual, @"12^A34^B56");
+}
+
+- (void)testEncodeNullString {
+    const unichar zero = 0;
+    NSString *actual = [[NSString stringWithCharacters:&zero length:1] jsonEncodedString];
+    XCTAssertEqualObjects(actual, @"\"\\u0000\"");
 }
 
 @end

@@ -85,12 +85,16 @@ typedef struct {
 #if ENABLE_UNFAMILIAR_TEXTURE_WORKAROUND
     NSInteger unfamiliarTextureCount;
 #endif
+    CGFloat maximumExtendedDynamicRangeColorComponentValue NS_AVAILABLE_MAC(10_15);
 } iTermMetalDriverMainThreadState;
 
 @interface iTermMetalDriver()
-// This indicates if a draw call was made while busy. When we stop being busy
-// and this is set, then we must schedule another draw.
-@property (atomic) BOOL needsDraw;
+
+// When less than infinity, we need to trigger our own redraw. This could be because we failed to
+// get a frame or there are too many concurrent draws. When the current attempt at drawing finishes
+// a call to setNeedsDisplay: will be made after this duration. It is reset to INFINITY when a draw
+// is not needed.
+@property (atomic) NSTimeInterval needsDrawAfterDuration;
 @property (atomic) BOOL waitingOnSynchronousDraw;
 @property (nonatomic, readonly) iTermMetalDriverMainThreadState *mainThreadState;
 @end
@@ -216,6 +220,7 @@ typedef struct {
         }];
 #endif
         _maxFramesInFlight = iTermMetalDriverMaximumNumberOfFramesInFlight;
+        _needsDrawAfterDuration = INFINITY;
 
         [[NSNotificationCenter defaultCenter] addObserver:self
                                                  selector:@selector(applicationDidBecomeActive:)
@@ -390,6 +395,22 @@ cellSizeWithoutSpacing:(CGSize)cellSizeWithoutSpacing
     });
 }
 
+- (MTLCaptureDescriptor *)triggerProgrammaticCapture:(id<MTLDevice>)device NS_AVAILABLE_MAC(10_15) {
+    MTLCaptureManager* captureManager = [MTLCaptureManager sharedCaptureManager];
+    MTLCaptureDescriptor* captureDescriptor = [[MTLCaptureDescriptor alloc] init];
+    NSString *filename = [NSString stringWithFormat:@"/tmp/%@.gputrace", [[NSUUID UUID] UUIDString]];
+    captureDescriptor.outputURL = [NSURL fileURLWithPath:filename];
+    captureDescriptor.destination = MTLCaptureDestinationGPUTraceDocument;
+    captureDescriptor.captureObject = device;
+
+    NSError *error;
+    if (![captureManager startCaptureWithDescriptor:captureDescriptor error:&error]) {
+        ITCriticalError(NO, @"Failed to start capture, error %@", error);
+        return nil;
+    }
+    return captureDescriptor;
+}
+
 - (BOOL)reallyDrawInMTKView:(nonnull MTKView *)view startToStartTime:(NSTimeInterval)startToStartTime {
     @synchronized (self) {
         [_inFlightHistogram addValue:_currentFrames.count];
@@ -398,6 +419,9 @@ cellSizeWithoutSpacing:(CGSize)cellSizeWithoutSpacing
         DLog(@"  abort: uninitialized");
         [self scheduleDrawIfNeededInView:view];
         return NO;
+    }
+    if (@available(macOS 10.15, *)) {
+        self.mainThreadState->maximumExtendedDynamicRangeColorComponentValue = view.window.screen.maximumPotentialExtendedDynamicRangeColorComponentValue;
     }
 
 #if ENABLE_FLAKY_METAL
@@ -434,13 +458,16 @@ cellSizeWithoutSpacing:(CGSize)cellSizeWithoutSpacing
             DLog(@"  abort: busy (dropped %@%%, number in flight: %d)", @((_dropped * 100)/_total), (int)framesInFlight);
             DLog(@"  current frames:\n%@", _currentFrames);
             _dropped++;
-            self.needsDraw = YES;
+            self.needsDrawAfterDuration = MIN(self.needsDrawAfterDuration, 1/60.0);
             return NO;
         }
     }
 
     if (self.captureDebugInfoForNextFrame) {
         frameData.debugInfo = [[iTermMetalDebugInfo alloc] init];
+        if (@available(macOS 10.15, *)) {
+            frameData.captureDescriptor = [self triggerProgrammaticCapture:frameData.device];
+        }
         self.captureDebugInfoForNextFrame = NO;
     }
     if (_total > 1) {
@@ -451,7 +478,7 @@ cellSizeWithoutSpacing:(CGSize)cellSizeWithoutSpacing
     if (!frameData.deferCurrentDrawable) {
         if (frameData.destinationTexture == nil || frameData.renderPassDescriptor == nil) {
             DLog(@"  abort: failed to get drawable or RPD");
-            self.needsDraw = YES;
+            self.needsDrawAfterDuration = MIN(self.needsDrawAfterDuration, 1/60.0);
             return NO;
         }
     }
@@ -459,7 +486,7 @@ cellSizeWithoutSpacing:(CGSize)cellSizeWithoutSpacing
     if (!frameData.textureIsFamiliar) {
         if (_mainThreadState.unfamiliarTextureCount < _maxFramesInFlight) {
             DLog(@"Texture is unfamiliar for %@", frameData);
-            self.needsDraw = YES;
+            self.needsDrawAfterDuration = 0;
         } else {
             DLog(@"Avoid redrawing unfamiliar texture to break loop");
         }
@@ -534,6 +561,9 @@ cellSizeWithoutSpacing:(CGSize)cellSizeWithoutSpacing
                                                   pointInsets.left * scale,
                                                   pointInsets.bottom * scale,
                                                   pointInsets.right * scale);
+        if (@available(macOS 10.15, *)) {
+            frameData.maximumExtendedDynamicRangeColorComponentValue = self.mainThreadState->maximumExtendedDynamicRangeColorComponentValue;
+        }
     }];
     return frameData;
 }
@@ -596,7 +626,7 @@ cellSizeWithoutSpacing:(CGSize)cellSizeWithoutSpacing
     if (!frameData.deferCurrentDrawable) {
         if (frameData.destinationTexture == nil || frameData.renderPassDescriptor == nil) {
             DLog(@"  abort: failed to get drawable or RPD");
-            self.needsDraw = YES;
+            self.needsDrawAfterDuration = MIN(self.needsDrawAfterDuration, 1/60.0);
             [self complete:frameData];
             return;
         }
@@ -734,8 +764,14 @@ cellSizeWithoutSpacing:(CGSize)cellSizeWithoutSpacing
 - (id<MTLTexture>)destinationTextureForFrameData:(iTermMetalFrameData *)frameData {
     if (frameData.debugInfo) {
         // Render to offscreen first
+        MTLPixelFormat pixelFormat;
+        if ([iTermAdvancedSettingsModel hdrCursor]) {
+            pixelFormat = MTLPixelFormatRGBA16Float;
+        } else {
+            pixelFormat = MTLPixelFormatBGRA8Unorm;
+        }
         MTLTextureDescriptor *textureDescriptor =
-            [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
+            [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:pixelFormat
                                                                width:frameData.destinationDrawable.texture.width
                                                               height:frameData.destinationDrawable.texture.height
                                                            mipmapped:NO];
@@ -946,7 +982,7 @@ cellSizeWithoutSpacing:(CGSize)cellSizeWithoutSpacing
         return;
     }
     iTermBackgroundImageMode mode;
-    NSImage *backgroundImage = [frameData.perFrameState metalBackgroundImageGetMode:&mode];
+    iTermImageWrapper *backgroundImage = [frameData.perFrameState metalBackgroundImageGetMode:&mode];
     [_backgroundImageRenderer setImage:backgroundImage
                                   mode:mode
                                  frame:frameData.perFrameState.relativeFrame
@@ -1131,10 +1167,10 @@ cellSizeWithoutSpacing:(CGSize)cellSizeWithoutSpacing
     textState.asciiUnderlineDescriptor = asciiUnderlineDescriptor;
     textState.nonAsciiUnderlineDescriptor = nonAsciiUnderlineDescriptor;
     textState.strikethroughUnderlineDescriptor = strikethroughUnderlineDescriptor;
-    textState.defaultBackgroundColor = frameData.perFrameState.defaultBackgroundColor;
 
     CGSize glyphSize = textState.cellConfiguration.glyphSize;
     iTermBackgroundColorRendererTransientState *backgroundState = [frameData transientStateForRenderer:_backgroundColorRenderer];
+    backgroundState.defaultBackgroundColor = frameData.perFrameState.processedDefaultBackgroundColor;
 
     iTermMetalIMEInfo *imeInfo = frameData.perFrameState.imeInfo;
 
@@ -1203,6 +1239,7 @@ cellSizeWithoutSpacing:(CGSize)cellSizeWithoutSpacing
                 if (array1[i].color.x != array2[i].color.x ||
                     array1[i].color.y != array2[i].color.y ||
                     array1[i].color.z != array2[i].color.z ||
+                    array1[i].color.w != array2[i].color.w ||
                     array1[i].count != array2[i].count) {
                     return NO;
                 }
@@ -1646,7 +1683,7 @@ cellSizeWithoutSpacing:(CGSize)cellSizeWithoutSpacing
         }
         if (frameData.destinationTexture == nil) {
             DLog(@"  abort: failed to get drawable or RPD %@", frameData);
-            self.needsDraw = YES;
+            self.needsDrawAfterDuration = MIN(self.needsDrawAfterDuration, 1/60.0);
             [frameData.renderEncoder endEncoding];
             [commandBuffer commit];
             [self didComplete:NO withFrameData:frameData];
@@ -1756,6 +1793,13 @@ cellSizeWithoutSpacing:(CGSize)cellSizeWithoutSpacing
         DLog(@"first time completed %@", frameData);
         if (frameData.debugInfo) {
             DLog(@"have debug info %@", frameData);
+            if (@available(macOS 10.15, *)) {
+                if (frameData.captureDescriptor) {
+                    MTLCaptureManager* captureManager = [MTLCaptureManager sharedCaptureManager];
+                    [captureManager stopCapture];
+                    [frameData.debugInfo addMetalCapture:frameData.captureDescriptor.outputURL];
+                }
+            }
             NSData *archive = [frameData.debugInfo newArchive];
             dispatch_async(dispatch_get_main_queue(), ^{
                 [self.dataSource metalDriverDidProduceDebugInfo:archive];
@@ -1859,19 +1903,20 @@ cellSizeWithoutSpacing:(CGSize)cellSizeWithoutSpacing
 }
 
 - (void)scheduleDrawIfNeededInView:(MTKView *)view {
-    if (self.needsDraw) {
+    const NSTimeInterval duration = self.needsDrawAfterDuration;
+    if (duration < INFINITY) {
         void (^block)(void) = ^{
-            if (self.needsDraw) {
-                self.needsDraw = NO;
+            if (self.needsDrawAfterDuration < INFINITY) {
+                self.needsDrawAfterDuration = INFINITY;
                 DLog(@"Calling setNeedsDisplay because of needsDraw");
                 [view setNeedsDisplay:YES];
             }
         };
-#if ENABLE_PRIVATE_QUEUE
-        dispatch_async(dispatch_get_main_queue(), block);
-#else
-        block();
-#endif
+        DLog(@"Schedule redraw after %f ms", duration * 1000);
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+                                     (int64_t)(duration * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(),
+                       block);
     }
 }
 

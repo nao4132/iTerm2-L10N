@@ -189,10 +189,23 @@ NSString *const iTermStatusBarElementPasteboardType = @"com.iterm2.status-bar-el
     assert(NO);
 }
 
+- (BOOL)statusBarComponentComposerShouldUsePopover:(id<iTermStatusBarComponent>)component {
+    assert(NO);
+    return NO;
+}
+
 - (void)statusBarComponent:(id<iTermStatusBarComponent>)component
       reportScriptingError:(NSError *)error
              forInvocation:(NSString *)invocation
                     origin:(NSString *)origin {
+    assert(NO);
+}
+
+- (void)statusBarComponentComposerRevealComposer:(id<iTermStatusBarComponent>)component { 
+    assert(NO);
+}
+
+- (iTermActivityInfo)statusBarComponentActivityInfo:(id<iTermStatusBarComponent>)component {
     assert(NO);
 }
 

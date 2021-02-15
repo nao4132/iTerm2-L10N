@@ -24,6 +24,7 @@
 @class iTermExpect;
 @class iTermFindCursorView;
 @class iTermFindOnPageHelper;
+@class iTermImageWrapper;
 @class iTermQuickLookController;
 @class iTermSelection;
 @protocol iTermSemanticHistoryControllerDelegate;
@@ -63,17 +64,18 @@ typedef NS_ENUM(NSInteger, PTYCharType) {
 - (void)keyDown:(NSEvent *)event;
 - (void)keyUp:(NSEvent *)event;
 - (BOOL)hasActionableKeyMappingForEvent:(NSEvent *)event;
-- (int)optionKey;
-- (int)rightOptionKey;
+- (iTermOptionKeyBehavior)optionKey;
+- (iTermOptionKeyBehavior)rightOptionKey;
 // Contextual menu
 - (void)menuForEvent:(NSEvent *)theEvent menu:(NSMenu *)theMenu;
 - (void)pasteString:(NSString *)aString;
 - (void)paste:(id)sender;
 - (void)pasteOptions:(id)sender;
 - (void)textViewFontDidChange;
-- (void)textViewDrawBackgroundImageInView:(NSView *)view
+- (BOOL)textViewDrawBackgroundImageInView:(NSView *)view
                                  viewRect:(NSRect)rect
-                   blendDefaultBackground:(BOOL)blendDefaultBackground;
+                   blendDefaultBackground:(BOOL)blendDefaultBackground
+                            virtualOffset:(CGFloat)virtualOffset;
 - (BOOL)textViewHasBackgroundImage;
 - (void)sendEscapeSequence:(NSString *)text;
 - (void)sendHexCode:(NSString *)codes;
@@ -190,7 +192,7 @@ typedef NS_ENUM(NSInteger, PTYCharType) {
 - (void)textViewDidSelectRangeForFindOnPage:(VT100GridCoordRange)range;
 - (void)textViewNeedsDisplayInRect:(NSRect)rect;
 - (void)textViewDidSelectPasswordPrompt;
-- (NSImage *)textViewBackgroundImage;
+- (iTermImageWrapper *)textViewBackgroundImage;
 - (iTermBackgroundImageMode)backgroundImageMode;
 - (BOOL)textViewShouldDrawRect;
 - (void)textViewDidHighlightMark;
@@ -218,6 +220,7 @@ typedef NS_ENUM(NSInteger, PTYCharType) {
                       failedWithError:(NSError *)error
                           forMenuItem:(NSString *)title;
 - (void)textViewApplyAction:(iTermAction *)action;
+- (void)textViewAddTrigger:(NSString *)text;
 @end
 
 @interface iTermHighlightedRow : NSObject
@@ -255,8 +258,8 @@ typedef NS_ENUM(NSInteger, PTYCharType) {
 @property(nonatomic, copy) NSArray *smartSelectionRules;
 
 // Intercell spacing as a proportion of cell size.
-@property(nonatomic, assign) double horizontalSpacing;
-@property(nonatomic, assign) double verticalSpacing;
+@property(nonatomic, assign) CGFloat horizontalSpacing;
+@property(nonatomic, assign) CGFloat verticalSpacing;
 
 // Use a different font for bold, if available?
 @property(nonatomic, assign) BOOL useBoldFont;
@@ -394,11 +397,14 @@ typedef void (^PTYTextViewDrawingHookBlock)(iTermTextDrawingHelper *);
 @property (nonatomic, readonly) VT100GridCoord cursorCoord;
 @property (nonatomic, readonly) iTermFindOnPageHelper *findOnPageHelper;
 
+// This is the height of the bottom margin.
+@property (nonatomic, readonly) double excess;
+
 // Returns the size of a cell for a given font. hspace and vspace are multipliers and the width
 // and height.
 + (NSSize)charSizeForFont:(NSFont*)aFont
-        horizontalSpacing:(double)hspace
-          verticalSpacing:(double)vspace;
+        horizontalSpacing:(CGFloat)hspace
+          verticalSpacing:(CGFloat)vspace;
 
 // This is the designated initializer. The color map should have the
 // basic colors plus the 8-bit ansi colors set shortly after this is
@@ -455,8 +461,8 @@ typedef void (^PTYTextViewDrawingHookBlock)(iTermTextDrawingHelper *);
 // Various accessors (TODO: convert as many as possible into properties)
 - (void)setFont:(NSFont*)aFont
     nonAsciiFont:(NSFont *)nonAsciiFont
-    horizontalSpacing:(double)horizontalSpacing
-    verticalSpacing:(double)verticalSpacing;
+    horizontalSpacing:(CGFloat)horizontalSpacing
+    verticalSpacing:(CGFloat)verticalSpacing;
 - (NSRect)scrollViewContentSize;
 - (void)setAntiAlias:(BOOL)asciiAA nonAscii:(BOOL)nonAsciiAA;
 
@@ -624,11 +630,21 @@ scrollToFirstResult:(BOOL)scrollToFirstResult;
 - (id)contentWithAttributes:(BOOL)attributes;
 - (void)setUseBoldColor:(BOOL)flag brighten:(BOOL)brighten;
 
+- (void)drawRect:(NSRect)rect inView:(NSView *)view;
+
+- (void)setAlphaValue:(CGFloat)alphaValue NS_UNAVAILABLE;
+
 #pragma mark - Testing only
 
-- (id)selectedTextAttributed:(BOOL)attributed
-                cappedAtSize:(int)maxBytes
-           minimumLineNumber:(int)minimumLineNumber;
+typedef NS_ENUM(NSUInteger, iTermCopyTextStyle) {
+    iTermCopyTextStylePlainText,
+    iTermCopyTextStyleAttributed,
+    iTermCopyTextStyleWithControlSequences
+};
+
+- (id)selectedTextWithStyle:(iTermCopyTextStyle)style
+               cappedAtSize:(int)maxBytes
+          minimumLineNumber:(int)minimumLineNumber;
 
 @end
 

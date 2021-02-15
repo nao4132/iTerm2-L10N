@@ -16,6 +16,9 @@
 "Send Selection" = "選択範囲の送信";
 
 /* Context menu */
+"Save Selection as Snippet" = "選択範囲をSnippetとして保存";
+
+/* Context menu */
 "Clear Buffer" = "バッファのクリア";
 
 /* Toolbar Item: Close Session */
@@ -66,6 +69,9 @@
 "Send Email to Selected Address" = "選択したアドレスへメールを送信";
 
 /* Context menu */
+"Add Trigger…" = "トリガーの追加…";
+
+/* Context menu */
 "Split Pane Vertically" = "垂直方向に分割";
 
 /* Context menu */
@@ -100,6 +106,9 @@
 
 /* Context menu */
 "Bury" = "埋め込み";
+
+/* Context menu */
+"Terminal State" = "端末の状態";
 
 /* Removal Alert */
 "Do you really want to remove this item?" = "この項目を本当に削除しますか？";

@@ -534,6 +534,7 @@ iTermWindowType iTermWindowTypeNormalized(iTermWindowType windowType) {
     [self didToggleTraditionalFullScreenModeWithSavedToolbeltWidth:savedToolbeltWidth];
     iTermApplicationDelegate *itad = [iTermApplication.sharedApplication delegate];
     [itad didToggleTraditionalFullScreenMode];
+    DLog(@"done toggling trad fullscreen. fullscreen=%@", @(_fullScreen));
 }
 
 - (void)didExitTraditionalFullScreenMode {
@@ -545,6 +546,7 @@ iTermWindowType iTermWindowTypeNormalized(iTermWindowType windowType) {
     contentSize.width -= decorationSize.width;
     contentSize.height -= decorationSize.height;
 
+    self.window.movable = [self.class windowTypeIsMovable:self.windowType];
     [self fitWindowToTabSize:contentSize];
 }
 
@@ -804,6 +806,11 @@ iTermWindowType iTermWindowTypeNormalized(iTermWindowType windowType) {
         _savedWindowType = self.windowType;
         _windowType = WINDOW_TYPE_LION_FULL_SCREEN;
     }
+    if ([iTermAdvancedSettingsModel workAroundBigSurBug]) {
+        while (self.window.it_titlebarAccessoryViewControllers.count > 0) {
+            [self.window removeTitlebarAccessoryViewControllerAtIndex:0];
+        }
+    }
 }
 
 - (void)windowDidEnterFullScreenImpl:(NSNotification *)notification {
@@ -911,6 +918,7 @@ iTermWindowType iTermWindowTypeNormalized(iTermWindowType windowType) {
     self.windowType = desiredWindowType;
     [self didChangeAnyFullScreen];
 
+    [self updateTabBarControlIsTitlebarAccessory];
     [self.contentView.tabBarControl updateFlashing];
     // Set scrollbars appropriately
     [self updateSessionScrollbars];
@@ -932,6 +940,7 @@ iTermWindowType iTermWindowTypeNormalized(iTermWindowType windowType) {
     [self.contentView layoutSubviews];
     [self updateForTransparency:self.ptyWindow];
     [self addShortcutAccessorViewControllerToTitleBarIfNeeded];
+    [self updateTabColors];  // This updates the window's background colors in case some panes are now transparent.
     [self didFinishFullScreenTransitionSuccessfully:YES];
     [self updateVariables];
 
@@ -939,6 +948,7 @@ iTermWindowType iTermWindowTypeNormalized(iTermWindowType windowType) {
     if ([[iTermApplication sharedApplication] isUIElement]) {
         self.window.collectionBehavior = self.desiredWindowCollectionBehavior;
     }
+    self.window.movable = [self.class windowTypeIsMovable:self.windowType];
 }
 
 - (BOOL)togglingLionFullScreenImpl {

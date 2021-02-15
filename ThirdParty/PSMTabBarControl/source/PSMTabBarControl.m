@@ -59,6 +59,7 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionFontSizeOverride =
 PSMTabBarControlOptionKey PSMTabBarControlOptionMinimalSelectedTabUnderlineProminence = @"PSMTabBarControlOptionMinimalSelectedTabUnderlineProminence";
 PSMTabBarControlOptionKey PSMTabBarControlOptionDragEdgeHeight = @"PSMTabBarControlOptionDragEdgeHeight";
 PSMTabBarControlOptionKey PSMTabBarControlOptionAttachedToTitleBar = @"PSMTabBarControlOptionAttachedToTitleBar";
+PSMTabBarControlOptionKey PSMTabBarControlOptionHTMLTabTitles = @"PSMTabBarControlOptionHTMLTabTitles";
 
 @interface PSMTabBarControl ()<PSMTabBarControlProtocol>
 @end
@@ -96,6 +97,9 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionAttachedToTitleBar = @"PSMTabBar
     // iTerm2 additions
     NSUInteger _modifier;
     BOOL _hasCloseButton;
+    BOOL _needsUpdateAnimate;
+    BOOL _needsUpdate;
+    NSInteger _preDragSelectedTabIndex;  // or NSNotFound
 }
 
 #pragma mark -
@@ -152,6 +156,7 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionAttachedToTitleBar = @"PSMTabBar
         _hasCloseButton = YES;
         _tabLocation = PSMTab_TopTab;
         _style = [[PSMYosemiteTabStyle alloc] init];
+        _preDragSelectedTabIndex = NSNotFound;
 
         // the overflow button/menu
         NSRect overflowButtonRect = NSMakeRect([self frame].size.width - [_style rightMarginForTabBarControlWithOverflow:YES
@@ -285,7 +290,7 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionAttachedToTitleBar = @"PSMTabBar
                 [self sanityCheckFailedWithCallsite:callsite reason:@"cells[i].representedObject != tabView.tabViewItems[i].representedObject"];
             }
         }
-        NSLog(@"Sanity check passed. cells=%@. tabView.tabViewITems=%@", self.cells, self.tabView.tabViewItems);
+        DLog(@"Sanity check passed. cells=%@. tabView.tabViewITems=%@", self.cells, self.tabView.tabViewItems);
     }
 }
 
@@ -378,7 +383,7 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionAttachedToTitleBar = @"PSMTabBar
 
 - (void)setDisableTabClose:(BOOL)value {
     _disableTabClose = value;
-    [self update:_automaticallyAnimates];
+    [self setNeedsUpdate:YES animate:YES];
 }
 
 - (void)setHideForSingleTab:(BOOL)value {
@@ -388,32 +393,32 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionAttachedToTitleBar = @"PSMTabBar
 
 - (void)setShowAddTabButton:(BOOL)value {
     _showAddTabButton = value;
-    [self update];
+    [self setNeedsUpdate:YES];
 }
 
 - (void)setCellMinWidth:(int)value {
     _cellMinWidth = value;
-    [self update:_automaticallyAnimates];
+    [self setNeedsUpdate:YES animate:YES];
 }
 
 - (void)setCellMaxWidth:(int)value {
     _cellMaxWidth = value;
-    [self update:_automaticallyAnimates];
+    [self setNeedsUpdate:YES animate:YES];
 }
 
 - (void)setCellOptimumWidth:(int)value {
     _cellOptimumWidth = value;
-    [self update:_automaticallyAnimates];
+    [self setNeedsUpdate:YES animate:YES];
 }
 
 - (void)setSizeCellsToFit:(BOOL)value {
     _sizeCellsToFit = value;
-    [self update:_automaticallyAnimates];
+    [self setNeedsUpdate:YES animate:YES];
 }
 
 - (void)setStretchCellsToFit:(BOOL)value {
     _stretchCellsToFit = value;
-    [self update:_automaticallyAnimates];
+    [self setNeedsUpdate:YES animate:YES];
 }
 
 - (void)setUseOverflowMenu:(BOOL)value {
@@ -563,6 +568,36 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionAttachedToTitleBar = @"PSMTabBar
 
     // pull from collection
     [_cells removeObject:cell];
+}
+
+- (void)dragDidFinish {
+    _preDragSelectedTabIndex = NSNotFound;
+}
+
+- (void)dragWillExitTabBar {
+    const NSInteger count = self.tabView.tabViewItems.count;
+    if (_preDragSelectedTabIndex == NSNotFound || _preDragSelectedTabIndex < 0 || _preDragSelectedTabIndex >= count) {
+        // There is no most-recent. Can we select the next one?
+        if (count == 1) {
+            // No next one exists.
+            return;
+        }
+        NSInteger currentIndex = [[self tabView] indexOfTabViewItem:self.tabView.selectedTabViewItem];
+        if (currentIndex == NSNotFound) {
+            // Shouldn't happen
+            return;
+        }
+        NSInteger indexToSelect;
+        if (currentIndex + 1 < count) {
+            indexToSelect = currentIndex + 1;
+        } else {
+            indexToSelect = currentIndex - 1;
+        }
+        [self.tabView selectTabViewItem:self.tabView.tabViewItems[indexToSelect]];
+        return;
+    }
+    [self.tabView selectTabViewItem:self.tabView.tabViewItems[_preDragSelectedTabIndex]];
+    _preDragSelectedTabIndex = NSNotFound;
 }
 
 #pragma mark -
@@ -1012,7 +1047,7 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionAttachedToTitleBar = @"PSMTabBar
     // size all cells appropriately and create tracking rects
     // nuke old tracking rects
     int i, cellCount = [_cells count];
-#warning TODO: This is quadratic. Creating a window with 100 tabs takes forever.
+
     for (i = 0; i < cellCount; i++) {
         id cell = [_cells objectAtIndex:i];
         [[NSNotificationCenter defaultCenter] removeObserver:cell];
@@ -1331,8 +1366,7 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionAttachedToTitleBar = @"PSMTabBar
     }
 }
 
-- (void)mouseDown:(NSEvent *)theEvent
-{
+- (void)mouseDown:(NSEvent *)theEvent {
     _didDrag = NO;
 
     // keep for dragging
@@ -1359,6 +1393,13 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionAttachedToTitleBar = @"PSMTabBar
             [cell setCloseButtonPressed:NO];
             if ([theEvent clickCount] == 1) {
                 if (_selectsTabsOnMouseDown) {
+                    if (cell.state != NSControlStateValueOn) {
+                        _preDragSelectedTabIndex = [[self tabView] indexOfTabViewItem:self.tabView.selectedTabViewItem];
+                    } else {
+                        // Because we always want it to switch tabs, don't save
+                        // the index if you're dragging the current tab.
+                        _preDragSelectedTabIndex = NSNotFound;
+                    }
                     [self tabClick:cell];
                 }
             }
@@ -1448,12 +1489,13 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionAttachedToTitleBar = @"PSMTabBar
         PSMTabBarCell *mouseDownCell = [self cellForPoint:[self convertPoint:[[self lastMiddleMouseDownEvent] locationInWindow] fromView:nil]
                                                 cellFrame:&mouseDownCellFrame];
         if (cell && cell == mouseDownCell) {
-            [self closeTabClick:cell];
+            [self closeTabClick:cell button:theEvent.buttonNumber];
         }
     }
 }
 
 - (void)mouseUp:(NSEvent *)theEvent {
+    _preDragSelectedTabIndex = NSNotFound;
     _haveInitialDragLocation = NO;
     if (_resizing) {
         _resizing = NO;
@@ -1480,7 +1522,7 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionAttachedToTitleBar = @"PSMTabBar
         cell.closeButtonVisible &&
         [mouseDownCell closeButtonPressed]) {
         // Clicked on close button
-        [self closeTabClick:cell];
+        [self closeTabClick:cell button:theEvent.buttonNumber];
         return;
     }
 
@@ -1697,8 +1739,7 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionAttachedToTitleBar = @"PSMTabBar
     [self update];
 }
 
-- (void)closeTabClick:(id)sender
-{
+- (void)closeTabClick:(id)sender button:(int)button {
     NSTabViewItem *item = [sender representedObject];
     [[sender retain] autorelease];
     [[item retain] autorelease];
@@ -1711,8 +1752,8 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionAttachedToTitleBar = @"PSMTabBar
         }
     }
 
-    if ([[self delegate] respondsToSelector:@selector(tabView:closeTab:)]) {
-        [[self delegate] tabView:[self tabView] closeTab:[item identifier]];
+    if ([[self delegate] respondsToSelector:@selector(tabView:closeTab:button:)]) {
+        [[self delegate] tabView:[self tabView] closeTab:[item identifier] button:button];
     }
 }
 
@@ -2323,6 +2364,35 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionAttachedToTitleBar = @"PSMTabBar
     }
 }
 
+- (void)setNeedsUpdate:(BOOL)needsUpdate {
+    [self setNeedsUpdate:needsUpdate animate:NO];
+}
+
+- (void)setNeedsUpdate:(BOOL)needsUpdate animate:(BOOL)animate {
+    _needsUpdateAnimate = _needsUpdateAnimate && animate;
+    if (_needsUpdate == needsUpdate) {
+        return;
+    }
+    if (!needsUpdate) {
+        _needsUpdate = NO;
+        return;
+    }
+    _needsUpdate = YES;
+    __weak __typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [weakSelf updateIfNeeded];
+    });
+}
+
+- (void)updateIfNeeded {
+    if (!_needsUpdate) {
+        return;
+    }
+    [self setNeedsUpdate:_needsUpdateAnimate];
+    [self update];
+}
+
+
 #pragma mark - NSDraggingSource
 
 - (NSDragOperation)draggingSession:(NSDraggingSession *)session sourceOperationMaskForDraggingContext:(NSDraggingContext)context {
@@ -2339,7 +2409,7 @@ PSMTabBarControlOptionKey PSMTabBarControlOptionAttachedToTitleBar = @"PSMTabBar
 #pragma mark - PSMProgressIndicatorDelegate
 
 - (void)progressIndicatorNeedsUpdate {
-    [self update];
+    [self setNeedsUpdate:YES];
 }
 
 @end

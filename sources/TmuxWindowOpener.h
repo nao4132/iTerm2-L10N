@@ -42,11 +42,19 @@ extern NSString *const kTmuxWindowOpenerWindowOptionStyleValueFullScreen;
 @property (nonatomic, assign) BOOL manuallyOpened;
 @property (nonatomic, copy) NSDictionary<NSNumber *, NSString *> *tabColors;
 @property (nonatomic, copy) Profile *profile;
+
+// Are we just attaching to a tmux session initially? If false, the initial window restoration has completed.
 @property (nonatomic, assign) BOOL initial;
+
+// If true, we did not originate creation of this window. Coulda been `tmux new-window`.
+@property (nonatomic, assign) BOOL anonymous;
+
 @property (nonatomic, copy) void (^completion)(int windowIndex);
 @property (nonatomic, assign) NSDecimalNumber *minimumServerVersion;
 @property (nonatomic, readonly) NSInteger errorCount;
 @property (nonatomic, readonly) NSArray<NSNumber *> *unpausingWindowPanes;
+@property (nonatomic, strong) NSNumber *tabIndex;  // open tab at this index, or nil to put at the end
+@property (nonatomic, copy) void (^newWindowBlock)(NSString *terminalGUID);  // called after creating a new window.
 
 + (TmuxWindowOpener *)windowOpener;
 - (BOOL)openWindows:(BOOL)initial;

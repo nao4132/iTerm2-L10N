@@ -11,14 +11,18 @@
 @class iTermPopupWindowController;
 @class PopupModel;
 @class PopupEntry;
-@class PTYTextView;
 @class VT100Screen;
+
+@protocol iTermPopupWindowPresenter<NSObject>
+- (void)popupWindowWillPresent:(iTermPopupWindowController *)popupWindowController;
+- (NSRect)popupWindowOriginRectInScreenCoords;
+@end
 
 @protocol PopupDelegate <NSObject>
 
-- (NSWindowController *)popupWindowController;
+- (NSRect)popupScreenVisibleFrame;
 - (VT100Screen *)popupVT100Screen;
-- (PTYTextView *)popupVT100TextView;
+- (id<iTermPopupWindowPresenter>)popupPresenter;
 - (void)popupInsertText:(NSString *)text;
 - (void)popupKeyDown:(NSEvent *)event;
 // Return YES if the delegate handles it, NO if Popup should handle it.
@@ -47,7 +51,8 @@
 - (BOOL)disableFocusFollowsMouse;
 
 // Called by clients to open window.
-- (void)popWithDelegate:(id<PopupDelegate>)delegate;
+- (void)popWithDelegate:(id<PopupDelegate>)delegate
+               inWindow:(NSWindow *)owningWindow;
 
 // Safely shut down the popup when the parent is about to be dealloced. Clients must call this from
 // dealloc. It removes possible pending timers.

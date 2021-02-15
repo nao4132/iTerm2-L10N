@@ -30,6 +30,11 @@
 - (NSString *)legacyApplicationSupportDirectory;
 - (NSString *)applicationSupportDirectory;
 
+// Gives a symlink called ApplicationSupport because pip3 can't handle spaces and this breaks pyenv.
+// Creates the symlink if it doesn't already exist
+- (NSString *)spacelessAppSupportCreatingLink;
+- (NSString *)spacelessAppSupportWithoutCreatingLink;
+
 - (NSString *)temporaryDirectory;
 
 - (NSString *)downloadsDirectory;
@@ -57,10 +62,12 @@ additionalNetworkPaths:(NSArray<NSString *> *)additionalNetworkPaths;
 
 // Directory where scripts live. These are loaded and added to a menu or auto-run at startup.
 - (NSString *)scriptsPath;
+- (NSString *)scriptsPathWithoutSpaces;
 
 // Path to special auto-launch script that is run at startup.
 - (NSString *)legacyAutolaunchScriptPath;  // applescript
 - (NSString *)autolaunchScriptPath;  // scripting API
+- (NSString *)autolaunchScriptPathCreatingLink;  // scripting API
 
 // Path to special file that, if it exists at launch time, suppresses autolaunch script and
 // window restoration.
@@ -74,4 +81,6 @@ additionalNetworkPaths:(NSArray<NSString *> *)additionalNetworkPaths;
 - (id)monitorFile:(NSString *)file block:(void (^)(long flags))block;
 - (void)stopMonitoringFileWithToken:(id)token;
 
+// Returns ~/.iterm2, creating if needed, or nil.
+- (NSString *)homeDirectoryDotDir;
 @end

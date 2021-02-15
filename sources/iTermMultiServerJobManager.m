@@ -139,6 +139,7 @@ typedef struct {
                      newEnviron:(NSArray<NSString *> *)newEnviron
                            task:(id<iTermTask>)task
                      completion:(void (^)(iTermJobManagerForkAndExecStatus))completion  {
+    DLog(@"begin");
     iTermMultiServerJobManagerForkRequest forkRequest = {
         .ttyState = ttyState,
         .argpath = [NSData dataWithBytes:argpath.UTF8String length:strlen(argpath.UTF8String) + 1],
@@ -148,6 +149,7 @@ typedef struct {
     };
     iTermCallback *callback = [self.thread newCallbackWithBlock:^(iTermMultiServerJobManagerState *state,
                                                                   iTermMultiServerConnection *conn) {
+        DLog(@"Callback run with connection %@", conn);
         if (!conn) {
             completion(iTermJobManagerForkAndExecStatusServerLaunchFailed);
             return;
@@ -173,10 +175,12 @@ typedef struct {
                                    task:(id<iTermTask>)task
                                   state:(iTermMultiServerJobManagerState *)state
                              completion:(void (^)(iTermJobManagerForkAndExecStatus))completion {
+    DLog(@"begin");
     [state check];
 
     iTermCallback *callback = [self.thread newCallbackWithBlock:^(iTermMultiServerJobManagerState *state,
                                                                   iTermResult<iTermFileDescriptorMultiClientChild *> *result) {
+        DLog(@"called back with result %@", result);
         [result handleObject:
          ^(iTermFileDescriptorMultiClientChild * _Nonnull child) {
             state.child = child;
@@ -396,6 +400,9 @@ typedef struct {
             results |= iTermJobManagerAttachResultsRegistered;
         }
     }
+    if (result.brokenPipe) {
+        [task brokenPipe];
+    }
     return results;
 }
 
@@ -555,6 +562,7 @@ typedef struct {
               removePreemptively:YES
                         callback:[self.thread newCallbackWithBlock:^(iTermMultiServerJobManagerState *state,
                                                                      iTermResult<NSNumber *> *result) {
+            // NOTE: killWithMode:state: must be idempotent. Be careful here.
             DLog(@"Preemptive wait for %d finished with result %@", pid, result);
         }]];
     }

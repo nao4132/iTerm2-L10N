@@ -439,12 +439,15 @@
 }
 
 - (PSMCachedTitleInputs *)cachedTitleInputsForTabCell:(PSMTabBarCell *)cell {
-    return [[[PSMCachedTitleInputs alloc] initWithTitle:cell.stringValue
-                                        truncationStyle:cell.truncationStyle
-                                                  color:[self textColorForCell:cell]
-                                                graphic:[(id)[[cell representedObject] identifier] psmTabGraphic]
-                                            orientation:_orientation
-                                               fontSize:self.fontSize] autorelease];
+    const BOOL parseHTML = [[_tabBar.delegate tabView:_tabBar valueOfOption:PSMTabBarControlOptionHTMLTabTitles] boolValue];
+    PSMCachedTitleInputs *inputs = [[[PSMCachedTitleInputs alloc] initWithTitle:cell.stringValue
+                                                                truncationStyle:cell.truncationStyle
+                                                                          color:[self textColorForCell:cell]
+                                                                        graphic:[(id)[[cell representedObject] identifier] psmTabGraphic]
+                                                                    orientation:_orientation
+                                                                       fontSize:self.fontSize
+                                                                      parseHTML:parseHTML] autorelease];
+    return inputs;
 }
 
 - (CGFloat)fontSize {
@@ -511,17 +514,12 @@
 }
 
 - (NSColor *)bigSurBackgroundColorSelected:(BOOL)selected highlightAmount:(CGFloat)highlightAmount NS_AVAILABLE_MAC(10_16) {
-    CGFloat colors[4] = { 0, 0, 0, 0};
     if (selected) {
-        // clear
-    } else {
-        colors[3] = 0.1 + 0.086 * highlightAmount;
+        const CGFloat white = 0.95;
+        return [NSColor colorWithWhite:white alpha:1];
     }
-
-    return [NSColor colorWithSRGBRed:colors[0]
-                               green:colors[1]
-                                blue:colors[2]
-                               alpha:colors[3]];
+    const CGFloat white = 0.9 - 0.05 * highlightAmount;
+    return [NSColor colorWithWhite:white alpha:1];
 }
 
 - (NSColor *)mojaveBackgroundColorSelected:(BOOL)selected highlightAmount:(CGFloat)highlightAmount NS_AVAILABLE_MAC(10_14) {
@@ -873,6 +871,8 @@
 
     CGFloat reservedSpace = 0;
     closeButtonSize = [closeButton size];
+    PSMCachedTitle *cachedTitle = cell.cachedTitle;
+
     if ([cell hasCloseButton]) {
         if (cell.isCloseButtonSuppressed && _orientation == PSMTabBarHorizontalOrientation) {
             // Do not use this much space on the left for the label, but the label is centered as
@@ -889,25 +889,34 @@
     }
 
     // Draw close button
+    CGFloat closeButtonAlpha = 0;
     if ([cell hasCloseButton] && [cell closeButtonVisible]) {
-        CGFloat fraction;
         if (cell.isCloseButtonSuppressed) {
-            fraction = highlightAmount;
+            closeButtonAlpha = highlightAmount;
         } else {
-            fraction = 1;
+            closeButtonAlpha = 1;
         }
         const BOOL keyMainAndActive = self.windowIsMainAndAppIsActive;
         if (!keyMainAndActive) {
-            fraction /= 2;
+            closeButtonAlpha /= 2;
         }
         [closeButton drawAtPoint:closeButtonRect.origin
                         fromRect:NSZeroRect
                        operation:NSCompositingOperationSourceOver
-                        fraction:fraction];
+                        fraction:closeButtonAlpha];
 
     }
-
-    PSMCachedTitle *cachedTitle = cell.cachedTitle;
+    // Draw graphic icon (i.e., the app icon, not new-output indicator icon) over close button.
+    if (cachedTitle.inputs.graphic) {
+        const CGFloat width = [self drawGraphicWithCellFrame:cellFrame
+                                                       image:cachedTitle.inputs.graphic
+                                                       alpha:1 - closeButtonAlpha];
+        if (_orientation == PSMTabBarHorizontalOrientation) {
+            reservedSpace = MAX(reservedSpace, width);
+        } else {
+            labelPosition = MAX(labelPosition, width + kPSMTabBarCellPadding);
+        }
+    }
 
     // icon
     BOOL drewIcon = NO;
@@ -985,6 +994,17 @@
 
         [attributedString drawInRect:labelRect];
     }
+}
+
+- (CGFloat)drawGraphicWithCellFrame:(NSRect)cellFrame
+                              image:(NSImage *)image
+                              alpha:(CGFloat)alpha {
+    NSRect rect = NSMakeRect(NSMinX(cellFrame) + 6,
+                             NSMinY(cellFrame) + (NSHeight(cellFrame) - image.size.height) / 2.0,
+                             image.size.width,
+                             image.size.height);
+    [image drawInRect:rect fromRect:NSZeroRect operation:NSCompositingOperationSourceOver fraction:alpha respectFlipped:YES hints:nil];
+    return NSWidth(rect) + kPSMTabBarCellPadding + 2;
 }
 
 - (CGFloat)widthForLabelInCell:(PSMTabBarCell *)cell

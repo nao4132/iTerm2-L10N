@@ -590,7 +590,7 @@ void StringToScreenChars(NSString *s,
                          NSInteger unicodeVersion) {
     __block NSInteger j = 0;
     __block BOOL foundCursor = NO;
-    NSCharacterSet *zeroWidthSpaces = [NSCharacterSet zeroWidthSpaceCharacterSetForUnicodeVersion:unicodeVersion];
+    NSCharacterSet *ignorableCharacters = [NSCharacterSet ignorableCharactersForUnicodeVersion:unicodeVersion];
     NSCharacterSet *spacingCombiningMarks = [NSCharacterSet spacingCombiningMarksForUnicodeVersion:12];
 
     [s enumerateComposedCharacters:^(NSRange range,
@@ -609,8 +609,7 @@ void StringToScreenChars(NSString *s,
         // Set the code and the complex flag. Also return early if no cell should be used by this
         // grapheme cluster. Set the isDoubleWidth flag.
         if (!composedOrNonBmpChar) {
-            if ([zeroWidthSpaces characterIsMember:baseBmpChar]) {
-                // Ignore zero-width spacers.
+            if ([ignorableCharacters characterIsMember:baseBmpChar]) {
                 return;
             } else if ([spacingCombiningMarks characterIsMember:baseBmpChar]) {
                 composedOrNonBmpChar = [NSString stringWithLongCharacter:baseBmpChar];
@@ -636,8 +635,9 @@ void StringToScreenChars(NSString *s,
             }
         }
         if (composedOrNonBmpChar) {
+            const NSUInteger composedLength = composedOrNonBmpChar.length;
             // Ensure the string is not longer than what we support.
-            if (composedOrNonBmpChar.length > kMaxParts) {
+            if (composedLength > kMaxParts) {
                 composedOrNonBmpChar = [composedOrNonBmpChar substringToIndex:kMaxParts];
 
                 // Ensure a high surrogate isn't left dangling at the end.
@@ -646,13 +646,28 @@ void StringToScreenChars(NSString *s,
                 }
             }
             SetComplexCharInScreenChar(buf + j, composedOrNonBmpChar, normalization, spacingCombiningMark);
+            NSInteger next = 1;
             UTF32Char baseChar = [composedOrNonBmpChar characterAtIndex:0];
-            if (IsHighSurrogate(baseChar) && composedOrNonBmpChar.length > 1) {
+            if (IsHighSurrogate(baseChar) && composedLength > 1) {
                 baseChar = DecodeSurrogatePair(baseChar, [composedOrNonBmpChar characterAtIndex:1]);
+                next += 1;
+                if (composedLength == 2 && [ignorableCharacters longCharacterIsMember:baseChar]) {
+                    return;
+                }
             }
             isDoubleWidth = [NSString isDoubleWidthCharacter:baseChar
                                       ambiguousIsDoubleWidth:ambiguousIsDoubleWidth
                                               unicodeVersion:unicodeVersion];
+            if (!isDoubleWidth && composedLength > next) {
+                const unichar peek = [composedOrNonBmpChar characterAtIndex:next];
+                if (peek == 0xfe0f) {
+                    // VS16
+                    if ([[NSCharacterSet emojiAcceptingVS16] characterIsMember:baseChar] &&
+                        [iTermAdvancedSettingsModel vs16Supported]) {
+                        isDoubleWidth = YES;
+                    }
+                }
+            }
         }
 
         // Append a DWC_RIGHT if the base character is double-width.

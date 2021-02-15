@@ -23,15 +23,36 @@
     iTermStatusBarViewController *_statusBarViewController;
     iTermMinimalComposerViewController *_minimalViewController;
     NSString *_saved;
+    BOOL _preserveSaved;
+}
+
+- (void)setCommand:(NSString *)command {
+    _saved = [command copy];
 }
 
 - (void)reveal {
     iTermStatusBarViewController *statusBarViewController = [self.delegate composerManagerStatusBarViewController:self];
     if (statusBarViewController) {
-        [self showComposerInStatusBar:statusBarViewController];
+        if (_dropDownComposerViewIsVisible) {
+            _saved = _minimalViewController.stringValue;
+            [self dismissMinimalView];
+        } else {
+            [self showComposerInStatusBar:statusBarViewController];
+        }
     } else {
         [self showMinimalComposerInView:[self.delegate composerManagerContainerView:self]];
     }
+}
+
+- (void)revealMinimal {
+    iTermStatusBarViewController *statusBarViewController = [self.delegate composerManagerStatusBarViewController:self];
+    if (statusBarViewController) {
+        iTermStatusBarComposerComponent *component = [statusBarViewController visibleComponentWithIdentifier:[iTermStatusBarComposerComponent statusBarComponentIdentifier]];
+        if (component) {
+            _saved = [component.stringValue copy];
+        }
+    }
+    [self showMinimalComposerInView:[self.delegate composerManagerContainerView:self]];
 }
 
 - (void)showComposerInStatusBar:(iTermStatusBarViewController *)statusBarViewController {
@@ -71,6 +92,12 @@
                                                     superview.frame.size.height - _minimalViewController.view.frame.size.height,
                                                     _minimalViewController.view.frame.size.width,
                                                     _minimalViewController.view.frame.size.height);
+    _minimalViewController.view.appearance = [self.delegate composerManagerAppearance:self];
+    [_minimalViewController setHost:[self.delegate composerManagerRemoteHost:self]
+                   workingDirectory:[self.delegate composerManagerWorkingDirectory:self]
+                              shell:[self.delegate composerManagerShell:self]
+                     tmuxController:[self.delegate composerManagerTmuxController:self]];
+    [_minimalViewController setFont:[self.delegate composerManagerFont:self]];
     [superview addSubview:_minimalViewController.view];
     if (_saved.length) {
         _minimalViewController.stringValue = _saved ?: @"";
@@ -79,6 +106,15 @@
     [_minimalViewController updateFrame];
     [_minimalViewController makeFirstResponder];
     _dropDownComposerViewIsVisible = YES;
+}
+
+- (BOOL)dismiss {
+    if (!_dropDownComposerViewIsVisible) {
+        return NO;
+    }
+    _saved = _minimalViewController.stringValue;
+    [self dismissMinimalView];
+    return YES;
 }
 
 - (void)layout {
@@ -121,6 +157,7 @@
         [vc.view removeFromSuperview];
     }];
     _minimalViewController = nil;
+    _dropDownComposerViewIsVisible = NO;
     // You get into infinite recursion if you do ths inside resignFirstResponder.
     dispatch_async(dispatch_get_main_queue(), ^{
         [self.delegate composerManagerDidDismissMinimalView:self];

@@ -74,6 +74,7 @@ withRelativeCoordRange:(VT100GridAbsCoordRange)range
 - (void)contextMenuSplitVertically:(iTermTextViewContextMenuHelper *)contextMenu;
 - (void)contextMenuSplitHorizontally:(iTermTextViewContextMenuHelper *)contextMenu;
 - (void)contextMenuMovePane:(iTermTextViewContextMenuHelper *)contextMenu;
+- (void)contextMenu:(iTermTextViewContextMenuHelper *)contextMenu copyURL:(NSURL *)url;
 - (void)contextMenuSwapSessions:(iTermTextViewContextMenuHelper *)contextMenu;
 - (void)contextMenuSendSelectedText:(iTermTextViewContextMenuHelper *)contextMenu;
 - (void)contextMenuClearBuffer:(iTermTextViewContextMenuHelper *)contextMenu;
@@ -125,6 +126,7 @@ runCommandInBackground:(NSString *)command;
 - (void)contextMenu:(iTermTextViewContextMenuHelper *)contextMenu inspectImage:(iTermImageInfo *)image;
 - (void)contextMenu:(iTermTextViewContextMenuHelper *)contextMenu toggleAnimationOfImage:(iTermImageInfo *)image;
 - (void)contextMenuSaveSelectionAsSnippet:(iTermTextViewContextMenuHelper *)contextMenu;
+- (void)contextMenu:(iTermTextViewContextMenuHelper *)contextMenu addTrigger:(NSString *)text;
 @end
 
 @interface iTermTextViewContextMenuHelper : NSObject<NSMenuDelegate>

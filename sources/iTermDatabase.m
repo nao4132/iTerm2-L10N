@@ -134,11 +134,13 @@
 
     NSString *checkType = arc4random_uniform(100) == 0 ? @"integrity_check" : @"quick_check";
     FMResultSet *results = [_db executeQuery:[NSString stringWithFormat:@"pragma %@", checkType]];
-    if (![results next]) {
+    NSString *value = nil;
+    if ([results next]) {
+        value = [results stringForColumn:checkType];
+    } else {
         DLog(@"%@ check failed - no next result", checkType);
-        return NO;
     }
-    NSString *value = [results stringForColumn:checkType];
+    [results close];
     if (![value isEqualToString:@"ok"]) {
         DLog(@"%@ check failed: %@", checkType, value);
         return NO;
@@ -206,6 +208,15 @@
     [_db beginDeferredTransaction];
     DLog(@"Begin transaction");
     BOOL result;
+#if BETA
+    {
+        FMResultSet *rs = [_db executeQuery:@"select count(*) as c from Node where parent=0"];
+        if ([rs next]) {
+            NSString *count = [rs stringForColumn:@"c"];
+            ITBetaAssert(count.integerValue < 2, @"PRE: %@", count);
+        }
+    }
+#endif
     if (block()) {
         DLog(@"Commit");
         result = [_db commit];
@@ -214,10 +225,12 @@
         result = [_db rollback];
     }
 #if BETA
-    FMResultSet *rs = [_db executeQuery:@"select count(*) as c from Node where parent=0"];
-    if ([rs next]) {
-        NSString *count = [rs stringForColumn:@"c"];
-        ITBetaAssert(count.integerValue == 1, @"%@", count);
+    {
+        FMResultSet *rs = [_db executeQuery:@"select count(*) as c from Node where parent=0"];
+        if ([rs next]) {
+            NSString *count = [rs stringForColumn:@"c"];
+            ITBetaAssert(count.integerValue == 1, @"POST: %@", count);
+        }
     }
 #endif
     if (!result) {

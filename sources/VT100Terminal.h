@@ -105,6 +105,9 @@ typedef struct {
 // If YES, overrides the delegate's -terminalTmuxMode.
 @property(nonatomic) BOOL tmuxMode;
 
+// DECSET 1036. This can be overridden by modifyOtherKeys, CSI u mode, and raw key reporting.
+@property(nonatomic) BOOL metaSendsEscape;
+
 - (void)setStateFromDictionary:(NSDictionary *)dict;
 
 - (void)setForegroundColor:(int)fgColorCode alternateSemantics:(BOOL)altsem;
@@ -115,6 +118,10 @@ typedef struct {
 - (void)resetCharset;
 - (void)resetByUserRequest:(BOOL)preservePrompt;
 - (void)resetForTmuxUnpause;
+// Use this when restarting the login shell. Some features like paste bracketing should be turned
+// off for a newly launched program. It differs from resetByUserRequest: by not modifying screen
+// contents.
+- (void)resetForRelaunch;
 
 - (void)setDisableSmcupRmcup:(BOOL)value;
 
@@ -147,5 +154,6 @@ typedef struct {
 - (void)gentleReset;
 
 - (NSSet<NSString *> *)sgrCodesForCharacter:(screen_char_t)c;
+- (void)resetSendModifiersWithSideEffects:(BOOL)sideEffects;
 
 @end

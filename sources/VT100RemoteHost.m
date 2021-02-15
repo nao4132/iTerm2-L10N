@@ -8,8 +8,8 @@
 
 #import "VT100RemoteHost.h"
 #import "DebugLogging.h"
-#import "iTermLocalHostNameGuesser.h"
 #import "NSDictionary+iTerm.h"
+#import "NSHost+iTerm.h"
 #import "NSObject+iTerm.h"
 
 static NSString *const kRemoteHostHostNameKey = @"Host name";
@@ -27,10 +27,11 @@ static NSString *const kRemoteHostUserNameKey = @"User name";
     return self;
 }
 
-- (void)dealloc {
-    [_hostname release];
-    [_username release];
-    [super dealloc];
++ (instancetype)localhost {
+    VT100RemoteHost *localhost = [[self alloc] init];
+    localhost.hostname = [NSHost fullyQualifiedDomainName];
+    localhost.username = NSUserName();
+    return localhost;
 }
 
 - (NSString *)description {
@@ -48,7 +49,7 @@ static NSString *const kRemoteHostUserNameKey = @"User name";
 }
 
 - (BOOL)isLocalhost {
-    NSString *localHostName = [[iTermLocalHostNameGuesser sharedInstance] name];
+    NSString *localHostName = [NSHost fullyQualifiedDomainName];
     if ([self.hostname isEqualToString:localHostName]) {
         return YES;
     }

@@ -4112,9 +4112,6 @@ ITERM_WEAKLY_REFERENCEABLE
 }
 
 - (void)setKeyMappingMode:(iTermKeyMappingMode)mode {
-    if (mode == _keyMappingMode) {
-        return;
-    }
     _keyMappingMode = mode;
     [self updateKeyMapper];
 }
@@ -4140,18 +4137,19 @@ ITERM_WEAKLY_REFERENCEABLE
             break;
     }
 
-    if ([_keyMapper isKindOfClass:mapperClass]) {
-        return;
-    }
-    [_keyMapper release];
-    _keyMapper = nil;
+    if (![_keyMapper isKindOfClass:mapperClass]) {
+        [_keyMapper release];
+        _keyMapper = nil;
 
-    id<iTermKeyMapper> keyMapper = [[mapperClass alloc] init];
-    if ([keyMapper respondsToSelector:@selector(setDelegate:)]) {
-        [keyMapper setDelegate:self];
+        id<iTermKeyMapper> keyMapper = [[mapperClass alloc] init];
+        if ([keyMapper respondsToSelector:@selector(setDelegate:)]) {
+            [keyMapper setDelegate:self];
+        }
+        _keyMapper = keyMapper;
+        _textview.keyboardHandler.keyMapper = _keyMapper;
     }
-    _keyMapper = keyMapper;
-    _textview.keyboardHandler.keyMapper = _keyMapper;
+    iTermTermkeyKeyMapper *termkey = [iTermTermkeyKeyMapper castFrom:_keyMapper];
+    termkey.flags = _terminal.keyReportingFlags;
 }
 
 - (NSString *)badgeFormat {
@@ -11739,6 +11737,13 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
     }
 }
 
+- (void)screenKeyReportingFlagsDidChange {
+    if (_terminal.keyReportingFlags & VT100TerminalKeyReportingFlagsDisambiguateEscape) {
+        self.keyMappingMode = iTermKeyMappingModeCSIu;
+    } else {
+        self.keyMappingMode = iTermKeyMappingModeStandard;
+    }
+}
 
 - (void)screenTerminalAttemptedPasteboardAccess {
     [self.textview didCopyToPasteboardWithControlSequence];
@@ -12247,9 +12252,13 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
 }
 
 - (void)sessionViewScrollViewDidResize {
-    [_shell setSize:_screen.size
-           viewSize:_screen.viewSize
-        scaleFactor:self.backingScaleFactor];
+    [self updateTTYSize];
+}
+
+- (BOOL)updateTTYSize {
+    return [_shell setSize:_screen.size
+                  viewSize:_screen.viewSize
+               scaleFactor:self.backingScaleFactor];
 }
 
 - (iTermStatusBarViewController *)sessionViewStatusBarViewController {
@@ -12285,8 +12294,11 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
 }
 
 - (void)sessionViewDidChangeWindow {
-    if (@available(macOS 10.11, *)) {
-        [self updateMetalDriver];
+    [self updateMetalDriver];
+    if (!_shell.ttySizeInitialized) {
+        if ([self updateTTYSize]) {
+            _shell.ttySizeInitialized = YES;
+        }
     }
 }
 

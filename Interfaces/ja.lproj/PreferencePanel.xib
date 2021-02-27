@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <document type="com.apple.InterfaceBuilder3.Cocoa.XIB" version="3.0" toolsVersion="15705" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES">
     <dependencies>
-        <deployment identifier="macosx"/>
         <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="15705"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
@@ -164,43 +163,43 @@
                     <popUpButton verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="6124">
                         <rect key="frame" x="127" y="202" width="306" height="26"/>
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                        <popUpButtonCell key="cell" type="push" bezelStyle="rounded" alignment="left" lineBreakMode="truncatingTail" borderStyle="borderAndBezel" imageScaling="proportionallyDown" inset="2" id="6125">
+                        <popUpButtonCell key="cell" type="push" bezelStyle="rounded" alignment="left" lineBreakMode="truncatingTail" state="on" borderStyle="borderAndBezel" imageScaling="proportionallyDown" inset="2" selectedItem="6203" id="6125">
                             <behavior key="behavior" lightByBackground="YES" lightByGray="YES"/>
                             <font key="font" metaFont="menu"/>
                             <menu key="menu" title="OtherViews" id="6126">
                                 <items>
-                                    <menuItem title="Right Button" tag="1" id="6164">
+                                    <menuItem title="右ボタン" tag="1" id="6164">
                                         <modifierMask key="keyEquivalentModifierMask"/>
                                     </menuItem>
-                                    <menuItem title="Middle Button" tag="2" id="6268">
+                                    <menuItem title="中ボタン" tag="2" id="6268">
                                         <modifierMask key="keyEquivalentModifierMask"/>
                                     </menuItem>
-                                    <menuItem title="Button #4" tag="3" id="6165">
+                                    <menuItem title="ボタン#4" tag="3" id="6165">
                                         <modifierMask key="keyEquivalentModifierMask"/>
                                     </menuItem>
-                                    <menuItem title="Button #5" tag="4" id="6166">
+                                    <menuItem title="ボタン#5" tag="4" id="6166">
                                         <modifierMask key="keyEquivalentModifierMask"/>
                                     </menuItem>
-                                    <menuItem title="Button #6" tag="5" id="6167">
+                                    <menuItem title="ボタン#6" tag="5" id="6167">
                                         <modifierMask key="keyEquivalentModifierMask"/>
                                     </menuItem>
-                                    <menuItem title="Button #7" tag="6" id="6168">
+                                    <menuItem title="ボタン#7" tag="6" id="6168">
                                         <modifierMask key="keyEquivalentModifierMask"/>
                                     </menuItem>
-                                    <menuItem isSeparatorItem="YES" id="6203"/>
-                                    <menuItem title="Three-finger Tap" tag="10" id="6202">
+                                    <menuItem isSeparatorItem="YES" state="on" id="6203"/>
+                                    <menuItem title="3つ指でタップ" tag="10" id="6202">
                                         <modifierMask key="keyEquivalentModifierMask"/>
                                     </menuItem>
-                                    <menuItem title="Three-finger Swipe Right" tag="11" id="6204">
+                                    <menuItem title="3つ指で右スワイプ" tag="11" id="6204">
                                         <modifierMask key="keyEquivalentModifierMask"/>
                                     </menuItem>
-                                    <menuItem title="Three-finger Swipe Left" tag="12" id="6205">
+                                    <menuItem title="3つ指で左スワイプ" tag="12" id="6205">
                                         <modifierMask key="keyEquivalentModifierMask"/>
                                     </menuItem>
-                                    <menuItem title="Three-finger Swipe Up" tag="13" id="6258">
+                                    <menuItem title="3つ指で上スワイプ" tag="13" id="6258">
                                         <modifierMask key="keyEquivalentModifierMask"/>
                                     </menuItem>
-                                    <menuItem title="Three-finger Swipe Down" tag="14" id="6259">
+                                    <menuItem title="3つ指で下スワイプ" tag="14" id="6259">
                                         <modifierMask key="keyEquivalentModifierMask"/>
                                     </menuItem>
                                     <menuItem isSeparatorItem="YES" id="Fth-LF-yC0"/>
@@ -719,7 +718,6 @@ Gw
                                     <tableColumns>
                                         <tableColumn width="348" minWidth="40" maxWidth="1000" id="5785">
                                             <tableHeaderCell key="headerCell" lineBreakMode="truncatingTail" borderStyle="border" alignment="left" title="正規表現">
-                                                <font key="font" metaFont="smallSystem"/>
                                                 <color key="textColor" name="headerTextColor" catalog="System" colorSpace="catalog"/>
                                                 <color key="backgroundColor" white="0.33333298560000002" alpha="1" colorSpace="calibratedWhite"/>
                                             </tableHeaderCell>
@@ -732,7 +730,6 @@ Gw
                                         </tableColumn>
                                         <tableColumn width="160.6953125" minWidth="40" maxWidth="1000" id="5786">
                                             <tableHeaderCell key="headerCell" lineBreakMode="truncatingTail" borderStyle="border" alignment="left" title="アクション">
-                                                <font key="font" metaFont="smallSystem"/>
                                                 <color key="textColor" name="headerTextColor" catalog="System" colorSpace="catalog"/>
                                                 <color key="backgroundColor" white="0.33333298560000002" alpha="1" colorSpace="calibratedWhite"/>
                                             </tableHeaderCell>
@@ -745,7 +742,6 @@ Gw
                                         </tableColumn>
                                         <tableColumn width="193.59765625" minWidth="40" maxWidth="1000" id="5816">
                                             <tableHeaderCell key="headerCell" lineBreakMode="truncatingTail" borderStyle="border" alignment="left" title="パラメータ">
-                                                <font key="font" metaFont="smallSystem"/>
                                                 <color key="textColor" name="headerTextColor" catalog="System" colorSpace="catalog"/>
                                                 <color key="backgroundColor" white="0.33333298560000002" alpha="1" colorSpace="calibratedWhite"/>
                                             </tableHeaderCell>
@@ -758,7 +754,6 @@ Gw
                                         </tableColumn>
                                         <tableColumn width="10" minWidth="10" maxWidth="3.4028234663852886e+38" id="4jW-vz-58j">
                                             <tableHeaderCell key="headerCell" lineBreakMode="truncatingTail" borderStyle="border" alignment="left" title="Instant">
-                                                <font key="font" metaFont="smallSystem"/>
                                                 <color key="textColor" name="headerTextColor" catalog="System" colorSpace="catalog"/>
                                                 <color key="backgroundColor" name="headerColor" catalog="System" colorSpace="catalog"/>
                                             </tableHeaderCell>
@@ -892,7 +887,6 @@ DQ
                                     <tableColumns>
                                         <tableColumn width="195" minWidth="10" maxWidth="3.4028234663852886e+38" id="5901">
                                             <tableHeaderCell key="headerCell" lineBreakMode="truncatingTail" borderStyle="border" alignment="left" title="Notes">
-                                                <font key="font" metaFont="smallSystem"/>
                                                 <color key="textColor" name="headerTextColor" catalog="System" colorSpace="catalog"/>
                                                 <color key="backgroundColor" name="headerColor" catalog="System" colorSpace="catalog"/>
                                             </tableHeaderCell>
@@ -905,7 +899,6 @@ DQ
                                         </tableColumn>
                                         <tableColumn width="465" minWidth="40" maxWidth="1000" id="5850">
                                             <tableHeaderCell key="headerCell" lineBreakMode="truncatingTail" borderStyle="border" alignment="left" title="正規表現">
-                                                <font key="font" metaFont="smallSystem"/>
                                                 <color key="textColor" name="headerTextColor" catalog="System" colorSpace="catalog"/>
                                                 <color key="backgroundColor" white="0.33333298560000002" alpha="1" colorSpace="calibratedWhite"/>
                                             </tableHeaderCell>
@@ -918,7 +911,6 @@ DQ
                                         </tableColumn>
                                         <tableColumn width="56" minWidth="40" maxWidth="1000" id="5848">
                                             <tableHeaderCell key="headerCell" lineBreakMode="truncatingTail" borderStyle="border" alignment="left" title="精度">
-                                                <font key="font" metaFont="smallSystem"/>
                                                 <color key="textColor" name="headerTextColor" catalog="System" colorSpace="catalog"/>
                                                 <color key="backgroundColor" white="0.33333298560000002" alpha="1" colorSpace="calibratedWhite"/>
                                             </tableHeaderCell>
@@ -1110,7 +1102,6 @@ DQ
                                     <tableColumns>
                                         <tableColumn width="164.40625" minWidth="40" maxWidth="1000" id="6285">
                                             <tableHeaderCell key="headerCell" lineBreakMode="truncatingTail" borderStyle="border" alignment="left" title="タイトル">
-                                                <font key="font" metaFont="smallSystem"/>
                                                 <color key="textColor" name="headerTextColor" catalog="System" colorSpace="catalog"/>
                                                 <color key="backgroundColor" white="0.33333298560000002" alpha="1" colorSpace="calibratedWhite"/>
                                             </tableHeaderCell>
@@ -1123,7 +1114,6 @@ DQ
                                         </tableColumn>
                                         <tableColumn width="167.1953125" minWidth="40" maxWidth="1000" id="6286">
                                             <tableHeaderCell key="headerCell" lineBreakMode="truncatingTail" borderStyle="border" alignment="left" title="アクション">
-                                                <font key="font" metaFont="smallSystem"/>
                                                 <color key="textColor" name="headerTextColor" catalog="System" colorSpace="catalog"/>
                                                 <color key="backgroundColor" white="0.33333298560000002" alpha="1" colorSpace="calibratedWhite"/>
                                             </tableHeaderCell>
@@ -1144,7 +1134,6 @@ DQ
                                         </tableColumn>
                                         <tableColumn width="154.48828125" minWidth="10" maxWidth="3.4028234663852886e+38" id="6289">
                                             <tableHeaderCell key="headerCell" lineBreakMode="truncatingTail" borderStyle="border" alignment="left" title="パラメータ">
-                                                <font key="font" metaFont="smallSystem"/>
                                                 <color key="textColor" name="headerTextColor" catalog="System" colorSpace="catalog"/>
                                                 <color key="backgroundColor" name="headerColor" catalog="System" colorSpace="catalog"/>
                                             </tableHeaderCell>
@@ -4208,10 +4197,10 @@ DQ
                     </connections>
                 </button>
                 <button fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="K0H-ZR-UrB">
-                    <rect key="frame" x="215" y="70" width="349" height="18"/>
+                    <rect key="frame" x="215" y="70" width="385" height="18"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                    <string key="toolTip">Some programs (such as vim and emacs) want to put the numeric keypad in "application" mode. Turn this off if you always want it to act as a numeric keypad.</string>
-                    <buttonCell key="cell" type="check" title="制御シーケンスを modifyOtherKeys モードで有効" bezelStyle="regularSquare" imagePosition="left" alignment="left" state="on" inset="2" id="Jc5-qq-jV3">
+                    <string key="toolTip">Some programs (such as vim and emacs) want to put the numeric keypad in "application" mode. Turn this off if you always want it to act as a numeric keypad. NOTE: This setting affects the older xterm control sequence (CSI &gt; Pp m), not the Kitty control sequence related to CSI &gt; flags u.</string>
+                    <buttonCell key="cell" type="check" title="xterm control sequence can enable modifyOtherKeys mode" bezelStyle="regularSquare" imagePosition="left" alignment="left" state="on" inset="2" id="Jc5-qq-jV3">
                         <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                         <font key="font" metaFont="system"/>
                     </buttonCell>
@@ -4309,7 +4298,7 @@ DQ
                     </connections>
                 </button>
                 <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="fCb-eQ-b2u">
-                    <rect key="frame" x="119" y="115" width="92" height="16"/>
+                    <rect key="frame" x="73" y="137" width="92" height="16"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <textFieldCell key="cell" lineBreakMode="clipping" alignment="right" title="キー報告モード:" id="qAg-7O-p9K">
                         <font key="font" usesAppearanceFont="YES"/>
@@ -4524,7 +4513,7 @@ DQ
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <clipView key="contentView" ambiguous="YES" id="FMp-vf-IvG">
                         <rect key="frame" x="1" y="1" width="519" height="76"/>
-                        <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                        <autoresizingMask key="autoresizingMask"/>
                         <subviews>
                             <tableView verticalHuggingPriority="750" ambiguous="YES" allowsExpansionToolTips="YES" columnAutoresizingStyle="lastColumnOnly" alternatingRowBackgroundColors="YES" columnSelection="YES" multipleSelection="NO" autosaveColumns="NO" id="69M-P0-mzb">
                                 <rect key="frame" x="0.0" y="0.0" width="519" height="76"/>
@@ -5367,7 +5356,7 @@ DQ
                     <font key="font" metaFont="system"/>
                     <tabViewItems>
                         <tabViewItem label="一般" identifier="" id="wt3-Hu-DaR">
-                            <view key="view" ambiguous="YES" id="7fG-Sy-1hE">
+                            <view key="view" id="7fG-Sy-1hE">
                                 <rect key="frame" x="10" y="33" width="590" height="214"/>
                                 <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                 <subviews>
@@ -6597,11 +6586,11 @@ DQ
                                             <scrollView fixedFrame="YES" autohidesScrollers="YES" horizontalLineScroll="19" horizontalPageScroll="10" verticalLineScroll="19" verticalPageScroll="10" usesPredominantAxisScrolling="NO" translatesAutoresizingMaskIntoConstraints="NO" id="6090">
                                                 <rect key="frame" x="20" y="49" width="851" height="285"/>
                                                 <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                                                <clipView key="contentView" ambiguous="YES" id="2zv-hI-Vxj">
+                                                <clipView key="contentView" id="2zv-hI-Vxj">
                                                     <rect key="frame" x="1" y="1" width="849" height="283"/>
                                                     <autoresizingMask key="autoresizingMask"/>
                                                     <subviews>
-                                                        <tableView verticalHuggingPriority="750" ambiguous="YES" allowsExpansionToolTips="YES" columnAutoresizingStyle="none" columnReordering="NO" columnResizing="NO" multipleSelection="NO" autosaveColumns="NO" id="6091">
+                                                        <tableView verticalHuggingPriority="750" allowsExpansionToolTips="YES" columnAutoresizingStyle="none" columnReordering="NO" columnResizing="NO" multipleSelection="NO" autosaveColumns="NO" id="6091">
                                                             <rect key="frame" x="0.0" y="0.0" width="849" height="283"/>
                                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                                             <size key="intercellSpacing" width="3" height="2"/>

@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <document type="com.apple.InterfaceBuilder3.Cocoa.XIB" version="3.0" toolsVersion="15705" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES">
     <dependencies>
-        <deployment identifier="macosx"/>
         <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="15705"/>
     </dependencies>
     <objects>
@@ -1247,7 +1246,7 @@ DQ
                                     <action selector="arrangeSplitPanesEvenly:" target="201" id="eE4-2D-fTq"/>
                                 </connections>
                             </menuItem>
-                            <menuItem title="セッションをウィンドウへ移動" identifier="Arrange Split Panes Evenly" id="Hlz-4M-IYw">
+                            <menuItem title="セッションをウィンドウへ移動" identifier="Move Session to Window" id="Hlz-4M-IYw">
                                 <modifierMask key="keyEquivalentModifierMask"/>
                                 <connections>
                                     <action selector="moveSessionToWindow:" target="-1" id="wG5-71-6aQ"/>

@@ -1796,6 +1796,8 @@ ITERM_WEAKLY_REFERENCEABLE
 
     [_textview setDataSource:_screen];
     [_textview setDelegate:self];
+    // useTransparency may have just changed.
+    [self invalidateBlend];
     [_view.scrollview setDocumentView:_wrapper];
     [_wrapper release];
     [_view.scrollview setDocumentCursor:[iTermMouseCursor mouseCursorOfType:iTermMouseCursorTypeIBeam]];
@@ -3194,7 +3196,7 @@ ITERM_WEAKLY_REFERENCEABLE
         [iTermProfilePreferences boolForKey:KEY_SEND_SESSION_ENDED_ALERT inProfile:self.profile]) {
         [[iTermNotificationController sharedInstance] notify:@"Session Ended"
                                              withDescription:[NSString stringWithFormat:@"Session \"%@\" in tab #%d just terminated.",
-                                                              [self name],
+                                                              [[self name] removingHTMLFromTabTitleIfNeeded],
                                                               [_delegate tabNumber]]];
     }
 
@@ -3637,7 +3639,7 @@ ITERM_WEAKLY_REFERENCEABLE
                 [iTermProfilePreferences boolForKey:KEY_SEND_BELL_ALERT inProfile:self.profile]) {
                 [[iTermNotificationController sharedInstance] notify:@"Bell"
                                                  withDescription:[NSString stringWithFormat:@"Session %@ #%d just rang a bell!",
-                                                                  [self name],
+                                                                  [[self name] removingHTMLFromTabTitleIfNeeded],
                                                                   [_delegate tabNumber]]
                                                      windowIndex:[self screenWindowIndex]
                                                         tabIndex:[self screenTabIndex]
@@ -4242,6 +4244,8 @@ ITERM_WEAKLY_REFERENCEABLE
     if (needsTermID) {
         [self setTermIDIfPossible];
     }
+    // useTransparency may have just changed.
+    [self invalidateBlend];
 }
 
 - (NSString *)name {
@@ -7580,7 +7584,8 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
 - (void)applyAction:(iTermAction *)action {
     [self.textview.window makeFirstResponder:self.textview];
     [self performKeyBindingAction:[iTermKeyBindingAction withAction:action.action
-                                                          parameter:action.parameter]
+                                                          parameter:action.parameter
+                                           useCompatibilityEscaping:action.useCompatibilityEscaping]
                             event:nil];
 }
 
@@ -7771,13 +7776,19 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
             if (_exited || isTmuxGateway) {
                 return;
             }
-            [self sendText:action.parameter];
+            [self sendText:action.parameter
+  useCompatibilityEscaping:action.useCompatibilityEscaping
+     compatibilityEscaping:iTermSendTextEscapingCompatibility
+         preferredEscaping:iTermSendTextEscapingCommon];
             break;
         case KEY_ACTION_VIM_TEXT:
             if (_exited || isTmuxGateway) {
                 return;
             }
-            [self sendText:[action.parameter stringByExpandingVimSpecialCharacters]];
+            [self sendText:action.parameter
+  useCompatibilityEscaping:action.useCompatibilityEscaping
+                    compatibilityEscaping:iTermSendTextEscapingVimAndCompatibility
+                        preferredEscaping:iTermSendTextEscapingVim];
             break;
         case KEY_ACTION_SEND_SNIPPET:
             if (_exited || isTmuxGateway) {
@@ -7786,7 +7797,10 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
                 DLog(@"Look up snippet with param %@", action.parameter);
                 iTermSnippet *snippet = [[iTermSnippetsModel sharedInstance] snippetWithActionKey:action.parameter];
                 if (snippet) {
-                    [self sendText:snippet.value];
+                    [self sendText:snippet.value
+          useCompatibilityEscaping:snippet.useCompatibilityEscaping
+             compatibilityEscaping:iTermSendTextEscapingCompatibility
+                 preferredEscaping:iTermSendTextEscapingCommon];
                 }
             }
             break;
@@ -9551,22 +9565,52 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
 }
 
 - (void)sendText:(NSString *)text
-{
+useCompatibilityEscaping:(BOOL)useCompatibilityEscaping
+compatibilityEscaping:(iTermSendTextEscaping)compatibilityEscaping
+preferredEscaping:(iTermSendTextEscaping)preferredEscaping {
+    DLog(@"sendText:%@ useCompatibilityEscaping:%@ compatibilityEscaping:%@ preferredEscaping:%@",
+         text,
+         @(useCompatibilityEscaping),
+         @(compatibilityEscaping),
+         @(preferredEscaping));
     if (_exited) {
+        DLog(@"Already exited");
         return;
     }
     if (![text isKindOfClass:[NSString class]]) {
-        DLog(@"text not a string: %@", text);
+        DLog(@"Not a string: %@", text);
+    }
+    if ([text length] == 0) {
         return;
     }
-    if ([text length] > 0) {
-        NSString *temp = text;
-        temp = [temp stringByReplacingEscapedChar:'n' withString:@"\n"];
-        temp = [temp stringByReplacingEscapedChar:'e' withString:@"\e"];
-        temp = [temp stringByReplacingEscapedChar:'a' withString:@"\a"];
-        temp = [temp stringByReplacingEscapedChar:'t' withString:@"\t"];
-        [self writeTask:temp];
+    [self writeTask:[self escapedText:text mode:useCompatibilityEscaping ? compatibilityEscaping : preferredEscaping]];
+}
+
+- (NSString *)escapedText:(NSString *)text mode:(iTermSendTextEscaping)escaping {
+    NSString *temp = text;
+    switch (escaping) {
+        case iTermSendTextEscapingNone:
+            return text;
+        case iTermSendTextEscapingCommon:
+            return [temp stringByReplacingCommonlyEscapedCharactersWithControls];
+        case iTermSendTextEscapingCompatibility:
+            temp = [temp stringByReplacingEscapedChar:'n' withString:@"\n"];
+            temp = [temp stringByReplacingEscapedChar:'e' withString:@"\e"];
+            temp = [temp stringByReplacingEscapedChar:'a' withString:@"\a"];
+            temp = [temp stringByReplacingEscapedChar:'t' withString:@"\t"];
+            return temp;
+        case iTermSendTextEscapingVimAndCompatibility:
+            temp = [temp stringByExpandingVimSpecialCharacters];
+            temp = [temp stringByReplacingEscapedChar:'n' withString:@"\n"];
+            temp = [temp stringByReplacingEscapedChar:'e' withString:@"\e"];
+            temp = [temp stringByReplacingEscapedChar:'a' withString:@"\a"];
+            temp = [temp stringByReplacingEscapedChar:'t' withString:@"\t"];
+            return temp;
+        case iTermSendTextEscapingVim:
+            return [temp stringByExpandingVimSpecialCharacters];
     }
+    assert(NO);
+    return @"";
 }
 
 - (void)sendTextSlowly:(NSString *)text {
@@ -10248,7 +10292,7 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
         if ([action isEqualToString:kMarkAlertActionPostNotification]) {
             [[iTermNotificationController sharedInstance] notify:@"Mark Set"
                                                  withDescription:[NSString stringWithFormat:@"Session %@ #%d had a mark set.",
-                                                                  [self name],
+                                                                  [[self name] removingHTMLFromTabTitleIfNeeded],
                                                                   [_delegate tabNumber]]
                                                      windowIndex:[self screenWindowIndex]
                                                         tabIndex:[self screenTabIndex]

@@ -2086,7 +2086,7 @@ ITERM_WEAKLY_REFERENCEABLE
       okToClose = [self confirmCloseForSessions:[NSArray arrayWithObject:aSession]
                                      identifier:@"This session"
                                     genericName:[NSString stringWithFormat:@"session \"%@\"",
-                                                    [aSession name]]];
+                                                    [[aSession name] removingHTMLFromTabTitleIfNeeded]]];
     }
     if (okToClose) {
         [self closeSessionWithoutConfirmation:aSession];
@@ -4493,12 +4493,13 @@ ITERM_WEAKLY_REFERENCEABLE
     } else {
         DLog(@"** Re-entrant call to windowDidChangeScreen:! Not canonicalizing. **");
     }
-    if (@available(macOS 10.11, *)) {
-        for (PTYSession *session in self.allSessions) {
-            [session updateMetalDriver];
-            [session.textview setNeedsDisplay:YES];
-            [session didChangeScreen:self.window.backingScaleFactor];
-        }
+    for (PTYSession *session in self.allSessions) {
+        [session updateMetalDriver];
+        [session.textview setNeedsDisplay:YES];
+        [session didChangeScreen:self.window.backingScaleFactor];
+    }
+    for (PTYTab *tab in self.tabs) {
+        [tab bounceMetal];
     }
     DLog(@"Returning from windowDidChangeScreen:.");
 }
@@ -5949,18 +5950,11 @@ ITERM_WEAKLY_REFERENCEABLE
 
     // Grabs whole tabview image.
     NSImage *viewImage = [[[NSImage alloc] initWithSize:contentFrame.size] autorelease];
-    NSImage *tabViewImage = [[[NSImage alloc] init] autorelease];
-
-    NSBitmapImageRep *tabviewRep;
 
     PTYTab *tab = tabViewItem.identifier;
     [tab bounceMetal];
 
-    tabviewRep = [tabRootView bitmapImageRepForCachingDisplayInRect:viewRect];
-    [tabRootView cacheDisplayInRect:viewRect toBitmapImageRep:tabviewRep];
-
-    [tabViewImage addRepresentation:tabviewRep];
-
+    NSImage *tabViewImage = [tabRootView snapshot];
 
     [viewImage lockFocus];
     switch ([iTermPreferences intForKey:kPreferenceKeyTabPosition]) {
@@ -8607,7 +8601,7 @@ static CGFloat iTermDimmingAmount(PSMTabBarControl *tabView) {
         // The scrollbar has already been added so tabs' current sizes are wrong.
         // Use ideal sizes instead, to fit to the session dimensions instead of
         // the existing pixel dimensions of the tabs.
-        [self fitWindowToTabsExcludingTmuxTabs:NO preservingHeight:YES];
+        [self fitWindowToIdealizedTabsPreservingHeight:YES];
         [self fitTabsToWindow];
         for (TmuxController *controller in [self uniqueTmuxControllers]) {
             [controller fitLayoutToWindows];

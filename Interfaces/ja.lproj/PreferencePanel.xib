@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <document type="com.apple.InterfaceBuilder3.Cocoa.XIB" version="3.0" toolsVersion="15705" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES">
     <dependencies>
+        <deployment identifier="macosx"/>
         <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="15705"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
@@ -693,7 +694,7 @@ Gw
                     <scrollView fixedFrame="YES" autohidesScrollers="YES" horizontalLineScroll="19" horizontalPageScroll="10" verticalLineScroll="19" verticalPageScroll="10" usesPredominantAxisScrolling="NO" translatesAutoresizingMaskIntoConstraints="NO" id="5780">
                         <rect key="frame" x="20" y="52" width="764" height="265"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
-                        <clipView key="contentView" id="Oi5-ZC-SxR">
+                        <clipView key="contentView" ambiguous="YES" id="Oi5-ZC-SxR">
                             <rect key="frame" x="1" y="0.0" width="762" height="264"/>
                             <autoresizingMask key="autoresizingMask"/>
                             <subviews>
@@ -4750,7 +4751,7 @@ DQ
                                             <textField verticalHuggingPriority="750" fixedFrame="YES" allowsCharacterPickerTouchBarItem="YES" translatesAutoresizingMaskIntoConstraints="NO" id="5054">
                                                 <rect key="frame" x="197" y="88" width="124" height="17"/>
                                                 <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                                                <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" sendsActionOnEndEditing="YES" title="MB/ミッション 確保" id="5060">
+                                                <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" sendsActionOnEndEditing="YES" title="MB/セッション 確保" id="5060">
                                                     <font key="font" metaFont="system"/>
                                                     <color key="textColor" name="controlTextColor" catalog="System" colorSpace="catalog"/>
                                                     <color key="backgroundColor" name="controlColor" catalog="System" colorSpace="catalog"/>
@@ -5062,7 +5063,7 @@ DQ
                                                 <rect key="frame" x="18" y="40" width="279" height="18"/>
                                                 <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                                                 <string key="toolTip">Native full screen windows animate into their own desktop. Non-native full screen windows quickly expand to fill the window's screen.</string>
-                                                <buttonCell key="cell" type="check" title="Native full screen windows" bezelStyle="regularSquare" imagePosition="left" alignment="left" inset="2" id="5320">
+                                                <buttonCell key="cell" type="check" title="ネイティブなフルスクリーンウィンドウ" bezelStyle="regularSquare" imagePosition="left" alignment="left" inset="2" id="5320">
                                                     <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                                                     <font key="font" metaFont="system"/>
                                                 </buttonCell>
@@ -5260,8 +5261,8 @@ DQ
                                                     <font key="font" metaFont="menu"/>
                                                     <menu key="menu" title="OtherViews" id="6339">
                                                         <items>
-                                                            <menuItem title="Native windows" id="6340"/>
-                                                            <menuItem title="Native tabs in a new window" tag="1" id="6341"/>
+                                                            <menuItem title="ネイティブウィンドウ" id="6340"/>
+                                                            <menuItem title="新ウィンドウのネイティブタブ" tag="1" id="6341"/>
                                                             <menuItem title="割り当てるウィンドウのタブ" tag="2" id="rh8-sm-6ap"/>
                                                         </items>
                                                     </menu>
@@ -5344,7 +5345,7 @@ DQ
                     <font key="font" metaFont="system"/>
                     <tabViewItems>
                         <tabViewItem label="一般" identifier="" id="wt3-Hu-DaR">
-                            <view key="view" id="7fG-Sy-1hE">
+                            <view key="view" ambiguous="YES" id="7fG-Sy-1hE">
                                 <rect key="frame" x="10" y="33" width="590" height="214"/>
                                 <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                 <subviews>
@@ -6574,11 +6575,11 @@ DQ
                                             <scrollView fixedFrame="YES" autohidesScrollers="YES" horizontalLineScroll="19" horizontalPageScroll="10" verticalLineScroll="19" verticalPageScroll="10" usesPredominantAxisScrolling="NO" translatesAutoresizingMaskIntoConstraints="NO" id="6090">
                                                 <rect key="frame" x="20" y="49" width="851" height="285"/>
                                                 <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                                                <clipView key="contentView" id="2zv-hI-Vxj">
+                                                <clipView key="contentView" ambiguous="YES" id="2zv-hI-Vxj">
                                                     <rect key="frame" x="1" y="1" width="849" height="283"/>
                                                     <autoresizingMask key="autoresizingMask"/>
                                                     <subviews>
-                                                        <tableView verticalHuggingPriority="750" allowsExpansionToolTips="YES" columnAutoresizingStyle="none" columnReordering="NO" columnResizing="NO" multipleSelection="NO" autosaveColumns="NO" id="6091">
+                                                        <tableView verticalHuggingPriority="750" ambiguous="YES" allowsExpansionToolTips="YES" columnAutoresizingStyle="none" columnReordering="NO" columnResizing="NO" multipleSelection="NO" autosaveColumns="NO" id="6091">
                                                             <rect key="frame" x="0.0" y="0.0" width="849" height="283"/>
                                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                                             <size key="intercellSpacing" width="3" height="2"/>

@@ -411,8 +411,7 @@ static int fromhex(unichar c) {
     return c - 'A' + 10;
 }
 
-- (NSData *)dataFromHexValues
-{
+- (NSData *)dataFromHexValues {
     NSMutableData *data = [NSMutableData data];
     int length = self.length;  // Convert to signed so length-1 is safe below.
     for (int i = 0; i < length - 1; i+=2) {
@@ -422,6 +421,22 @@ static int fromhex(unichar c) {
         [data appendBytes:&b length:1];
     }
     return data;
+}
+
+- (NSData *)dataFromWhitespaceDelimitedHexValues {
+    if (![self isMatchedByRegex:@"^[0-9A-Fa-f\\s]+$"]) {
+        return nil;
+    }
+    NSArray<NSString *> *parts = [self componentsSeparatedByCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    NSMutableData *result = [NSMutableData data];
+    for (NSString *string in parts) {
+        if (string.length % 2 != 0) {
+            return nil;
+        }
+        NSData *subdata = [string dataFromHexValues];
+        [result appendData:subdata];
+    }
+    return result;
 }
 
 - (NSString *)stringByReplacingEscapedHexValuesWithChars
@@ -1693,6 +1708,26 @@ static TECObjectRef CreateTECConverterForUTF8Variants(TextEncodingVariant varian
     NSCharacterSet *nonNumericCharacterSet = [[NSCharacterSet decimalDigitCharacterSet] invertedSet];
     NSRange range = [self rangeOfCharacterFromSet:nonNumericCharacterSet];
     return range.location == NSNotFound;
+}
+
+- (BOOL)isNonnegativeFractionalNumber {
+    NSArray<NSString *> *parts = [self componentsSeparatedByString:@"."];
+    if (parts.count == 0 || parts.count > 2) {
+        return NO;
+    }
+    if (parts.count == 1) {
+        // "123"
+        return [parts.firstObject isNumeric];
+    }
+    if (parts.count == 2) {
+        if (parts[0].length == 0) {
+            // ".1"
+            return [parts[1] isNumeric];
+        }
+        // "1.2"
+        return [parts[0] isNumeric] && [parts[1] isNumeric];
+    }
+    return NO;
 }
 
 - (BOOL)startsWithDigit {

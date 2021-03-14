@@ -208,6 +208,15 @@
                                     <action selector="closeCurrentTab:" target="-1" id="1186"/>
                                 </connections>
                             </menuItem>
+                            <menuItem isSeparatorItem="YES" id="9vB-1n-LfH">
+                                <modifierMask key="keyEquivalentModifierMask" command="YES"/>
+                            </menuItem>
+                            <menuItem title="Undo Close" identifier="Undo Close" id="OIr-XE-oT1">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="undoCloseSession:" target="201" id="df0-of-sxF"/>
+                                </connections>
+                            </menuItem>
                             <menuItem isSeparatorItem="YES" id="224">
                                 <modifierMask key="keyEquivalentModifierMask" command="YES"/>
                             </menuItem>
@@ -664,6 +673,17 @@ DQ
                                     <action selector="clearScrollbackBuffer:" target="-1" id="756"/>
                                 </connections>
                             </menuItem>
+                            <menuItem title="Clear to Start of Selection" keyEquivalent="l" identifier="Clear to Last Mark" id="CYE-nw-eWv">
+                                <connections>
+                                    <action selector="clearToStartOfSelection:" target="-1" id="Hme-Uy-xl3"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Clear to Last Mark" keyEquivalent="l" identifier="Clear to Last Mark" id="Xsz-J9-7ar">
+                                <modifierMask key="keyEquivalentModifierMask" option="YES" command="YES"/>
+                                <connections>
+                                    <action selector="clearToLastMark:" target="-1" id="5rW-GL-dJl"/>
+                                </connections>
+                            </menuItem>
                         </items>
                     </menu>
                 </menuItem>
@@ -868,11 +888,37 @@ DQ
                             <menuItem isSeparatorItem="YES" id="908">
                                 <modifierMask key="keyEquivalentModifierMask" command="YES"/>
                             </menuItem>
-                            <menuItem title="Add Trigger…" identifier="Add Trigger" id="xcL-dd-3m4">
+                            <menuItem title="Triggers" id="DB9-tf-hPg">
                                 <modifierMask key="keyEquivalentModifierMask"/>
-                                <connections>
-                                    <action selector="addTrigger:" target="-1" id="iVb-tZ-MfQ"/>
-                                </connections>
+                                <menu key="submenu" title="Triggers" id="Ixq-yO-JO6">
+                                    <items>
+                                        <menuItem title="Add Trigger…" identifier="Add Trigger" id="xcL-dd-3m4">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="addTrigger:" target="-1" id="iVb-tZ-MfQ"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Edit Triggers" identifier="Edit Triggers" id="rRB-v6-pdW">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="editTriggers:" target="-1" id="lJ0-nl-NnJ"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem isSeparatorItem="YES" id="74b-21-sZF"/>
+                                        <menuItem title="Enable All" identifier="Triggers.Enable All" id="mcR-jM-n5n">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="enableAllTriggers:" target="-1" id="hwR-hE-di0"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Disable All" identifier="Triggers.Disable All" id="B3C-jO-rIU">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="disableAllTriggers:" target="-1" id="CnC-kp-auE"/>
+                                            </connections>
+                                        </menuItem>
+                                    </items>
+                                </menu>
                             </menuItem>
                             <menuItem isSeparatorItem="YES" id="2Gf-zh-GWz">
                                 <modifierMask key="keyEquivalentModifierMask" command="YES"/>
@@ -1489,6 +1535,7 @@ DQ
                 <outlet property="_splitHorizontallyWithCurrentProfile" destination="1201" id="FLl-hN-paX"/>
                 <outlet property="_splitVertically" destination="1291" id="HKF-80-dqT"/>
                 <outlet property="_splitVerticallyWithCurrentProfile" destination="1200" id="TXu-qW-aIJ"/>
+                <outlet property="_triggers" destination="DB9-tf-hPg" id="gAA-pF-wPx"/>
                 <outlet property="bookmarkMenu" destination="592" id="874"/>
                 <outlet property="closeTab" destination="635" id="795"/>
                 <outlet property="closeWindow" destination="598" id="796"/>

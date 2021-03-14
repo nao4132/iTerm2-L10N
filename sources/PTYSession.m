@@ -154,6 +154,7 @@
 #import "SessionView.h"
 #import "TaskNotifier.h"
 #import "TerminalFile.h"
+#import "TriggerController.h"
 #import "TmuxController.h"
 #import "TmuxControllerRegistry.h"
 #import "TmuxGateway.h"
@@ -325,7 +326,8 @@ static const NSUInteger kMaxHosts = 100;
     iTermTermkeyKeyMapperDelegate,
     iTermTmuxControllerSession,
     iTermUpdateCadenceControllerDelegate,
-    iTermWorkingDirectoryPollerDelegate>
+    iTermWorkingDirectoryPollerDelegate,
+    TriggerDelegate>
 @property(nonatomic, retain) Interval *currentMarkOrNotePosition;
 @property(nonatomic, retain) TerminalFileDownload *download;
 @property(nonatomic, retain) TerminalFileUpload *upload;
@@ -602,6 +604,7 @@ static const NSUInteger kMaxHosts = 100;
     VT100GridSize _savedGridSize;
 
     iTermActivityInfo _activityInfo;
+    TriggerController *_triggerWindowController;
 }
 
 @synthesize isDivorced = _divorced;
@@ -965,6 +968,7 @@ ITERM_WEAKLY_REFERENCEABLE
     [_composerManager release];
     [_tmuxClientWritePipe release];
     [_arrangementGUID release];
+    [_triggerWindowController release];
 
     [super dealloc];
 }
@@ -2311,6 +2315,7 @@ ITERM_WEAKLY_REFERENCEABLE
                            customShell:customShell
                               gridSize:_screen.size
                               viewSize:_screen.viewSize
+                      maybeScaleFactor:_textview.window.backingScaleFactor
                                 isUTF8:isUTF8
                             completion:^{
                     [self sendInitialText];
@@ -3077,6 +3082,47 @@ ITERM_WEAKLY_REFERENCEABLE
         iTermStringLine *stringLine = [iTermStringLine stringLineWithString:s];
         [self checkTriggersOnPartialLine:YES stringLine:stringLine lineNumber:_triggerLineNumber];
     }
+}
+
+- (void)setAllTriggersEnabled:(BOOL)enabled {
+    NSArray<NSDictionary *> *triggers = self.profile[KEY_TRIGGERS];
+    triggers = [triggers mapWithBlock:^id(NSDictionary *dict) {
+        return [dict dictionaryBySettingObject:@(!enabled) forKey:kTriggerDisabledKey];
+    }];
+    if (!triggers) {
+        return;
+    }
+    [self setSessionSpecificProfileValues:@{ KEY_TRIGGERS: triggers }];
+}
+
+- (BOOL)anyTriggerCanBeEnabled {
+    NSArray<NSDictionary *> *triggers = self.profile[KEY_TRIGGERS];
+    return [triggers anyWithBlock:^BOOL(NSDictionary *dict) {
+        return [dict[kTriggerDisabledKey] boolValue];
+    }];
+}
+
+- (BOOL)anyTriggerCanBeDisabled {
+    NSArray<NSDictionary *> *triggers = self.profile[KEY_TRIGGERS];
+    return [triggers anyWithBlock:^BOOL(NSDictionary *dict) {
+        return ![dict[kTriggerDisabledKey] boolValue];
+    }];
+}
+
+- (NSArray<iTermTuple<NSString *, NSNumber *> *> *)triggerTuples {
+    NSArray<NSDictionary *> *triggers = self.profile[KEY_TRIGGERS];
+    return [triggers mapWithBlock:^id(NSDictionary *dict) {
+        return [iTermTuple tupleWithObject:dict[kTriggerRegexKey]
+                                 andObject:@(![dict[kTriggerDisabledKey] boolValue])];
+    }];
+}
+
+- (void)toggleTriggerEnabledAtIndex:(NSInteger)index {
+    NSMutableArray<NSDictionary *> *mutableTriggers = [[self.profile[KEY_TRIGGERS] mutableCopy] autorelease];
+    NSDictionary *triggerDict = mutableTriggers[index];
+    const BOOL disabled = [triggerDict[kTriggerDisabledKey] boolValue];
+    mutableTriggers[index] = [triggerDict dictionaryBySettingObject:@(!disabled) forKey:kTriggerDisabledKey];
+    [self setSessionSpecificProfileValues:@{ KEY_TRIGGERS: mutableTriggers }];
 }
 
 - (void)clearTriggerLine {
@@ -9447,6 +9493,22 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
                                  window:self.view.window];
 }
 
+- (void)textViewEditTriggers {
+    [_triggerWindowController autorelease];
+    _triggerWindowController = [[TriggerController alloc] init];
+    _triggerWindowController.guid = self.profile[KEY_GUID];
+    _triggerWindowController.delegate = self;
+    [_triggerWindowController windowWillOpen];
+    __weak __typeof(self) weakSelf = self;
+    [self.view.window beginSheet:_triggerWindowController.window completionHandler:^(NSModalResponse returnCode) {
+        [weakSelf closeTriggerWindowController];
+    }];
+}
+
+- (void)closeTriggerWindowController {
+    [_triggerWindowController close];
+}
+
 - (void)textViewAddTrigger:(NSString *)text {
     __weak __typeof(self) weakSelf = self;
     iTermColorSuggester *cs =
@@ -13896,6 +13958,38 @@ getOptionKeyBehaviorLeft:(iTermOptionKeyBehavior *)left
 
 - (void)legacyView:(iTermLegacyView *)legacyView drawRect:(NSRect)dirtyRect {
     [_textview drawRect:dirtyRect inView:legacyView];
+}
+
+#pragma mark - TriggerDelegate
+
+- (void)triggerChanged:(TriggerController *)triggerController newValue:(NSArray *)value {
+    [[triggerController.window undoManager] registerUndoWithTarget:self
+                                                          selector:@selector(setTriggersValue:)
+                                                            object:self.profile[KEY_TRIGGERS]];
+    [[triggerController.window undoManager] setActionName:@"Edit Triggers"];
+    [self setSessionSpecificProfileValues:@{ KEY_TRIGGERS: value }];
+    triggerController.guid = self.profile[KEY_GUID];
+}
+
+- (void)setTriggersValue:(NSArray *)value {
+    [self setSessionSpecificProfileValues:@{ KEY_TRIGGERS: value }];
+    _triggerWindowController.guid = self.profile[KEY_GUID];
+    [_triggerWindowController profileDidChange];
+}
+
+- (void)triggerSetUseInterpolatedStrings:(BOOL)useInterpolatedStrings {
+    [self setSessionSpecificProfileValues:@{ KEY_TRIGGERS_USE_INTERPOLATED_STRINGS: @(useInterpolatedStrings) }];
+    _triggerWindowController.guid = self.profile[KEY_GUID];
+}
+
+- (void)triggersCloseSheet {
+    [self closeTriggerWindowController];
+}
+
+- (void)triggersCopyToProfile {
+    [ProfileModel updateSharedProfileWithGUID:self.profile[KEY_ORIGINAL_GUID]
+                                    newValues:@{ KEY_TRIGGERS: self.profile[KEY_TRIGGERS],
+                                                 KEY_TRIGGERS_USE_INTERPOLATED_STRINGS: self.profile[KEY_TRIGGERS_USE_INTERPOLATED_STRINGS] }];
 }
 
 @end

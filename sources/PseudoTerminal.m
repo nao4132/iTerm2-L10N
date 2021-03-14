@@ -2245,6 +2245,23 @@ ITERM_WEAKLY_REFERENCEABLE
     }
 }
 
+- (NSString *)titleForWindowMenu {
+    if (![iTermAdvancedSettingsModel includeShortcutInWindowsMenu]) {
+        return self.window.title;
+    }
+    NSString *modifiers = [iTermWindowShortcutLabelTitlebarAccessoryViewController modifiersString];
+    if (!modifiers) {
+        return self.window.title;
+    }
+    if (number_ + 1 >= 10) {
+        return [NSString stringWithFormat:@"%@ — %@", self.window.title, @(number_ + 1)];
+    }
+    NSString *formattedShortcut = [NSString stringWithFormat:@"%@%@",
+                                   modifiers,
+                                   @(number_ + 1)];
+    return [NSString stringWithFormat:@"%@ — %@", _contentView.windowTitle, formattedShortcut];
+}
+
 - (void)setWindowTitle:(NSString *)title {
     DLog(@"setWindowTitle:%@", title);
     if (_deallocing) {
@@ -4769,6 +4786,12 @@ ITERM_WEAKLY_REFERENCEABLE
 }
 
 - (void)updateWindowMenu {
+    if ([iTermAdvancedSettingsModel includeShortcutInWindowsMenu]) {
+        DLog(@"Include shortcut");
+        [NSApp changeWindowsItem:self.window title:[self titleForWindowMenu] filename:NO];
+        return;
+    }
+
     if (!self.fullScreen) {
         DLog(@"No - not fullscreen %@", self);
         return;
@@ -7404,6 +7427,22 @@ static CGFloat iTermDimmingAmount(PSMTabBarControl *tabView) {
     [self.currentSession textViewAddTrigger:self.currentSession.selectedText ?: @""];
 }
 
+- (IBAction)editTriggers:(id)sender {
+    [self.currentSession textViewEditTriggers];
+}
+
+- (IBAction)enableAllTriggers:(id)sender {
+    [self.currentSession setAllTriggersEnabled:YES];
+}
+
+- (IBAction)disableAllTriggers:(id)sender {
+    [self.currentSession setAllTriggersEnabled:NO];
+}
+
+- (void)toggleTriggerEnabled:(id)sender {
+    [self.currentSession toggleTriggerEnabledAtIndex:[[sender representedObject] integerValue]];
+}
+
 - (IBAction)openPasteHistory:(id)sender {
     if (!pbHistoryView) {
         pbHistoryView = [[PasteboardHistoryWindowController alloc] init];
@@ -9649,9 +9688,16 @@ static CGFloat iTermDimmingAmount(PSMTabBarControl *tabView) {
 }
 
 // Erase the scrollback buffer of the current session.
-- (void)clearScrollbackBuffer:(id)sender
-{
+- (void)clearScrollbackBuffer:(id)sender {
     [[self currentSession] clearScrollbackBuffer];
+}
+
+- (IBAction)clearToStartOfSelection:(id)sender {
+    [self.currentSession.screen clearFromAbsoluteLineToEnd:self.currentSession.textview.selection.firstAbsRange.coordRange.start.y];
+}
+
+- (IBAction)clearToLastMark:(id)sender {
+    [self.currentSession.screen clearToLastMark];
 }
 
 - (IBAction)saveContents:(id)sender {
@@ -9865,6 +9911,18 @@ static CGFloat iTermDimmingAmount(PSMTabBarControl *tabView) {
     } else if (item.action == @selector(setWindowStyle:)) {
         item.state = (iTermWindowTypeNormalized(self.windowType) == item.tag) ? NSControlStateValueOn : NSControlStateValueOff;
         return YES;
+    } else if (item.action == @selector(enableAllTriggers:)) {
+        return [[self currentSession] anyTriggerCanBeEnabled];
+    } else if (item.action == @selector(disableAllTriggers:)) {
+        return [[self currentSession] anyTriggerCanBeDisabled];
+    } else if (item.action == @selector(toggleTriggerEnabled:)) {
+        return YES;
+    } else if (item.action == @selector(clearScrollbackBuffer:)) {
+        return self.currentSession.screen.numberOfScrollbackLines > 0;
+    } else if (item.action == @selector(clearToLastMark:)) {
+        return self.currentSession.screen.lastMark != nil;
+    } else if (item.action == @selector(clearToStartOfSelection:)) {
+        return self.currentSession.hasSelection;
     }
 
     return result;

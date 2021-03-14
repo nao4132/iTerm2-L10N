@@ -88,12 +88,15 @@ NSString *const kBackgroundColorWellIdentifier = @"kBackgroundColorWellIdentifie
     IBOutlet NSTableColumn *_partialLineColumn;
     IBOutlet NSTableColumn *_actionColumn;
     IBOutlet NSTableColumn *_parametersColumn;
+    IBOutlet NSTableColumn *_enabledColumn;
     IBOutlet NSButton *_removeTriggerButton;
     IBOutlet NSButton *_interpolatedStringParameters;
+    IBOutlet NSButton *_updateProfileButton;
+    NSArray *_cached;
 }
 
 - (instancetype)init {
-    self = [super init];
+    self = [self initWithWindowNibName:@"iTermTriggersPanel"];
     if (self) {
         NSMutableArray *triggers = [NSMutableArray array];
         for (Class class in [self.class triggerClasses]) {
@@ -101,6 +104,10 @@ NSString *const kBackgroundColorWellIdentifier = @"kBackgroundColorWellIdentifie
         }
         _triggers = triggers;
         _textEditingRow = -1;
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(reloadAllProfiles:)
+                                                     name:kReloadAllProfiles
+                                                   object:nil];
     }
     return self;
 }
@@ -137,6 +144,45 @@ NSString *const kBackgroundColorWellIdentifier = @"kBackgroundColorWellIdentifie
     [_tableView registerForDraggedTypes:@[ kiTermTriggerControllerPasteboardType ]];
     _tableView.doubleAction = @selector(doubleClick:);
     _tableView.target = self;
+    [self updateCopyToProfileButtonVisibility];
+    [self updateUseInterpolatedStringParametersState];
+}
+
+- (void)setDelegate:(id<TriggerDelegate>)delegate {
+    _delegate = delegate;
+    [self updateCopyToProfileButtonVisibility];
+}
+
+- (BOOL)sharedProfileTriggersDifferFromMine {
+    if ([[ProfileModel sharedInstance] bookmarkWithGuid:self.guid] != nil) {
+        return NO;
+    }
+    NSString *originalGUID = self.bookmark[KEY_ORIGINAL_GUID];
+    if (!originalGUID) {
+        return NO;
+    }
+    Profile *sharedProfile = [[ProfileModel sharedInstance] bookmarkWithGuid:originalGUID];
+    if (!sharedProfile) {
+        return NO;
+    }
+    NSArray *sharedTriggers = sharedProfile[KEY_TRIGGERS];
+    NSArray *myTriggers = [self triggerDictionariesForCurrentProfile];
+    if (![sharedTriggers isEqual:myTriggers]) {
+        return YES;
+    }
+
+    if ([iTermProfilePreferences boolForKey:KEY_TRIGGERS_USE_INTERPOLATED_STRINGS inProfile:sharedProfile] !=
+        [iTermProfilePreferences boolForKey:KEY_TRIGGERS_USE_INTERPOLATED_STRINGS inProfile:self.bookmark]) {
+        return YES;
+    }
+    return NO;
+}
+
+- (void)updateCopyToProfileButtonVisibility {
+    if (self.delegate) {
+        _updateProfileButton.hidden = ![self.delegate respondsToSelector:@selector(triggersCopyToProfile)];
+        _updateProfileButton.enabled = [self sharedProfileTriggersDifferFromMine];
+    }
 }
 
 - (void)windowWillOpen {
@@ -195,7 +241,8 @@ NSString *const kBackgroundColorWellIdentifier = @"kBackgroundColorWellIdentifie
 - (NSArray *)triggerDictionariesForCurrentProfile {
     Profile *bookmark = [self bookmark];
     NSArray *triggers = [bookmark objectForKey:KEY_TRIGGERS];
-    return triggers ? triggers : [NSArray array];
+    _cached = triggers ? triggers : [NSArray array];
+    return _cached;
 }
 
 - (void)setTriggerDictionary:(NSDictionary *)triggerDictionary
@@ -250,6 +297,10 @@ NSString *const kBackgroundColorWellIdentifier = @"kBackgroundColorWellIdentifie
 - (void)setGuid:(NSString *)guid {
     _guid = [guid copy];
     [_tableView reloadData];
+    [self updateUseInterpolatedStringParametersState];
+}
+
+- (void)updateUseInterpolatedStringParametersState {
     _interpolatedStringParameters.state = [iTermProfilePreferences boolForKey:KEY_TRIGGERS_USE_INTERPOLATED_STRINGS inProfile:[self bookmark]] ? NSControlStateValueOn : NSControlStateValueOff;
 }
 
@@ -270,9 +321,17 @@ NSString *const kBackgroundColorWellIdentifier = @"kBackgroundColorWellIdentifie
     return textField;
 }
 
+- (void)reloadAllProfiles:(NSNotification *)notification {
+    if (_cached && ![_cached isEqual:[self triggerDictionariesForCurrentProfile]]) {
+        [_tableView reloadData];
+    }
+    [self updateUseInterpolatedStringParametersState];
+}
+
 #pragma mark - NSTableViewDataSource
 
 - (NSInteger)numberOfRowsInTableView:(NSTableView *)aTableView {
+    [self updateCopyToProfileButtonVisibility];
     return [[self triggerDictionariesForCurrentProfile] count];
 }
 
@@ -342,7 +401,7 @@ NSString *const kBackgroundColorWellIdentifier = @"kBackgroundColorWellIdentifie
 - (BOOL)tableView:(NSTableView *)aTableView
     shouldEditTableColumn:(NSTableColumn *)aTableColumn
                       row:(NSInteger)rowIndex {
-    if (aTableColumn == _regexColumn || aTableColumn == _partialLineColumn) {
+    if (aTableColumn == _regexColumn || aTableColumn == _partialLineColumn | aTableColumn == _enabledColumn) {
         return YES;
     }
     if (aTableColumn == _parametersColumn) {
@@ -500,6 +559,15 @@ NSString *const kBackgroundColorWellIdentifier = @"kBackgroundColorWellIdentifie
         checkbox.target = self;
         checkbox.action = @selector(instantDidChange:);
         return checkbox;
+    } else if (tableColumn == _enabledColumn) {
+        NSButton *checkbox = [[NSButton alloc] initWithFrame:NSZeroRect];
+        [checkbox sizeToFit];
+        [checkbox setButtonType:NSButtonTypeSwitch];
+        checkbox.title = @"";
+        checkbox.state = [triggerDictionary[kTriggerDisabledKey] boolValue] ? NSControlStateValueOff : NSControlStateValueOn;
+        checkbox.target = self;
+        checkbox.action = @selector(enabledDidChange:);
+        return checkbox;
     } else if (tableColumn == _parametersColumn) {
         NSArray *triggerDicts = [self triggerDictionariesForCurrentProfile];
         Trigger *trigger = [self triggerWithAction:triggerDicts[row][kTriggerActionKey]];
@@ -575,7 +643,8 @@ NSString *const kBackgroundColorWellIdentifier = @"kBackgroundColorWellIdentifie
 }
 
 - (IBAction)toggleUseInterpolatedStrings:(id)sender {
-    _interpolatedStringParameters.state = (![iTermProfilePreferences boolForKey:KEY_TRIGGERS_USE_INTERPOLATED_STRINGS inProfile:[self bookmark]]) ? NSControlStateValueOn : NSControlStateValueOff;
+    const BOOL wasEnabled = [iTermProfilePreferences boolForKey:KEY_TRIGGERS_USE_INTERPOLATED_STRINGS inProfile:[self bookmark]];
+    _interpolatedStringParameters.state = (!wasEnabled) ? NSControlStateValueOn : NSControlStateValueOff;
     [self.delegate triggerSetUseInterpolatedStrings:_interpolatedStringParameters.state == NSControlStateValueOn];
     [_tableView reloadData];
 }
@@ -643,6 +712,23 @@ NSString *const kBackgroundColorWellIdentifier = @"kBackgroundColorWellIdentifie
     [self setTriggerDictionary:triggerDictionary forRow:row reloadData:YES];
 }
 
+- (void)enabledDidChange:(NSButton *)checkbox {
+    NSNumber *newValue = checkbox.state == NSControlStateValueOff ? @YES : @NO;
+    NSInteger row = [_tableView rowForView:checkbox];
+
+    // If a text field is editing, make it save its contents before we get the trigger dictionary.
+    [_tableView reloadData];
+
+    NSArray *triggerDicts = [self triggerDictionariesForCurrentProfile];
+    if (row < 0 || row >= triggerDicts.count) {
+        return;
+    }
+    NSMutableDictionary *triggerDictionary =
+        [[self triggerDictionariesForCurrentProfile][row] mutableCopy];
+    triggerDictionary[kTriggerDisabledKey] = newValue;
+    [self setTriggerDictionary:triggerDictionary forRow:row reloadData:YES];
+}
+
 - (void)actionDidChange:(NSPopUpButton *)sender {
     NSInteger rowIndex = [_tableView rowForView:sender];
     if (rowIndex < 0) {
@@ -684,6 +770,17 @@ NSString *const kBackgroundColorWellIdentifier = @"kBackgroundColorWellIdentifie
     [self setTriggerDictionary:triggerDictionary forRow:rowIndex reloadData:YES];
 }
 
+- (IBAction)closeTriggersSheet:(id)sender {
+    [self.delegate triggersCloseSheet];
+}
+
+- (IBAction)copyToProfile:(id)sender {
+    if ([self.delegate respondsToSelector:@selector(triggersCopyToProfile)]) {
+        [self.delegate triggersCopyToProfile];
+        [self updateCopyToProfileButtonVisibility];
+    }
+}
+
 #pragma mark - NSTextFieldDelegate
 
 - (void)controlTextDidBeginEditing:(NSNotification *)obj {
@@ -694,7 +791,7 @@ NSString *const kBackgroundColorWellIdentifier = @"kBackgroundColorWellIdentifie
 
 - (void)controlTextDidEndEditing:(NSNotification *)obj {
     NSTextField *textField = obj.object;
-    if (_textEditingRow < 0) {
+    if (_textEditingRow >= [[self triggerDictionariesForCurrentProfile] count]) {
         return;
     }
     NSMutableDictionary *triggerDictionary =

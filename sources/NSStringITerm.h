@@ -112,6 +112,7 @@ int decode_utf8_char(const unsigned char * restrict datap,
 
 // Convert a string of hex values (an even number of [0-9A-Fa-f]) into data.
 - (NSData *)dataFromHexValues;
+- (NSData *)dataFromWhitespaceDelimitedHexValues;
 
 // Always returns a non-null value, but it may contain replacement chars for
 // malformed utf-8 sequences.
@@ -271,6 +272,8 @@ int decode_utf8_char(const unsigned char * restrict datap,
 
 // Contains only digits?
 - (BOOL)isNumeric;
+// Accepts strings like .2, 1, 1.2
+- (BOOL)isNonnegativeFractionalNumber;
 
 // First character is a digit?
 - (BOOL)startsWithDigit;

@@ -19,6 +19,10 @@ extern NSString *const kBackgroundColorWellIdentifier;
 @protocol TriggerDelegate <NSObject>
 - (void)triggerChanged:(TriggerController *)controller newValue:(NSArray *)value;
 - (void)triggerSetUseInterpolatedStrings:(BOOL)useInterpolatedStrings;
+- (void)triggersCloseSheet;
+
+@optional
+- (void)triggersCopyToProfile;
 @end
 
 @protocol iTermTriggerParameterController<NSObject, NSTextFieldDelegate, iTermFocusReportingTextFieldDelegate>

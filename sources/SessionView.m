@@ -123,6 +123,8 @@ NSString *const SessionViewWasSelectedForInspectionNotification = @"SessionViewW
             _vev.material = NSVisualEffectMaterialSheet;
             _vev.state = NSVisualEffectStateActive;
             _vev.layer.cornerRadius = radius;
+            _vev.layer.borderWidth = 1;
+            _vev.layer.borderColor = [[self desiredBorderColor] CGColor];
             [self addSubview:_vev positioned:NSWindowBelow relativeTo:self.subviews.firstObject];
             _vev.autoresizingMask = (NSViewWidthSizable | NSViewHeightSizable);
             self.autoresizesSubviews = YES;
@@ -131,6 +133,17 @@ NSString *const SessionViewWasSelectedForInspectionNotification = @"SessionViewW
     return self;
 }
 
+- (void)viewDidChangeEffectiveAppearance {
+    _vev.layer.borderColor = [[self desiredBorderColor] CGColor];
+}
+
+- (NSColor *)desiredBorderColor {
+    if ([self.effectiveAppearance it_isDark]) {
+        return [NSColor colorWithWhite:0.9 alpha:0.25];
+    } else {
+        return [NSColor colorWithWhite:0 alpha:0.25];
+    }
+}
 - (void)drawRect:(NSRect)dirtyRect {
     if (@available(macOS 10.14, *)) {
         return;
@@ -704,9 +717,11 @@ NSString *const SessionViewWasSelectedForInspectionNotification = @"SessionViewW
         // that doesn't involve doing something nutty like saving a copy of the drawable.
         [_metalView setNeedsDisplay:YES];
         [_scrollview setNeedsDisplay:YES];
-    } else {
-        [_legacyView setNeedsDisplay:YES];
     }
+
+    // Legacy view is hidden when metal is enabled, but when temporarily disabling metal you can get
+    // here while _useMetal is YES and _legacyView is also NOT hidden. Issue 9587.
+    [_legacyView setNeedsDisplay:YES];
 }
 
 - (void)didChangeMetalViewAlpha {

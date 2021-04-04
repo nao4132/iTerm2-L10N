@@ -11,6 +11,7 @@
 #import "iTermSemanticHistoryController.h"
 #import "iTermTextDrawingHelper.h"
 #import "LineBuffer.h"
+#import "NSEvent+iTerm.h"
 #import "PasteEvent.h"
 #import "PointerController.h"
 #import "PreferencePanel.h"
@@ -71,6 +72,7 @@ typedef NS_ENUM(NSUInteger, iTermSendTextEscaping) {
 - (void)queueKeyDown:(NSEvent *)event;
 - (void)keyDown:(NSEvent *)event;
 - (void)keyUp:(NSEvent *)event;
+- (void)textViewhandleSpecialKeyDown:(NSEvent *)event;
 - (BOOL)hasActionableKeyMappingForEvent:(NSEvent *)event;
 - (iTermOptionKeyBehavior)optionKey;
 - (iTermOptionKeyBehavior)rightOptionKey;
@@ -234,6 +236,8 @@ preferredEscaping:(iTermSendTextEscaping)preferredEscaping;
 - (void)textViewApplyAction:(iTermAction *)action;
 - (void)textViewAddTrigger:(NSString *)text;
 - (void)textViewEditTriggers;
+- (void)textViewToggleEnableTriggersInInteractiveApps;
+- (BOOL)textViewTriggersAreEnabledInInteractiveApps;
 @end
 
 @interface iTermHighlightedRow : NSObject
@@ -247,6 +251,7 @@ preferredEscaping:(iTermSendTextEscaping)preferredEscaping;
   iTermFocusFollowsMouseFocusReceiver,
   iTermIndicatorsHelperDelegate,
   iTermSemanticHistoryControllerDelegate,
+  iTermSpecialHandlerForAPIKeyDownNotifications,
   iTermTextDrawingHelperDelegate,
   NSDraggingDestination,
   NSTextInputClient,

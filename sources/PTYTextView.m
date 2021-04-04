@@ -3791,7 +3791,7 @@ useCompatibilityEscaping:compatibilityEscaping
             NSString *selection = [self selectedText];
             if (selection) {
                 [[iTermFindPasteboard sharedInstance] setStringValue:selection];
-                [[iTermFindPasteboard sharedInstance] updateObservers];
+                [[iTermFindPasteboard sharedInstance] updateObservers:_delegate];
             }
             break;
         }
@@ -4925,6 +4925,12 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
 
 - (NSFont *)badgeLabelFontOfSize:(CGFloat)pointSize {
     return [self.delegate badgeLabelFontOfSize:pointSize];
+}
+
+#pragma mark - iTermSpecialHandlerForAPIKeyDownNotifications
+
+- (void)handleSpecialKeyDown:(NSEvent *)event {
+    [self.delegate textViewhandleSpecialKeyDown:event];
 }
 
 @end

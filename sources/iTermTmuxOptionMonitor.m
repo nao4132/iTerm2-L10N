@@ -72,6 +72,13 @@
     }
 }
 
+- (void)startTimerIfSubscriptionsUnsupported {
+    if ([_gateway versionAtLeastDecimalNumberWithString:@"3.2"]) {
+        return;
+    }
+    [self startTimer];
+}
+
 - (void)startTimer {
     if (_subscriptionHandle.isValid) {
         DLog(@"Not starting timer because there is a valid subscription for %@", self);
@@ -116,6 +123,10 @@
         DLog(@"Not making a request because one is outstanding");
         return;
     }
+    if ([self.gateway versionAtLeastDecimalNumberWithString:@"3.2"] && _subscriptionHandle.isValid) {
+        DLog(@"Not making a request for %@ because subscriptions should do the job.", self.command);
+        return;
+    }
     if (_fallbackVariableName && self.gateway.minimumServerVersion.doubleValue <= 2.9) {
         [self didFetch:[self.scope valueForVariableName:_fallbackVariableName]];
         return;
@@ -136,6 +147,7 @@
         // Probably the pane went away and we'll be dealloced soon.
         return;
     }
+    _lastValue = [value copy];
     _haveOutstandingRequest = NO;
     if (_variableName) {
         [self.scope setValue:value forVariableNamed:_variableName];

@@ -222,6 +222,7 @@ extern NSString *const iTermAdvancedSettingsDidChange;
 + (BOOL)optionIsMetaForSpecialChars;
 + (BOOL)oscColorReport16Bits;
 + (int)pasteHistoryMaxOptions;
++ (BOOL)pastingClearsSelection;
 + (NSString *)pathsToIgnore;
 + (NSString *)pathToFTP;
 + (NSString *)pathToTelnet;
@@ -288,6 +289,7 @@ extern NSString *const iTermAdvancedSettingsDidChange;
 // background. If the brightness difference is less than this value then the text color becomes
 // black or white.
 + (double)smartCursorColorFgThreshold;
++ (int)smartSelectionRadius;
 + (BOOL)solidUnderlines;
 + (BOOL)squareWindowCorners;
 + (NSString *)sshSchemePath;

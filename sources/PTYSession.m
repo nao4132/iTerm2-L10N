@@ -1736,7 +1736,8 @@ ITERM_WEAKLY_REFERENCEABLE
     }
     _logging = [[iTermLoggingHelper alloc] initWithRawLogger:_shell
                                                  plainLogger:self
-                                                 profileGUID:self.profile[KEY_GUID]];
+                                                 profileGUID:self.profile[KEY_GUID]
+                                                       scope:self.variablesScope];
     return _logging;
 }
 
@@ -3614,9 +3615,12 @@ ITERM_WEAKLY_REFERENCEABLE
     return output;
 }
 
-- (void)pasteString:(NSString *)aString
-{
+- (void)pasteString:(NSString *)aString {
     [self pasteString:aString flags:0];
+}
+
+- (void)pasteStringWithoutBracketing:(NSString *)theString {
+    [self pasteString:theString flags:kPTYSessionPasteBracketingDisabled];
 }
 
 - (void)deleteBackward:(id)sender {
@@ -5697,16 +5701,20 @@ ITERM_WEAKLY_REFERENCEABLE
     [_view showFindUI];
 }
 
-- (void)compose {
+- (iTermComposerManager *)composerManager {
     if (!_composerManager) {
         _composerManager = [[iTermComposerManager alloc] init];
         _composerManager.delegate = self;
     }
+    return _composerManager;
+}
+
+- (void)compose {
     if (self.currentCommand.length > 0) {
         [self sendHexCode:[iTermAdvancedSettingsModel composerClearSequence]];
-        [_composerManager setCommand:self.currentCommand];
+        [self.composerManager setCommand:self.currentCommand];
     }
-    [_composerManager reveal];
+    [self.composerManager reveal];
 }
 
 - (BOOL)closeComposer {
@@ -8658,6 +8666,7 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
                        slowly:!!(flags & kPTYSessionPasteSlowly)
              escapeShellChars:!!(flags & kPTYSessionPasteEscapingSpecialCharacters)
                      isUpload:NO
+              allowBracketing:!(flags & kPTYSessionPasteBracketingDisabled)
                  tabTransform:tabTransform
                  spacesPerTab:spacesPerTab];
 }
@@ -9613,12 +9622,6 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
     }
 }
 
-- (void)updateUseCSIuMode {
-    const BOOL profileSetting =
-        [iTermProfilePreferences boolForKey:KEY_USE_LIBTICKIT_PROTOCOL inProfile:self.profile];
-    self.keyMappingMode = profileSetting ? iTermKeyMappingModeCSIu : iTermKeyMappingModeStandard;
-}
-
 - (void)textViewResetTerminal {
     [_terminal gentleReset];
 }
@@ -9906,6 +9909,7 @@ preferredEscaping:(iTermSendTextEscaping)preferredEscaping {
                                                     slowly:NO
                                           escapeShellChars:NO
                                                   isUpload:NO
+                                           allowBracketing:YES
                                               tabTransform:NO
                                               spacesPerTab:0
                                                   progress:^(NSInteger progress) {}];
@@ -10923,6 +10927,7 @@ preferredEscaping:(iTermSendTextEscaping)preferredEscaping {
                                slowly:NO
                      escapeShellChars:NO
                              isUpload:YES
+                      allowBracketing:YES
                          tabTransform:kTabTransformNone
                          spacesPerTab:0
                              progress:^(NSInteger progress) {
@@ -12057,6 +12062,10 @@ preferredEscaping:(iTermSendTextEscaping)preferredEscaping {
 }
 
 - (void)screenSendModifiersDidChange {
+    if (_keyMappingMode == iTermKeyMappingModeCSIu) {
+        // Since you can only enter CSI u mode via the UI, don't let a control sequence change it.
+        return;
+    }
     const BOOL allowed = [iTermProfilePreferences boolForKey:KEY_ALLOW_MODIFY_OTHER_KEYS
                                                    inProfile:self.profile];
     const int modifyOtherKeysMode = _terminal.sendModifiers[4].intValue;
@@ -12272,6 +12281,10 @@ preferredEscaping:(iTermSendTextEscaping)preferredEscaping {
         return NO;
     }
     return !*boolPtr;
+}
+
+- (void)screenDidResize {
+    [self.delegate sessionDidResize:self];
 }
 
 - (VT100Screen *)popupVT100Screen {
@@ -13242,7 +13255,7 @@ preferredEscaping:(iTermSendTextEscaping)preferredEscaping {
 }
 
 - (BOOL)statusBarRevealComposer {
-    [_composerManager revealMinimal];
+    [self.composerManager revealMinimal];
     return NO;
 }
 

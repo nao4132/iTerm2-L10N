@@ -2647,6 +2647,9 @@
     if ([_delegate respondsToSelector:@selector(paste:)]) {
         DLog(@"Calling paste on delegate.");
         [_delegate paste:sender];
+        if (!_selection.live && [iTermAdvancedSettingsModel pastingClearsSelection]) {
+            [self deselect];
+        }
     }
 }
 
@@ -2698,10 +2701,11 @@
             if (pasteNewline) {
                 // For cmd-drag, we append a newline.
                 [stringToPaste appendString:@"\r"];
+                [_delegate pasteStringWithoutBracketing:stringToPaste];
             } else if (!cdToDirectory) {
                 [stringToPaste appendString:@" "];
+                [_delegate pasteString:stringToPaste];
             }
-            [_delegate pasteString:stringToPaste];
 
             return YES;
         }
@@ -3333,9 +3337,9 @@ useCompatibilityEscaping:compatibilityEscaping
     }
 }
 
-- (void)_dragImage:(iTermImageInfo *)imageInfo forEvent:(NSEvent *)theEvent
-{
-    NSImage *icon = [imageInfo imageWithCellSize:NSMakeSize(_charWidth, _lineHeight)];
+- (void)_dragImage:(iTermImageInfo *)imageInfo forEvent:(NSEvent *)theEvent {
+    NSImage *icon = [imageInfo imageWithCellSize:NSMakeSize(_charWidth, _lineHeight)
+                                           scale:1];
 
     NSData *imageData = imageInfo.data;
     if (!imageData || !icon) {

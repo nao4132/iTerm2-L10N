@@ -5696,6 +5696,10 @@ static void SwapInt(int *a, int *b) {
 - (void)gridCursorDidMove {
 }
 
+- (void)gridDidResize {
+    [self.delegate screenDidResize];
+}
+
 #pragma mark - iTermMarkDelegate
 
 - (void)markDidBecomeCommandMark:(id<iTermMark>)mark {
@@ -5882,6 +5886,8 @@ static void SwapInt(int *a, int *b) {
     dateFormatter.timeStyle = NSDateFormatterShortStyle;
     NSString *message = [NSString stringWithFormat:@"Session Contents Restored on %@", [dateFormatter stringFromDate:[NSDate date]]];
     [self appendStringAtCursor:message];
+    currentGrid_.cursorX = 0;
+    currentGrid_.preferredCursorPosition = currentGrid_.cursor;
 
     // Restore the graphic rendition, add a newline, and calculate how far down the cursor moved.
     terminal_.graphicRendition = saved;

@@ -2705,6 +2705,7 @@ ITERM_WEAKLY_REFERENCEABLE
     // check if we want to send this input to all the sessions
     if (canBroadcast && [[_delegate realParentWindow] broadcastInputToSession:self]) {
         // Ask the parent window to write to the other tasks.
+        DLog(@"Passing input to window to broadcast it. Won't send in this call.");
         [[_delegate realParentWindow] sendInputToAllSessions:string
                                                     encoding:optionalEncoding
                                                forceEncoding:forceEncoding];
@@ -13500,6 +13501,11 @@ preferredEscaping:(iTermSendTextEscaping)preferredEscaping {
 
 - (void)workingDirectoryPollerDidFindWorkingDirectory:(NSString *)pwd invalidated:(BOOL)invalidated {
     DLog(@"workingDirectoryPollerDidFindWorkingDirectory:%@ invalidated:%@", pwd, @(invalidated));
+    if (invalidated && _lastLocalDirectoryWasPushed && _lastLocalDirectory != nil) {
+        DLog(@"Ignore local directory poller's invalidated result when we have a pushed last local directory. _lastLocalDirectory=%@ _lastLocalDirectoryWasPushed=%@",
+             _lastLocalDirectory, @(_lastLocalDirectoryWasPushed));
+        return;
+    }
     if (invalidated || ![self useLocalDirectoryPollerResult]) {
         DLog(@"Not creating a mark. invalidated=%@", @(invalidated));
         if (self.lastLocalDirectory != nil && self.lastLocalDirectoryWasPushed) {

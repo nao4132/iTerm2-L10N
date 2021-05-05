@@ -573,6 +573,7 @@ static const NSUInteger kMaxHosts = 100;
     iTermWorkingDirectoryPoller *_pwdPoller;
     iTermTmuxOptionMonitor *_tmuxTitleMonitor;
     iTermTmuxOptionMonitor *_tmuxForegroundJobMonitor;
+    iTermTmuxOptionMonitor *_paneIndexMonitor;
 
     iTermGraphicSource *_graphicSource;
     iTermVariableReference *_jobPidRef;
@@ -952,6 +953,8 @@ ITERM_WEAKLY_REFERENCEABLE
     [_tmuxTitleMonitor release];
     [_tmuxForegroundJobMonitor invalidate];
     [_tmuxForegroundJobMonitor release];
+    [_paneIndexMonitor invalidate];
+    [_paneIndexMonitor release];
     if (_metalContext) {
         CGContextRelease(_metalContext);
     }
@@ -6584,6 +6587,7 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
                 [self installTmuxStatusBarMonitor];
                 [self installTmuxTitleMonitor];
                 [self installTmuxForegroundJobMonitor];
+                [self installOtherTmuxMonitors];
                 [self replaceWorkingDirectoryPollerWithTmuxWorkingDirectoryPoller];
                 break;
         }
@@ -6718,6 +6722,23 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
     }
     [self installTmuxForegroundJobMonitor];
     return _tmuxForegroundJobMonitor;
+}
+
+- (void)installOtherTmuxMonitors {
+    if (![_tmuxController.gateway supportsSubscriptions]) {
+        return;
+    }
+    if (_paneIndexMonitor) {
+        return;
+    }
+    _paneIndexMonitor = [[iTermTmuxOptionMonitor alloc] initWithGateway:_tmuxController.gateway
+                                                                  scope:self.variablesScope
+                                                   fallbackVariableName:nil
+                                                                 format:@"#{pane_index}"
+                                                                 target:[NSString stringWithFormat:@"%%%@", @(self.tmuxPane)]
+                                                           variableName:iTermVariableKeySessionTmuxWindowPaneIndex
+                                                                  block:nil];
+    [_paneIndexMonitor updateOnce];
 }
 
 // NOTE: Despite the name, this doesn't continuously monitor because that is
@@ -11795,6 +11816,18 @@ preferredEscaping:(iTermSendTextEscaping)preferredEscaping {
     [_delegate sessionCurrentDirectoryDidChange:self];
 }
 
+- (void)setLastLocalDirectory:(NSString *)lastLocalDirectory {
+    DLog(@"lastLocalDirectory goes %@ -> %@ for %@\n%@", _lastLocalDirectory, lastLocalDirectory, self, [NSThread callStackSymbols]);
+    [_lastLocalDirectory autorelease];
+    _lastLocalDirectory = [lastLocalDirectory copy];
+}
+
+- (void)setLastLocalDirectoryWasPushed:(BOOL)lastLocalDirectoryWasPushed {
+    DLog(@"lastLocalDirectoryWasPushed goes %@ -> %@ for %@\n%@", @(_lastLocalDirectoryWasPushed),
+         @(lastLocalDirectoryWasPushed), self, [NSThread callStackSymbols]);
+    _lastLocalDirectoryWasPushed = lastLocalDirectoryWasPushed;
+}
+
 - (void)asyncCurrentLocalWorkingDirectoryOrInitialDirectory:(void (^)(NSString *pwd))completion {
     NSString *envPwd = self.environment[@"PWD"];
     DLog(@"asyncCurrentLocalWorkingDirectoryOrInitialDirectory environment[pwd]=%@", envPwd);
@@ -13516,7 +13549,7 @@ preferredEscaping:(iTermSendTextEscaping)preferredEscaping {
 }
 
 - (void)workingDirectoryPollerDidFindWorkingDirectory:(NSString *)pwd invalidated:(BOOL)invalidated {
-    DLog(@"workingDirectoryPollerDidFindWorkingDirectory:%@ invalidated:%@", pwd, @(invalidated));
+    DLog(@"workingDirectoryPollerDidFindWorkingDirectory:%@ invalidated:%@ self=%@", pwd, @(invalidated), self);
     if (invalidated && _lastLocalDirectoryWasPushed && _lastLocalDirectory != nil) {
         DLog(@"Ignore local directory poller's invalidated result when we have a pushed last local directory. _lastLocalDirectory=%@ _lastLocalDirectoryWasPushed=%@",
              _lastLocalDirectory, @(_lastLocalDirectoryWasPushed));
@@ -13528,6 +13561,7 @@ preferredEscaping:(iTermSendTextEscaping)preferredEscaping {
             DLog(@"Last local directory (%@) was pushed, not changing it.", self.lastLocalDirectory);
             return;
         }
+        DLog(@"Since last local driectory was not pushed, update it.");
         // This is definitely a local directory. It may have been invalidated because we got a push
         // for a remote directory, but it's still useful to know the local directory for the purposes
         // of session restoration.

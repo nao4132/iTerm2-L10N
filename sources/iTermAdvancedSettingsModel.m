@@ -248,13 +248,14 @@ DEFINE_STRING(alternateMouseScrollStringForDown, @"",
 DEFINE_SETTABLE_BOOL(alternateMouseScroll, AlternateMouseScroll, NO, SECTION_MOUSE @"Scroll wheel sends arrow keys when in alternate screen mode.");
 DEFINE_BOOL(pinchToChangeFontSizeDisabled, NO, SECTION_MOUSE @"Disable changing font size in response to a pinch gesture.");
 DEFINE_BOOL(useSystemCursorWhenPossible, UseSystemCursorWhenPossibleDefault(), SECTION_MOUSE @"Use system cursor icons when possible.");
-DEFINE_BOOL(alwaysAcceptFirstMouse, NO, SECTION_MOUSE @"Always accept first mouse event on terminal windows.\nThis means clicks will work the same when iTerm2 is active as when it’s inactive.");
+DEFINE_BOOL(alwaysAcceptFirstMouse, YES, SECTION_MOUSE @"Always accept first mouse event on terminal windows.\nThis means clicks will work the same when iTerm2 is active as when it’s inactive.");
 DEFINE_BOOL(doubleReportScrollWheel, NO, SECTION_MOUSE @"Double-report scroll wheel events to work around tmux scrolling bug.");
 DEFINE_BOOL(stealKeyFocus, NO, SECTION_MOUSE @"When Focus Follows Mouse is enabled, steal key focus even when inactive.");
 DEFINE_BOOL(aggressiveFocusFollowsMouse, NO, SECTION_MOUSE @"When Focus Follows Mouse is enabled, activate the window under the cursor when iTerm2 becomes active?");
 DEFINE_BOOL(cmdClickWhenInactiveInvokesSemanticHistory, NO, SECTION_MOUSE @"⌘-click in an active pane while iTerm2 isn't the active app invokes Semantic History.\nBy default, iTerm2 respects the OS standard that ⌘-click in an app that doesn't have keyboard focus behaves like a non-⌘ click that does not raise the window.");
 DEFINE_BOOL(enableUnderlineSemanticHistoryOnCmdHover, YES, SECTION_MOUSE @"Underline Semantic History-selectable items under the cursor while holding ⌘?");
 DEFINE_BOOL(sensitiveScrollWheel, NO, SECTION_MOUSE @"Scroll on any scroll wheel movement, no matter how small?");
+DEFINE_FLOAT(scrollWheelAcceleration, 1, SECTION_MOUSE @"Speed up scroll gestures by this factor.");
 
 // This defines the fraction of a character's width on its right side that is used to
 // select the NEXT character.

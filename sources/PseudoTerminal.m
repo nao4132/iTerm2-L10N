@@ -2020,6 +2020,7 @@ ITERM_WEAKLY_REFERENCEABLE
 }
 
 - (void)updateFullScreenTabBar:(NSNotification *)notification {
+    DLog(@"%@", self);
     if ([self anyFullScreen]) {
         if (@available(macOS 10.14, *)) {
             [self updateTabBarControlIsTitlebarAccessory];
@@ -2027,6 +2028,8 @@ ITERM_WEAKLY_REFERENCEABLE
         [_contentView.tabBarControl updateFlashing];
         [self repositionWidgets];
         [self fitTabsToWindow];
+    } else {
+        DLog(@"Not full screen");
     }
 }
 
@@ -5140,15 +5143,18 @@ ITERM_WEAKLY_REFERENCEABLE
 }
 
 - (BOOL)tabBarShouldBeAccessory {
+    DLog(@"%@", self);
     if (@available(macOS 10.14, *)) { } else {
+        DLog(@"NO - os too old");
         return NO;
     }
     if (!(self.window.styleMask & NSWindowStyleMaskTitled)) {
         // You get an assertion if you try to add an accessory to an untitled window.
+        DLog(@"NO - window not titled");
         return NO;
     }
-    DLog(@"%@", self);
     if (!exitingLionFullscreen_) {
+        DLog(@"exitingLionFullscreen");
         const BOOL assumeFullScreen = (self.lionFullScreen || togglingLionFullScreen_);
         if (assumeFullScreen) {
             DLog(@"tabBarShouldBeAccessory - assuing full screen, should=%@", @([self shouldMoveTabBarToTitlebarAccessoryInLionFullScreen]));
@@ -5218,6 +5224,7 @@ ITERM_WEAKLY_REFERENCEABLE
 }
 
 - (void)updateTabBarControlIsTitlebarAccessory {
+    DLog(@"updateTabBarControlIsTitlebarAccessory");
     const NSInteger index = [self.window.it_titlebarAccessoryViewControllers indexOfObject:_titleBarAccessoryTabBarViewController];
     if ([self tabBarShouldBeAccessory]) {
         DLog(@"tab bar should be accessory");
@@ -7617,11 +7624,11 @@ static CGFloat iTermDimmingAmount(PSMTabBarControl *tabView) {
     NSFont* asciiFont = [ITAddressBookMgr fontWithDesc:[theBookmark objectForKey:KEY_NORMAL_FONT]];
     NSFont* nonAsciiFont = [ITAddressBookMgr fontWithDesc:[theBookmark objectForKey:KEY_NON_ASCII_FONT]];
     NSSize asciiCharSize = [PTYTextView charSizeForFont:asciiFont
-                                      horizontalSpacing:[[theBookmark objectForKey:KEY_HORIZONTAL_SPACING] doubleValue]
-                                        verticalSpacing:[[theBookmark objectForKey:KEY_VERTICAL_SPACING] doubleValue]];
+                                      horizontalSpacing:[iTermProfilePreferences doubleForKey:KEY_HORIZONTAL_SPACING inProfile:theBookmark]
+                                        verticalSpacing:[iTermProfilePreferences doubleForKey:KEY_VERTICAL_SPACING inProfile:theBookmark]];
     NSSize nonAsciiCharSize = [PTYTextView charSizeForFont:nonAsciiFont
-                                         horizontalSpacing:[[theBookmark objectForKey:KEY_HORIZONTAL_SPACING] doubleValue]
-                                           verticalSpacing:[[theBookmark objectForKey:KEY_VERTICAL_SPACING] doubleValue]];
+                                         horizontalSpacing:[iTermProfilePreferences doubleForKey:KEY_HORIZONTAL_SPACING inProfile:theBookmark]
+                                           verticalSpacing:[iTermProfilePreferences doubleForKey:KEY_VERTICAL_SPACING inProfile:theBookmark]];
     NSSize charSize = NSMakeSize(MAX(asciiCharSize.width, nonAsciiCharSize.width),
                                  MAX(asciiCharSize.height, nonAsciiCharSize.height));
     NSSize newSessionSize = NSMakeSize(charSize.width * kVT100ScreenMinColumns + [iTermPreferences intForKey:kPreferenceKeySideMargins] * 2,
@@ -9088,6 +9095,7 @@ static CGFloat iTermDimmingAmount(PSMTabBarControl *tabView) {
     return nil;
 }
 - (void)updateTabBarStyle {
+    DLog(@"%@\n%@", self, [NSThread callStackSymbols]);
     id<PSMTabStyle> style = [[iTermTheme sharedInstance] tabStyleWithDelegate:self
                                                           effectiveAppearance:self.window.effectiveAppearance];
     [_contentView.tabBarControl setStyle:style];
@@ -9488,8 +9496,8 @@ static CGFloat iTermDimmingAmount(PSMTabBarControl *tabView) {
                                      userInfo:nil];
     }
     NSSize charSize = [PTYTextView charSizeForFont:[ITAddressBookMgr fontWithDesc:[profile objectForKey:KEY_NORMAL_FONT]]
-                                 horizontalSpacing:[[profile objectForKey:KEY_HORIZONTAL_SPACING] doubleValue]
-                                   verticalSpacing:[[profile objectForKey:KEY_VERTICAL_SPACING] doubleValue]];
+                                 horizontalSpacing:[iTermProfilePreferences doubleForKey:KEY_HORIZONTAL_SPACING inProfile:profile]
+                                   verticalSpacing:[iTermProfilePreferences doubleForKey:KEY_VERTICAL_SPACING inProfile:profile]];
 
     if (size == nil && [_contentView.tabView numberOfTabViewItems] != 0) {
         NSSize contentSize = [[[[self currentSession] view] scrollview] documentVisibleRect].size;
@@ -11476,8 +11484,8 @@ backgroundColor:(NSColor *)backgroundColor {
         case WINDOW_TYPE_COMPACT:
         case WINDOW_TYPE_ACCESSORY: {
             DLog(@"Will apply width adjustment of %@", @(_widthAdjustment));
-            NSRect rect = self.window.frame;
             rect.size.width += _widthAdjustment;
+            DLog(@"Return %@", NSStringFromRect(rect));
             return rect;
         }
     }

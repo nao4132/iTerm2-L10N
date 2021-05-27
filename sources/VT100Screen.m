@@ -1701,6 +1701,12 @@ const NSInteger VT100ScreenBigFileDownloadThreshold = 1024 * 1024 * 1024;
     long long lineNumber = absoluteLineNumber - self.totalScrollbackOverflow - self.numberOfScrollbackLines;
 
     VT100GridRun gridRun = [currentGrid_ gridRunFromRange:range relativeToRow:lineNumber];
+    DLog(@"Highlight range %@ with colors %@ at lineNumber %@ giving grid run %@",
+         NSStringFromRange(range),
+         colors,
+         @(lineNumber),
+         VT100GridRunDescription(gridRun));
+
     if (gridRun.length > 0) {
         NSColor *foreground = colors[kHighlightForegroundColor];
         NSColor *background = colors[kHighlightBackgroundColor];
@@ -2539,6 +2545,26 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
         }
     }
     return notes;
+}
+
+- (void)removePromptMarksBelowLine:(int)line {
+    VT100ScreenMark *mark = [self lastPromptMark];
+    if (!mark) {
+        return;
+    }
+
+    VT100GridCoordRange range = [self coordRangeForInterval:mark.entry.interval];
+    while (range.start.y >= line) {
+        if (mark == self.lastCommandMark) {
+            self.lastCommandMark = nil;
+        }
+        [self removeObjectFromIntervalTree:mark];
+        mark = [self lastPromptMark];
+        if (!mark) {
+            return;
+        }
+        range = [self coordRangeForInterval:mark.entry.interval];
+    }
 }
 
 - (VT100ScreenMark *)lastPromptMark {
@@ -3417,6 +3443,10 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
             // Only do it in alternate screen mode to avoid doing this for zsh (issue 8822)
             [delegate_ screenRemoveSelection];
             [self scrollScreenIntoHistory];
+        } else {
+            // This is important for tmux integration with shell integration enabled. The screen
+            // terminal uses ED 0 instead of ED 2 to clear the screen (e.g., when you do ^L at the shell).
+            [self removePromptMarksBelowLine:yStart + self.numberOfScrollbackLines];
         }
     } else {
         return;
@@ -5113,6 +5143,8 @@ basedAtAbsoluteLineNumber:(long long)absoluteLineNumber
 - (void)highlightRun:(VT100GridRun)run
     withForegroundColor:(NSColor *)fgColor
         backgroundColor:(NSColor *)bgColor {
+    DLog(@"Really highlight run %@ fg=%@ bg=%@", VT100GridRunDescription(run), fgColor, bgColor);
+
     screen_char_t fg = { 0 };
     screen_char_t bg = { 0 };
 

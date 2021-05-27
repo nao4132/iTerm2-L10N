@@ -58,6 +58,7 @@
 #import "iTermObject.h"
 #import "iTermOpenDirectory.h"
 #import "iTermPreferences.h"
+#import "iTermRateLimitedUpdate.h"
 #import "iTermScriptConsole.h"
 #import "iTermScriptHistory.h"
 #import "iTermSharedImageStore.h"
@@ -622,6 +623,9 @@ static const NSUInteger kMaxHosts = 100;
     // Measures time spent in triggers and executing tokens while in interactive apps.
     // nil when not in soft alternate screen mode.
     iTermSlownessDetector *_triggersSlownessDetector;
+
+    iTermRateLimitedUpdate *_idempotentTriggerRateLimit;
+    BOOL _shouldUpdateIdempotentTriggers;
 }
 
 @synthesize isDivorced = _divorced;
@@ -998,6 +1002,7 @@ ITERM_WEAKLY_REFERENCEABLE
     [_arrangementGUID release];
     [_triggerWindowController release];
     [_triggersSlownessDetector release];
+    [_idempotentTriggerRateLimit release];
 
     [super dealloc];
 }
@@ -1801,8 +1806,8 @@ ITERM_WEAKLY_REFERENCEABLE
     [_textview setAutoresizingMask: NSViewWidthSizable | NSViewHeightSizable];
     [_textview setFont:[ITAddressBookMgr fontWithDesc:[_profile objectForKey:KEY_NORMAL_FONT]]
           nonAsciiFont:[ITAddressBookMgr fontWithDesc:[_profile objectForKey:KEY_NON_ASCII_FONT]]
-     horizontalSpacing:[[_profile objectForKey:KEY_HORIZONTAL_SPACING] doubleValue]
-       verticalSpacing:[[_profile objectForKey:KEY_VERTICAL_SPACING] doubleValue]];
+     horizontalSpacing:[iTermProfilePreferences doubleForKey:KEY_HORIZONTAL_SPACING inProfile:_profile]
+       verticalSpacing:[iTermProfilePreferences doubleForKey:KEY_VERTICAL_SPACING inProfile:_profile]];
     [self setTransparency:[[_profile objectForKey:KEY_TRANSPARENCY] floatValue]];
     [self setTransparencyAffectsOnlyDefaultBackgroundColor:[[_profile objectForKey:KEY_TRANSPARENCY_AFFECTS_ONLY_DEFAULT_BACKGROUND_COLOR] boolValue]];
 
@@ -3096,7 +3101,17 @@ ITERM_WEAKLY_REFERENCEABLE
 
     // If the trigger causes the session to get released, don't crash.
     [[self retain] autorelease];
+    [self reallyCheckTriggersOnPartialLine:partial
+                                stringLine:stringLine
+                                lineNumber:startAbsLineNumber
+                        requireIdempotency:NO];
+}
 
+
+- (void)reallyCheckTriggersOnPartialLine:(BOOL)partial
+                              stringLine:(iTermStringLine *)stringLine
+                              lineNumber:(long long)startAbsLineNumber
+                      requireIdempotency:(BOOL)requireIdempotency {
     for (iTermExpectation *expectation in [[_expect.expectations copy] autorelease]) {
         NSArray<NSString *> *capture = [stringLine.stringValue captureComponentsMatchedByRegex:expectation.regex];
         if (capture.count) {
@@ -3111,6 +3126,9 @@ ITERM_WEAKLY_REFERENCEABLE
     DLog(@"Start checking triggers");
     [_triggersSlownessDetector measureEvent:PTYSessionSlownessEventTriggers block:^{
         for (Trigger *trigger in triggers) {
+            if (requireIdempotency && !trigger.isIdempotent) {
+                continue;
+            }
             BOOL stop = [trigger tryString:stringLine
                                  inSession:self
                                partialLine:partial
@@ -5129,7 +5147,39 @@ ITERM_WEAKLY_REFERENCEABLE
         _passwordInput = _shell.passwordInput;
         [[iTermSecureKeyboardEntryController sharedInstance] update];
     }
+
+    if (![self shouldUseTriggers] && [iTermAdvancedSettingsModel allowIdempotentTriggers]) {
+        const NSTimeInterval interval = [iTermAdvancedSettingsModel idempotentTriggerModeRateLimit];
+        if (!_idempotentTriggerRateLimit) {
+            _idempotentTriggerRateLimit = [[iTermRateLimitedUpdate alloc] initWithName:@"idempotent triggers"
+                                                                       minimumInterval:interval];
+        } else {
+            _idempotentTriggerRateLimit.minimumInterval = interval;
+        }
+        __weak __typeof(self) weakSelf = self;
+        [_idempotentTriggerRateLimit performRateLimitedBlock:^{
+            [weakSelf checkIdempotentTriggers];
+        }];
+    }
     _timerRunning = NO;
+}
+
+- (void)checkIdempotentTriggers {
+    DLog(@"%@", self);
+    if (!_shouldUpdateIdempotentTriggers) {
+        DLog(@"Don't need to update idempotent triggers");
+        return;
+    }
+    _shouldUpdateIdempotentTriggers = NO;
+    iTermTextExtractor *extractor = [[[iTermTextExtractor alloc] initWithDataSource:_screen] autorelease];
+    DLog(@"Check idempotent triggers from line number %@", @(_screen.numberOfScrollbackLines));
+    [extractor enumerateWrappedLinesIntersectingRange:VT100GridRangeMake(_screen.numberOfScrollbackLines, _screen.height) block:
+     ^(iTermStringLine *stringLine, VT100GridWindowedRange range, BOOL *stop) {
+        [self reallyCheckTriggersOnPartialLine:NO
+                                    stringLine:stringLine
+                                    lineNumber:range.coordRange.start.y + _screen.totalScrollbackOverflow
+                            requireIdempotency:YES];
+    }];
 }
 
 // Update the tab, session view, and window title.
@@ -5457,8 +5507,8 @@ ITERM_WEAKLY_REFERENCEABLE
         NSString* fontDesc = [abEntry objectForKey:KEY_NORMAL_FONT];
         font = [ITAddressBookMgr fontWithDesc:fontDesc];
         nonAsciiFont = [ITAddressBookMgr fontWithDesc:[abEntry objectForKey:KEY_NON_ASCII_FONT]];
-        hs = [[abEntry objectForKey:KEY_HORIZONTAL_SPACING] doubleValue];
-        vs = [[abEntry objectForKey:KEY_VERTICAL_SPACING] doubleValue];
+        hs = [iTermProfilePreferences doubleForKey:KEY_HORIZONTAL_SPACING inProfile:abEntry];
+        vs = [iTermProfilePreferences doubleForKey:KEY_VERTICAL_SPACING inProfile:abEntry];
     }
     [self setFont:font nonAsciiFont:nonAsciiFont horizontalSpacing:hs verticalSpacing:vs];
 
@@ -8410,7 +8460,7 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
     const NSEventModifierFlags mask = (NSEventModifierFlagCommand | NSEventModifierFlagOption | NSEventModifierFlagShift | NSEventModifierFlagControl);
     if (!_terminal.softAlternateScreenMode &&
         (event.modifierFlags & mask) == 0 &&
-        [iTermAdvancedSettingsModel movementKeysScrollOutsideInteractiveApps]) {
+        [iTermProfilePreferences boolForKey:KEY_MOVEMENT_KEYS_SCROLL_OUTSIDE_INTERACTIVE_APPS inProfile:self.profile]) {
         switch (event.keyCode) {
             case kVK_PageUp:
                 [_textview scrollPageUp:nil];
@@ -8897,6 +8947,7 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
                                                  toConnectionKey:key];
         }];
     }
+    _shouldUpdateIdempotentTriggers = YES;
 }
 
 - (void)textViewBeginDrag

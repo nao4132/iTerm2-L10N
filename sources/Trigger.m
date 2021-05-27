@@ -105,6 +105,10 @@ NSString * const kTriggerDisabledKey = @"disabled";
     return nil;
 }
 
+- (BOOL)isIdempotent {
+    return NO;
+}
+
 - (NSArray *)groupedMenuItemsForPopupButton
 {
   NSDictionary *menuItems = [self menuItemsForPoupupButton];
@@ -159,6 +163,7 @@ NSString * const kTriggerDisabledKey = @"disabled";
 
     __block BOOL stopFutureTriggersFromRunningOnThisLine = NO;
     NSString *s = stringLine.stringValue;
+    DLog(@"Search for regex %@ in string %@", regex_, s);
     [s enumerateStringsMatchedByRegex:regex_
                            usingBlock:^(NSInteger captureCount,
                                         NSString *const __unsafe_unretained *capturedStrings,

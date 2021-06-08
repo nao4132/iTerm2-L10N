@@ -626,6 +626,9 @@ static const NSUInteger kMaxHosts = 100;
 
     iTermRateLimitedUpdate *_idempotentTriggerRateLimit;
     BOOL _shouldUpdateIdempotentTriggers;
+
+    // If positive focus reports will not be sent.
+    NSInteger _disableFocusReporting;
 }
 
 @synthesize isDivorced = _divorced;
@@ -672,6 +675,7 @@ static const NSUInteger kMaxHosts = 100;
 - (instancetype)initSynthetic:(BOOL)synthetic {
     self = [super init];
     if (self) {
+        DLog(@"Begin initialization of new PTYsession %p", self);
         _autoLogId = arc4random();
         _useAdaptiveFrameRate = [iTermAdvancedSettingsModel useAdaptiveFrameRate];
         _adaptiveFrameRateThroughputThreshold = [iTermAdvancedSettingsModel adaptiveFrameRateThroughputThreshold];
@@ -864,6 +868,7 @@ static const NSUInteger kMaxHosts = 100;
         if (!synthetic) {
             [[NSNotificationCenter defaultCenter] postNotificationName:PTYSessionCreatedNotification object:self];
         }
+        DLog(@"Done initializing new PTYSession %@", self);
     }
     return self;
 }
@@ -4846,7 +4851,7 @@ ITERM_WEAKLY_REFERENCEABLE
 
 - (void)setProfile:(Profile *)newProfile {
     assert(newProfile);
-    DLog(@"Set profile to one with guid %@", newProfile[KEY_GUID]);
+    DLog(@"Set profile to one with guid %@\n%@", newProfile[KEY_GUID], [NSThread callStackSymbols]);
 
     NSMutableDictionary *mutableProfile = [[newProfile mutableCopy] autorelease];
     // This is the most practical way to migrate the bopy of a
@@ -5144,8 +5149,11 @@ ITERM_WEAKLY_REFERENCEABLE
     const BOOL passwordInput = _shell.passwordInput;
     DLog(@"passwordInput=%@", @(passwordInput));
     if (passwordInput != _passwordInput) {
-        _passwordInput = _shell.passwordInput;
+        _passwordInput = passwordInput;
         [[iTermSecureKeyboardEntryController sharedInstance] update];
+        if (passwordInput) {
+            [self didBeginPasswordInput];
+        }
     }
 
     if (![self shouldUseTriggers] && [iTermAdvancedSettingsModel allowIdempotentTriggers]) {
@@ -5162,6 +5170,19 @@ ITERM_WEAKLY_REFERENCEABLE
         }];
     }
     _timerRunning = NO;
+}
+
+- (BOOL)shouldShowPasswordManagerAutomatically {
+    return [iTermProfilePreferences boolForKey:KEY_OPEN_PASSWORD_MANAGER_AUTOMATICALLY
+                                     inProfile:self.profile];
+}
+
+- (void)didBeginPasswordInput {
+    if ([self shouldShowPasswordManagerAutomatically]) {
+        iTermApplicationDelegate *itad = [iTermApplication.sharedApplication delegate];
+        [itad openPasswordManagerToAccountName:nil inSession:self];
+
+    }
 }
 
 - (void)checkIdempotentTriggers {
@@ -6506,6 +6527,7 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
 }
 
 - (void)enterPassword:(NSString *)password {
+    [self incrementDisableFocusReporting:1];
     _echoProbe.delegate = self;
     [_echoProbe beginProbeWithBackspace:[self backspaceData]
                                password:password];
@@ -6571,16 +6593,43 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
     [self launchCoprocessWithCommand:command mute:YES];
 }
 
+- (void)performBlockWithoutFocusReporting:(void (^NS_NOESCAPE)(void))block {
+    [self incrementDisableFocusReporting:1];
+    block();
+    [self incrementDisableFocusReporting:-1];
+}
+
+- (void)incrementDisableFocusReporting:(NSInteger)delta {
+    DLog(@"delta=%@ count %@->%@\n%@", @(delta), @(_disableFocusReporting), @(_disableFocusReporting + delta), self);
+    _disableFocusReporting += delta;
+    if (_disableFocusReporting == 0) {
+        [self setFocused:[self textViewIsFirstResponder]];
+    }
+}
+
 - (void)setFocused:(BOOL)focused {
-    if (focused != _focused) {
-        _focused = focused;
-        if ([_terminal reportFocus]) {
-            [self writeLatin1EncodedData:[_terminal.output reportFocusGained:focused] broadcastAllowed:NO];
-        }
-        if (focused && [self isTmuxClient]) {
-            [_tmuxController selectPane:self.tmuxPane];
-            [self.delegate sessionDidReportSelectedTmuxPane:self];
-        }
+    DLog(@"setFocused:%@ self=%@", @(focused), self);
+    if (_disableFocusReporting) {
+        DLog(@"Focus reporting disabled");
+        return;
+    }
+    if ([self.delegate sessionPasswordManagerWindowIsOpen]) {
+        DLog(@"Password manager window is open");
+        return;
+    }
+    if (focused == _focused) {
+        DLog(@"No change");
+        return;
+    }
+    _focused = focused;
+    if ([_terminal reportFocus]) {
+        DLog(@"Will report focus");
+        [self writeLatin1EncodedData:[_terminal.output reportFocusGained:focused] broadcastAllowed:NO];
+    }
+    if (focused && [self isTmuxClient]) {
+        DLog(@"Tell tmux about focus change");
+        [_tmuxController selectPane:self.tmuxPane];
+        [self.delegate sessionDidReportSelectedTmuxPane:self];
     }
 }
 
@@ -10849,6 +10898,7 @@ preferredEscaping:(iTermSendTextEscaping)preferredEscaping {
         return;
     }
     [self profileDidChangeToProfileWithName:newProfile[KEY_NAME]];
+    DLog(@"Done setting profile of %@", self);
 }
 
 - (void)screenSetPasteboard:(NSString *)value {
@@ -12642,10 +12692,14 @@ preferredEscaping:(iTermSendTextEscaping)preferredEscaping {
     return [_colorMap colorForKey:kColorMapBackground];
 }
 
-- (BOOL)sessionViewTerminalIsFirstResponder {
+- (BOOL)textViewIsFirstResponder {
     return (_textview.window.firstResponder == _textview &&
             [NSApp isActive] &&
             _textview.window.isKeyWindow);
+}
+
+- (BOOL)sessionViewTerminalIsFirstResponder {
+    return [self textViewIsFirstResponder];
 }
 
 - (BOOL)sessionViewShouldDimOnlyText {
@@ -13293,10 +13347,13 @@ preferredEscaping:(iTermSendTextEscaping)preferredEscaping {
                                            window:self.view.window] == kiTermWarningSelection1);
     if (ok) {
         [_echoProbe enterPassword];
+    } else {
+        [self incrementDisableFocusReporting:-1];
     }
 }
 
 - (void)echoProbeDidSucceed:(iTermEchoProbe *)echoProbe {
+    [self incrementDisableFocusReporting:-1];
 }
 
 - (BOOL)echoProbeShouldSendPassword:(iTermEchoProbe *)echoProbe {

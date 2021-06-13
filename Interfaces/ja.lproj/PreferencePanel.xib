@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <document type="com.apple.InterfaceBuilder3.Cocoa.XIB" version="3.0" toolsVersion="15705" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES">
     <dependencies>
+        <deployment identifier="macosx"/>
         <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="15705"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
@@ -698,6 +699,7 @@ Gw
                                     <tableColumns>
                                         <tableColumn width="195" minWidth="10" maxWidth="3.4028234663852886e+38" id="5901">
                                             <tableHeaderCell key="headerCell" lineBreakMode="truncatingTail" borderStyle="border" alignment="left" title="Notes">
+                                                <font key="font" metaFont="smallSystem"/>
                                                 <color key="textColor" name="headerTextColor" catalog="System" colorSpace="catalog"/>
                                                 <color key="backgroundColor" name="headerColor" catalog="System" colorSpace="catalog"/>
                                             </tableHeaderCell>
@@ -710,6 +712,7 @@ Gw
                                         </tableColumn>
                                         <tableColumn width="465" minWidth="40" maxWidth="1000" id="5850">
                                             <tableHeaderCell key="headerCell" lineBreakMode="truncatingTail" borderStyle="border" alignment="left" title="正規表現">
+                                                <font key="font" metaFont="smallSystem"/>
                                                 <color key="textColor" name="headerTextColor" catalog="System" colorSpace="catalog"/>
                                                 <color key="backgroundColor" white="0.33333298560000002" alpha="1" colorSpace="calibratedWhite"/>
                                             </tableHeaderCell>
@@ -722,6 +725,7 @@ Gw
                                         </tableColumn>
                                         <tableColumn width="56" minWidth="40" maxWidth="1000" id="5848">
                                             <tableHeaderCell key="headerCell" lineBreakMode="truncatingTail" borderStyle="border" alignment="left" title="精度">
+                                                <font key="font" metaFont="smallSystem"/>
                                                 <color key="textColor" name="headerTextColor" catalog="System" colorSpace="catalog"/>
                                                 <color key="backgroundColor" white="0.33333298560000002" alpha="1" colorSpace="calibratedWhite"/>
                                             </tableHeaderCell>
@@ -913,6 +917,7 @@ DQ
                                     <tableColumns>
                                         <tableColumn width="164.40625" minWidth="40" maxWidth="1000" id="6285">
                                             <tableHeaderCell key="headerCell" lineBreakMode="truncatingTail" borderStyle="border" alignment="left" title="タイトル">
+                                                <font key="font" metaFont="smallSystem"/>
                                                 <color key="textColor" name="headerTextColor" catalog="System" colorSpace="catalog"/>
                                                 <color key="backgroundColor" white="0.33333298560000002" alpha="1" colorSpace="calibratedWhite"/>
                                             </tableHeaderCell>
@@ -925,6 +930,7 @@ DQ
                                         </tableColumn>
                                         <tableColumn width="167.1953125" minWidth="40" maxWidth="1000" id="6286">
                                             <tableHeaderCell key="headerCell" lineBreakMode="truncatingTail" borderStyle="border" alignment="left" title="アクション">
+                                                <font key="font" metaFont="smallSystem"/>
                                                 <color key="textColor" name="headerTextColor" catalog="System" colorSpace="catalog"/>
                                                 <color key="backgroundColor" white="0.33333298560000002" alpha="1" colorSpace="calibratedWhite"/>
                                             </tableHeaderCell>
@@ -945,6 +951,7 @@ DQ
                                         </tableColumn>
                                         <tableColumn width="154.48828125" minWidth="10" maxWidth="3.4028234663852886e+38" id="6289">
                                             <tableHeaderCell key="headerCell" lineBreakMode="truncatingTail" borderStyle="border" alignment="left" title="パラメータ">
+                                                <font key="font" metaFont="smallSystem"/>
                                                 <color key="textColor" name="headerTextColor" catalog="System" colorSpace="catalog"/>
                                                 <color key="backgroundColor" name="headerColor" catalog="System" colorSpace="catalog"/>
                                             </tableHeaderCell>
@@ -1411,6 +1418,8 @@ DQ
                 <outlet property="_reduceFlicker" destination="Flt-We-Y3i" id="gLN-is-gOD"/>
                 <outlet property="_removeJob" destination="5669" id="YFO-c0-Vq2"/>
                 <outlet property="_sendCodeWhenIdle" destination="5697" id="dJR-J9-XOR"/>
+                <outlet property="_showTimestampsLabel" destination="tCm-x3-wFw" id="5Wz-bV-dln"/>
+                <outlet property="_showTimestampsPopup" destination="QhQ-qK-ObI" id="7om-bB-6kR"/>
                 <outlet property="_statusBarEnabled" destination="cO8-6s-51k" id="q6E-b3-j7D"/>
                 <outlet property="_undoTimeout" destination="ksA-qB-n6W" id="YVr-dx-p2r"/>
                 <outlet property="_warnContainer" destination="9hB-rM-RqL" id="XZB-xl-v3a"/>
@@ -3616,15 +3625,15 @@ DQ
             <point key="canvasLocation" x="183" y="-831.5"/>
         </customView>
         <customView id="ayN-Cl-pQs" userLabel="Prefs - Profiles - Session" customClass="iTermSizeRememberingView">
-            <rect key="frame" x="0.0" y="0.0" width="559" height="423"/>
+            <rect key="frame" x="0.0" y="0.0" width="559" height="447"/>
             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
             <subviews>
                 <scrollView fixedFrame="YES" autohidesScrollers="YES" horizontalLineScroll="19" horizontalPageScroll="10" verticalLineScroll="19" verticalPageScroll="10" usesPredominantAxisScrolling="NO" translatesAutoresizingMaskIntoConstraints="NO" id="5658">
-                    <rect key="frame" x="16" y="220" width="525" height="97"/>
+                    <rect key="frame" x="16" y="244" width="525" height="97"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <clipView key="contentView" ambiguous="YES" id="ArV-0K-qze">
                         <rect key="frame" x="1" y="1" width="523" height="95"/>
-                        <autoresizingMask key="autoresizingMask"/>
+                        <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
                             <tableView verticalHuggingPriority="750" ambiguous="YES" allowsExpansionToolTips="YES" columnAutoresizingStyle="lastColumnOnly" alternatingRowBackgroundColors="YES" columnReordering="NO" columnResizing="NO" multipleSelection="NO" autosaveColumns="NO" id="5661">
                                 <rect key="frame" x="0.0" y="0.0" width="523" height="95"/>
@@ -3663,7 +3672,7 @@ DQ
                     </scroller>
                 </scrollView>
                 <button verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="5667">
-                    <rect key="frame" x="16" y="190" width="23" height="23"/>
+                    <rect key="frame" x="16" y="214" width="23" height="23"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <buttonCell key="cell" type="smallSquare" bezelStyle="smallSquare" image="NSAddTemplate" imagePosition="overlaps" alignment="center" state="on" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="5668">
                         <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
@@ -3674,7 +3683,7 @@ DQ
                     </connections>
                 </button>
                 <button verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="5669">
-                    <rect key="frame" x="38" y="190" width="23" height="23"/>
+                    <rect key="frame" x="38" y="214" width="23" height="23"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <buttonCell key="cell" type="smallSquare" bezelStyle="smallSquare" image="NSRemoveTemplate" imagePosition="overlaps" alignment="center" state="on" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="5670">
                         <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
@@ -3685,7 +3694,7 @@ DQ
                     </connections>
                 </button>
                 <button fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="5685">
-                    <rect key="frame" x="14" y="135" width="288" height="18"/>
+                    <rect key="frame" x="14" y="159" width="288" height="18"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <buttonCell key="cell" type="check" title="セッションでの入力を自動的に以下へロギング:" bezelStyle="regularSquare" imagePosition="left" alignment="left" inset="2" id="5692">
                         <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
@@ -3697,7 +3706,7 @@ DQ
                     </connections>
                 </button>
                 <textField verticalHuggingPriority="750" fixedFrame="YES" allowsCharacterPickerTouchBarItem="YES" translatesAutoresizingMaskIntoConstraints="NO" id="5686">
-                    <rect key="frame" x="34" y="107" width="415" height="22"/>
+                    <rect key="frame" x="34" y="131" width="415" height="22"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" selectable="YES" editable="YES" sendsActionOnEndEditing="YES" state="on" borderStyle="bezel" drawsBackground="YES" id="5691" customClass="iTermStatusIndicatingTextFieldCell">
                         <font key="font" metaFont="system"/>
@@ -3709,7 +3718,7 @@ DQ
                     </connections>
                 </textField>
                 <button verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="5687">
-                    <rect key="frame" x="451" y="100" width="96" height="32"/>
+                    <rect key="frame" x="451" y="124" width="96" height="32"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <buttonCell key="cell" type="push" title="変更" bezelStyle="rounded" alignment="center" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="5690">
                         <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
@@ -3720,12 +3729,12 @@ DQ
                     </connections>
                 </button>
                 <imageView hidden="YES" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="5688">
-                    <rect key="frame" x="429" y="110" width="16" height="16"/>
+                    <rect key="frame" x="429" y="134" width="16" height="16"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <imageCell key="cell" refusesFirstResponder="YES" alignment="left" animates="YES" imageScaling="proportionallyDown" image="Warning" id="5689"/>
                 </imageView>
                 <button toolTip="Only use this if you really know what you’re doing!" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="5697">
-                    <rect key="frame" x="14" y="60" width="174" height="18"/>
+                    <rect key="frame" x="14" y="84" width="174" height="18"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <buttonCell key="cell" type="check" title="アイドル時にASCIIコード" bezelStyle="regularSquare" imagePosition="left" alignment="left" inset="2" id="5701">
                         <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
@@ -3736,7 +3745,7 @@ DQ
                     </connections>
                 </button>
                 <button toolTip="This is not recommended." fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="Flt-We-Y3i">
-                    <rect key="frame" x="14" y="40" width="455" height="18"/>
+                    <rect key="frame" x="14" y="64" width="455" height="18"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <buttonCell key="cell" type="check" title="スクロール中のちらつき軽減のため、カーソルが隠れている間は描画しない" bezelStyle="regularSquare" imagePosition="left" alignment="left" inset="2" id="elQ-vX-kkH">
                         <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
@@ -3747,9 +3756,9 @@ DQ
                     </connections>
                 </button>
                 <button toolTip="When a password prompt appears, automatically open the password manager?" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="7G9-14-8aW">
-                    <rect key="frame" x="14" y="82" width="455" height="18"/>
+                    <rect key="frame" x="14" y="106" width="455" height="18"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                    <buttonCell key="cell" type="check" title="Open password manager automatically" bezelStyle="regularSquare" imagePosition="left" alignment="left" inset="2" id="UEU-xg-gYz">
+                    <buttonCell key="cell" type="check" title="自動的にパスワードマネージャーを開く" bezelStyle="regularSquare" imagePosition="left" alignment="left" inset="2" id="UEU-xg-gYz">
                         <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                         <font key="font" metaFont="system"/>
                     </buttonCell>
@@ -3758,7 +3767,7 @@ DQ
                     </connections>
                 </button>
                 <button toolTip="Shows a configurable status bar at the top of each session." fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="cO8-6s-51k">
-                    <rect key="frame" x="14" y="20" width="141" height="18"/>
+                    <rect key="frame" x="14" y="19" width="141" height="18"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <buttonCell key="cell" type="check" title="ステータスバーを有効" bezelStyle="regularSquare" imagePosition="left" alignment="left" inset="2" id="cl5-An-mPh">
                         <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
@@ -3769,7 +3778,7 @@ DQ
                     </connections>
                 </button>
                 <textField verticalHuggingPriority="750" fixedFrame="YES" allowsCharacterPickerTouchBarItem="YES" translatesAutoresizingMaskIntoConstraints="NO" id="5707">
-                    <rect key="frame" x="14" y="403" width="55" height="17"/>
+                    <rect key="frame" x="14" y="427" width="55" height="17"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" sendsActionOnEndEditing="YES" title="終了時" id="5708">
                         <font key="font" metaFont="systemBold"/>
@@ -3778,7 +3787,7 @@ DQ
                     </textFieldCell>
                 </textField>
                 <textField verticalHuggingPriority="750" fixedFrame="YES" allowsCharacterPickerTouchBarItem="YES" translatesAutoresizingMaskIntoConstraints="NO" id="5709">
-                    <rect key="frame" x="14" y="156" width="99" height="17"/>
+                    <rect key="frame" x="14" y="180" width="99" height="17"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" sendsActionOnEndEditing="YES" title="その他" id="5710">
                         <font key="font" metaFont="systemBold"/>
@@ -3787,7 +3796,7 @@ DQ
                     </textFieldCell>
                 </textField>
                 <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" fixedFrame="YES" allowsCharacterPickerTouchBarItem="YES" translatesAutoresizingMaskIntoConstraints="NO" id="wbj-Xu-M03">
-                    <rect key="frame" x="14" y="350" width="319" height="17"/>
+                    <rect key="frame" x="14" y="374" width="319" height="17"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" sendsActionOnEndEditing="YES" title="「やり直す」で右の時間内に終了したセッションを再開" id="JdL-vz-9Vf">
                         <font key="font" metaFont="system"/>
@@ -3796,7 +3805,7 @@ DQ
                     </textFieldCell>
                 </textField>
                 <textField verticalHuggingPriority="750" fixedFrame="YES" allowsCharacterPickerTouchBarItem="YES" translatesAutoresizingMaskIntoConstraints="NO" id="ksA-qB-n6W">
-                    <rect key="frame" x="377" y="348" width="63" height="22"/>
+                    <rect key="frame" x="377" y="372" width="63" height="22"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" selectable="YES" editable="YES" sendsActionOnEndEditing="YES" state="on" borderStyle="bezel" drawsBackground="YES" id="ack-0h-dVd">
                         <font key="font" metaFont="system"/>
@@ -3808,7 +3817,7 @@ DQ
                     </connections>
                 </textField>
                 <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" fixedFrame="YES" allowsCharacterPickerTouchBarItem="YES" translatesAutoresizingMaskIntoConstraints="NO" id="fn0-X1-OtH">
-                    <rect key="frame" x="446" y="348" width="56" height="19"/>
+                    <rect key="frame" x="446" y="372" width="56" height="19"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" sendsActionOnEndEditing="YES" title="秒" id="vCA-Gp-FvI">
                         <font key="font" metaFont="system"/>
@@ -3817,7 +3826,7 @@ DQ
                     </textFieldCell>
                 </textField>
                 <textField verticalHuggingPriority="750" fixedFrame="YES" allowsCharacterPickerTouchBarItem="YES" translatesAutoresizingMaskIntoConstraints="NO" id="5698">
-                    <rect key="frame" x="208" y="59" width="81" height="22"/>
+                    <rect key="frame" x="208" y="83" width="81" height="22"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" selectable="YES" editable="YES" sendsActionOnEndEditing="YES" state="on" borderStyle="bezel" alignment="left" placeholderString="ASCII Code" drawsBackground="YES" id="5699">
                         <font key="font" metaFont="system"/>
@@ -3830,7 +3839,7 @@ DQ
                     </connections>
                 </textField>
                 <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" fixedFrame="YES" allowsCharacterPickerTouchBarItem="YES" translatesAutoresizingMaskIntoConstraints="NO" id="SKQ-AW-1wN">
-                    <rect key="frame" x="288" y="60" width="42" height="18"/>
+                    <rect key="frame" x="288" y="84" width="42" height="18"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" sendsActionOnEndEditing="YES" alignment="center" title="を" id="e95-Tz-JKN">
                         <font key="font" metaFont="system"/>
@@ -3839,7 +3848,7 @@ DQ
                     </textFieldCell>
                 </textField>
                 <textField verticalHuggingPriority="750" fixedFrame="YES" allowsCharacterPickerTouchBarItem="YES" translatesAutoresizingMaskIntoConstraints="NO" id="Dvw-Ch-E3y">
-                    <rect key="frame" x="329" y="59" width="55" height="22"/>
+                    <rect key="frame" x="329" y="83" width="55" height="22"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" selectable="YES" editable="YES" sendsActionOnEndEditing="YES" state="on" borderStyle="bezel" alignment="left" placeholderString="interval" drawsBackground="YES" id="Njg-LZ-sIb">
                         <font key="font" metaFont="system"/>
@@ -3851,7 +3860,7 @@ DQ
                     </connections>
                 </textField>
                 <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" fixedFrame="YES" allowsCharacterPickerTouchBarItem="YES" translatesAutoresizingMaskIntoConstraints="NO" id="RGW-48-LkR">
-                    <rect key="frame" x="385" y="54" width="83" height="17"/>
+                    <rect key="frame" x="385" y="84" width="83" height="18"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" sendsActionOnEndEditing="YES" title="秒ごとに送信" id="VbV-8M-87X">
                         <font key="font" metaFont="system"/>
@@ -3860,7 +3869,7 @@ DQ
                     </textFieldCell>
                 </textField>
                 <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="YAa-fh-c4L">
-                    <rect key="frame" x="14" y="325" width="145" height="17"/>
+                    <rect key="frame" x="14" y="349" width="145" height="17"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" sendsActionOnEndEditing="YES" title="閉じる前のプロンプト:" id="iZE-xA-Mxl">
                         <font key="font" metaFont="system"/>
@@ -3869,7 +3878,7 @@ DQ
                     </textFieldCell>
                 </textField>
                 <customView fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="9hB-rM-RqL" userLabel="Warn Container">
-                    <rect key="frame" x="165" y="325" width="374" height="17"/>
+                    <rect key="frame" x="165" y="349" width="374" height="17"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <subviews>
                         <button verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="jr3-cM-gDJ">
@@ -3908,7 +3917,7 @@ DQ
                     </subviews>
                 </customView>
                 <button verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="crL-dF-Ixm">
-                    <rect key="frame" x="152" y="13" width="139" height="28"/>
+                    <rect key="frame" x="152" y="12" width="139" height="28"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <buttonCell key="cell" type="push" title="ステータスバーの設定" bezelStyle="rounded" alignment="center" controlSize="small" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="Kw4-Uw-vBd">
                         <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
@@ -3919,7 +3928,7 @@ DQ
                     </connections>
                 </button>
                 <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="Xcd-dg-Jah">
-                    <rect key="frame" x="14" y="378" width="131" height="17"/>
+                    <rect key="frame" x="14" y="402" width="131" height="17"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <textFieldCell key="cell" lineBreakMode="clipping" title="セッション終了後:" id="s5V-Jn-CdV">
                         <font key="font" usesAppearanceFont="YES"/>
@@ -3928,7 +3937,7 @@ DQ
                     </textFieldCell>
                 </textField>
                 <popUpButton verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="P7Z-yJ-1GX">
-                    <rect key="frame" x="149" y="373" width="140" height="25"/>
+                    <rect key="frame" x="149" y="397" width="140" height="25"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <popUpButtonCell key="cell" type="push" title="何もしない" bezelStyle="rounded" alignment="left" lineBreakMode="truncatingTail" state="on" borderStyle="borderAndBezel" imageScaling="proportionallyDown" inset="2" selectedItem="2UH-A6-PHv" id="sAi-EY-JC7">
                         <behavior key="behavior" lightByBackground="YES" lightByGray="YES"/>
@@ -3946,7 +3955,7 @@ DQ
                     </connections>
                 </popUpButton>
                 <button verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="Tl8-Wq-C80">
-                    <rect key="frame" x="437" y="135" width="179" height="18"/>
+                    <rect key="frame" x="360" y="159" width="179" height="18"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <buttonCell key="cell" type="check" title="プレインテキストでロギング" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="Ajt-gf-YM2">
                         <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
@@ -3956,9 +3965,36 @@ DQ
                         <action selector="settingChanged:" target="TG6-06-mq9" id="jrl-4x-XIp"/>
                     </connections>
                 </button>
+                <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="tCm-x3-wFw">
+                    <rect key="frame" x="34" y="42" width="125" height="16"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
+                    <textFieldCell key="cell" lineBreakMode="clipping" title="タイムスタンプを表示" id="4QD-Wk-ajm">
+                        <font key="font" usesAppearanceFont="YES"/>
+                        <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
+                        <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
+                    </textFieldCell>
+                </textField>
+                <popUpButton verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="QhQ-qK-ObI">
+                    <rect key="frame" x="156" y="36" width="245" height="25"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
+                    <popUpButtonCell key="cell" type="push" title="非表示" bezelStyle="rounded" alignment="left" lineBreakMode="truncatingTail" state="on" borderStyle="borderAndBezel" imageScaling="proportionallyDown" inset="2" selectedItem="6wE-Nd-sEZ" id="D96-nq-rVU">
+                        <behavior key="behavior" lightByBackground="YES" lightByGray="YES"/>
+                        <font key="font" metaFont="menu"/>
+                        <menu key="menu" id="2Av-os-Wya">
+                            <items>
+                                <menuItem title="非表示" state="on" id="6wE-Nd-sEZ"/>
+                                <menuItem title="常に表示" tag="1" id="wMW-cd-tme"/>
+                                <menuItem title="スクロールバーにマウスが来た時に表示" tag="2" id="Sfc-f4-G7H"/>
+                            </items>
+                        </menu>
+                    </popUpButtonCell>
+                    <connections>
+                        <action selector="settingChanged:" target="TG6-06-mq9" id="SLz-4O-Pbi"/>
+                    </connections>
+                </popUpButton>
             </subviews>
             <accessibility identifier="prefsProfilesSession"/>
-            <point key="canvasLocation" x="713.5" y="733.5"/>
+            <point key="canvasLocation" x="713.5" y="745.5"/>
         </customView>
         <customView id="M5G-Dw-0HO" userLabel="Prefs - Profiles - Keys" customClass="iTermSizeRememberingView">
             <rect key="frame" x="0.0" y="0.0" width="657" height="453"/>
@@ -3970,7 +4006,7 @@ DQ
                     <font key="font" metaFont="system"/>
                     <tabViewItems>
                         <tabViewItem label="一般" identifier="General" id="Aba-Zo-uvC">
-                            <view key="view" identifier="GeneralTabView" id="KEo-nn-2KS">
+                            <view key="view" identifier="GeneralTabView" ambiguous="YES" id="KEo-nn-2KS">
                                 <rect key="frame" x="10" y="33" width="645" height="423"/>
                                 <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                 <subviews>
@@ -4117,7 +4153,7 @@ DQ
                                             <button fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="Nqn-Qm-sbi">
                                                 <rect key="frame" x="132" y="315" width="428" height="18"/>
                                                 <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                                                <buttonCell key="cell" type="check" title="Page up, page down, home and end scroll outside interactive apps" bezelStyle="regularSquare" imagePosition="left" alignment="left" state="on" inset="2" id="GRf-s1-ZiR">
+                                                <buttonCell key="cell" type="check" title="対話型アプリ外で Page up, Page Down, Home, Scroll" bezelStyle="regularSquare" imagePosition="left" alignment="left" state="on" inset="2" id="GRf-s1-ZiR">
                                                     <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                                                     <font key="font" metaFont="system"/>
                                                 </buttonCell>
@@ -4394,7 +4430,7 @@ DQ
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <clipView key="contentView" ambiguous="YES" id="FMp-vf-IvG">
                         <rect key="frame" x="1" y="1" width="519" height="76"/>
-                        <autoresizingMask key="autoresizingMask"/>
+                        <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
                             <tableView verticalHuggingPriority="750" ambiguous="YES" allowsExpansionToolTips="YES" columnAutoresizingStyle="lastColumnOnly" alternatingRowBackgroundColors="YES" columnSelection="YES" multipleSelection="NO" autosaveColumns="NO" id="69M-P0-mzb">
                                 <rect key="frame" x="0.0" y="0.0" width="519" height="76"/>
@@ -4519,7 +4555,7 @@ DQ
                     <font key="font" metaFont="system"/>
                     <tabViewItems>
                         <tabViewItem label="起動" identifier="1" id="ZsM-GD-jXe">
-                            <view key="view" ambiguous="YES" id="PuF-5n-KLY">
+                            <view key="view" id="PuF-5n-KLY">
                                 <rect key="frame" x="10" y="33" width="755" height="461"/>
                                 <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                 <subviews>
@@ -4993,7 +5029,7 @@ DQ
                             </view>
                         </tabViewItem>
                         <tabViewItem label="設定" identifier="" id="A3y-3j-WQF">
-                            <view key="view" id="NGW-1C-GwI">
+                            <view key="view" ambiguous="YES" id="NGW-1C-GwI">
                                 <rect key="frame" x="10" y="33" width="755" height="461"/>
                                 <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                 <subviews>
@@ -5711,7 +5747,7 @@ DQ
                             </view>
                         </tabViewItem>
                         <tabViewItem label="調光" identifier="" id="erX-Qj-Ist">
-                            <view key="view" id="qPY-VI-zPN">
+                            <view key="view" ambiguous="YES" id="qPY-VI-zPN">
                                 <rect key="frame" x="10" y="33" width="590" height="214"/>
                                 <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                 <subviews>
@@ -5806,7 +5842,7 @@ DQ
                     <font key="font" metaFont="system"/>
                     <tabViewItems>
                         <tabViewItem label="キー割り当て" identifier="" id="Nxa-UI-aa0">
-                            <view key="view" ambiguous="YES" id="Hvj-tK-pw4">
+                            <view key="view" id="Hvj-tK-pw4">
                                 <rect key="frame" x="10" y="33" width="899" height="384"/>
                                 <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                 <subviews>
@@ -6051,7 +6087,7 @@ DQ
                             </view>
                         </tabViewItem>
                         <tabViewItem label="装飾キーの再割り当て" identifier="1" id="ZPU-LD-eKa">
-                            <view key="view" id="cf3-jz-e1B">
+                            <view key="view" ambiguous="YES" id="cf3-jz-e1B">
                                 <rect key="frame" x="10" y="33" width="899" height="384"/>
                                 <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                 <subviews>
@@ -6371,7 +6407,7 @@ DQ
                     <font key="font" metaFont="system"/>
                     <tabViewItems>
                         <tabViewItem label="一般" identifier="2" id="H6p-WE-6DF">
-                            <view key="view" ambiguous="YES" id="PCm-pP-b2X">
+                            <view key="view" id="PCm-pP-b2X">
                                 <rect key="frame" x="10" y="33" width="859" height="371"/>
                                 <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                 <subviews>
@@ -6453,7 +6489,7 @@ DQ
                             </view>
                         </tabViewItem>
                         <tabViewItem label="割り当て" identifier="1" id="FxS-Eb-dxA">
-                            <view key="view" id="4w0-aP-GJy">
+                            <view key="view" ambiguous="YES" id="4w0-aP-GJy">
                                 <rect key="frame" x="10" y="33" width="859" height="371"/>
                                 <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                 <subviews>
@@ -6487,11 +6523,11 @@ DQ
                                             <scrollView fixedFrame="YES" autohidesScrollers="YES" horizontalLineScroll="19" horizontalPageScroll="10" verticalLineScroll="19" verticalPageScroll="10" usesPredominantAxisScrolling="NO" translatesAutoresizingMaskIntoConstraints="NO" id="6090">
                                                 <rect key="frame" x="20" y="49" width="851" height="285"/>
                                                 <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                                                <clipView key="contentView" id="2zv-hI-Vxj">
+                                                <clipView key="contentView" ambiguous="YES" id="2zv-hI-Vxj">
                                                     <rect key="frame" x="1" y="1" width="849" height="283"/>
-                                                    <autoresizingMask key="autoresizingMask"/>
+                                                    <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                                     <subviews>
-                                                        <tableView verticalHuggingPriority="750" allowsExpansionToolTips="YES" columnAutoresizingStyle="none" columnReordering="NO" columnResizing="NO" multipleSelection="NO" autosaveColumns="NO" id="6091">
+                                                        <tableView verticalHuggingPriority="750" ambiguous="YES" allowsExpansionToolTips="YES" columnAutoresizingStyle="none" columnReordering="NO" columnResizing="NO" multipleSelection="NO" autosaveColumns="NO" id="6091">
                                                             <rect key="frame" x="0.0" y="0.0" width="849" height="283"/>
                                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                                             <size key="intercellSpacing" width="3" height="2"/>
@@ -6574,7 +6610,7 @@ DQ
                     <font key="font" metaFont="system"/>
                     <tabViewItems>
                         <tabViewItem label="アクション" identifier="Actions" id="GdP-GX-FgT">
-                            <view key="view" identifier="ActionWrapper" ambiguous="YES" id="zEH-KM-w0R">
+                            <view key="view" identifier="ActionWrapper" id="zEH-KM-w0R">
                                 <rect key="frame" x="10" y="33" width="846" height="344"/>
                                 <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                 <subviews>
@@ -6586,7 +6622,7 @@ DQ
                             </view>
                         </tabViewItem>
                         <tabViewItem label="Snippets" identifier="Snippets" id="DUQ-NG-jEh">
-                            <view key="view" identifier="SnippetWrapper" id="0Vk-OH-GGO">
+                            <view key="view" identifier="SnippetWrapper" ambiguous="YES" id="0Vk-OH-GGO">
                                 <rect key="frame" x="10" y="33" width="846" height="344"/>
                                 <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                 <subviews>
@@ -6611,7 +6647,7 @@ DQ
                     <autoresizingMask key="autoresizingMask" widthSizable="YES" flexibleMinY="YES"/>
                     <clipView key="contentView" ambiguous="YES" id="Fm3-fw-Qw5">
                         <rect key="frame" x="1" y="1" width="950" height="362"/>
-                        <autoresizingMask key="autoresizingMask"/>
+                        <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
                             <tableView verticalHuggingPriority="750" ambiguous="YES" allowsExpansionToolTips="YES" columnAutoresizingStyle="none" columnReordering="NO" columnResizing="NO" multipleSelection="NO" autosaveColumns="NO" typeSelect="NO" rowSizeStyle="automatic" viewBased="YES" id="5ik-Xh-beg" customClass="iTermAdvancedSettingsTableView">
                                 <rect key="frame" x="0.0" y="0.0" width="950" height="362"/>

@@ -215,6 +215,7 @@
 #define KEY_STATUS_BAR_LAYOUT                 @"Status Bar Layout"
 #define KEY_PLAIN_TEXT_LOGGING                @"Plain Text Logging"
 #define KEY_OPEN_PASSWORD_MANAGER_AUTOMATICALLY @"Open Password Manager Automatically"
+#define KEY_SHOW_TIMESTAMPS                   @"Show Timestamps"  // NSNumber iTermTimestampsMode
 
 // Keyboard
 #define KEY_KEYBOARD_MAP                      @"Keyboard Map"
@@ -251,6 +252,7 @@
 
 // Dynamic Profiles (not in prefs ui)
 #define KEY_DYNAMIC_PROFILE_PARENT_NAME      @"Dynamic Profile Parent Name"
+#define KEY_DYNAMIC_PROFILE_PARENT_GUID      @"Dynamic Profile Parent GUID"
 #define KEY_DYNAMIC_PROFILE_FILENAME         @"Dynamic Profile Filename"
 
 // Session-only key
@@ -397,6 +399,12 @@ typedef NS_ENUM(NSUInteger, iTermProfileIcon) {
     iTermProfileIconNone = 0,
     iTermProfileIconAutomatic = 1,
     iTermProfileIconCustom = 2
+};
+
+typedef NS_ENUM(NSUInteger, iTermTimestampsMode) {
+    iTermTimestampsModeOff,
+    iTermTimestampsModeOn,
+    iTermTimestampsModeHover
 };
 
 @interface ITAddressBookMgr : NSObject <NSNetServiceBrowserDelegate, NSNetServiceDelegate>

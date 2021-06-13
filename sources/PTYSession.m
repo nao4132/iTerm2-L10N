@@ -6,6 +6,7 @@
 #import "CVector.h"
 #import "FakeWindow.h"
 #import "FileTransferManager.h"
+#import "FutureMethods.h"
 #import "ITAddressBookMgr.h"
 #import "iTerm.h"
 #import "iTermAPIHelper.h"
@@ -3288,6 +3289,11 @@ ITERM_WEAKLY_REFERENCEABLE
     [self.variablesScope setValue:task.tty forVariableNamed:iTermVariableKeySessionTTY];
 }
 
+// Main thread
+- (void)taskDidRegister:(PTYTask *)task {
+    [self updateTTYSize];
+}
+
 - (void)tmuxDidDisconnect {
     DLog(@"tmuxDidDisconnect");
     if (_exited) {
@@ -6075,6 +6081,14 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
         machineSupportsMetal = devices.count > 0;
         [devices release];
     });
+    if (@available(macOS 12.0, *)) {
+        if ([[NSProcessInfo processInfo] isLowPowerModeEnabled]) {
+            if (reason) {
+                *reason = iTermMetalUnavailableReasonLowerPowerMode;
+            }
+            return NO;
+        }
+    }
     if (!machineSupportsMetal) {
         if (reason) {
             *reason = iTermMetalUnavailableReasonNoGPU;
@@ -9866,6 +9880,25 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
     return [iTermProfilePreferences boolForKey:KEY_ENABLE_TRIGGERS_IN_INTERACTIVE_APPS inProfile:self.profile];
 }
 
+- (iTermTimestampsMode)textviewTimestampsMode {
+    return (iTermTimestampsMode)[iTermProfilePreferences unsignedIntegerForKey:KEY_SHOW_TIMESTAMPS inProfile:self.profile];
+}
+
+- (void)textviewToggleTimestampsMode {
+    iTermTimestampsMode mode = iTermTimestampsModeOff;
+    switch ([self textviewTimestampsMode]) {
+        case iTermTimestampsModeOff:
+            mode = iTermTimestampsModeOn;
+            break;
+        case iTermTimestampsModeOn:
+        case iTermTimestampsModeHover:
+            mode = iTermTimestampsModeOff;
+            break;
+    }
+    [self setSessionSpecificProfileValues:@{ KEY_SHOW_TIMESTAMPS: @(mode) }];
+    [_textview setNeedsDisplay:YES];
+}
+
 - (void)closeTriggerWindowController {
     [_triggerWindowController close];
 }
@@ -11615,16 +11648,16 @@ preferredEscaping:(iTermSendTextEscaping)preferredEscaping {
         }
     }
     if (!haveCommand && hadCommand) {
-        DLog(@"Hide because don't have a command, but just had one");
+        DLog(@"ACH Hide because don't have a command, but just had one");
         [[_delegate realParentWindow] hideAutoCommandHistoryForSession:self];
     } else {
         if (!hadCommand && range.start.x >= 0) {
-            DLog(@"Show because I have a range but didn't have a command");
+            DLog(@"ACH Show because I have a range but didn't have a command");
             [[_delegate realParentWindow] showAutoCommandHistoryForSession:self];
         }
         if ([[_delegate realParentWindow] wantsCommandHistoryUpdatesFromSession:self]) {
             NSString *command = haveCommand ? [self commandInRange:_commandRange] : @"";
-            DLog(@"Update command to %@, have=%d, range.start.x=%d", command, (int)haveCommand, range.start.x);
+            DLog(@"ACH Update command to %@, have=%d, range.start.x=%d", command, (int)haveCommand, range.start.x);
             if (haveCommand && self.eligibleForAutoCommandHistory) {
                 [[_delegate realParentWindow] updateAutoCommandHistoryForPrefix:command
                                                                       inSession:self
@@ -12611,10 +12644,12 @@ preferredEscaping:(iTermSendTextEscaping)preferredEscaping {
 
 - (void)sessionViewMouseEntered:(NSEvent *)event {
     [_textview mouseEntered:event];
+    [_textview setNeedsDisplay:YES];
 }
 
 - (void)sessionViewMouseExited:(NSEvent *)event {
     [_textview mouseExited:event];
+    [_textview setNeedsDisplay:YES];
 }
 
 - (void)sessionViewMouseMoved:(NSEvent *)event {
@@ -12765,6 +12800,7 @@ preferredEscaping:(iTermSendTextEscaping)preferredEscaping {
 }
 
 - (BOOL)updateTTYSize {
+    DLog(@"%@\n%@", self, [NSThread callStackSymbols]);
     return [_shell setSize:_screen.size
                   viewSize:_screen.viewSize
                scaleFactor:self.backingScaleFactor];

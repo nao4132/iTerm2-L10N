@@ -6,27 +6,27 @@
 	<dict>
 		<key>Resources/EmptyStar.tiff</key>
 		<data>
-		W6NdFL37ZzZPtQ+E8uGAlC/Rzds=
+		PSR2i57C1XnlldWG6gF0L62g/hU=
 		</data>
 		<key>Resources/FilledStar.tiff</key>
 		<data>
-		0Smh4/Nto6iGk3iNQX1uqHer77I=
+		QVb8IDzEwhKGa2EbR2+HAT00wIw=
 		</data>
 		<key>Resources/HorizontalSpacingIcon.tiff</key>
 		<data>
-		NW2RyHx4rYZSzLMhzAtjnUeyNlw=
+		9mgd6tjd0mCZf0P//5AaMErCM+Y=
 		</data>
 		<key>Resources/Info.plist</key>
 		<data>
-		wR2XaDwBqxWRa5V7WnORaRu3eP8=
+		pFkLP4Pk1t+7esyKqWQa3FDaZTY=
 		</data>
 		<key>Resources/MainViewController.nib</key>
 		<data>
-		LNPYQV/KD4slS2Sy04o+VbDHDo8=
+		YE4up8aBhkhwxgn5B8Fuf8E/L/Q=
 		</data>
 		<key>Resources/VerticalSpacingIcon.tiff</key>
 		<data>
-		2Dh1SXIsRSXtn13bU4cyCInc1tM=
+		MoRFq4caHhQDIPUbx5iGkEsizWI=
 		</data>
 	</dict>
 	<key>files2</key>
@@ -35,7 +35,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			mW714MO2KltII4QE1nar3fqAHexlrdBJLwCuQ+MBTIc=
+			ymQMmlP0rXKapU++eoer2L6RuLbH0lqrSFiWqjaCa20=
 			</data>
 		</dict>
 		<key>Headers/BetterFontPicker.h</key>
@@ -45,88 +45,32 @@
 			8jqMWUA2CTUlu5XlhSjQOWekKSw5cQOii/umJSlzeIA=
 			</data>
 		</dict>
-		<key>Modules/BetterFontPicker.swiftmodule/Project/arm64-apple-macos.swiftsourceinfo</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			B68ntXrfJhM9+6plmvi52hqUGzx825Usguc+Mql8gb0=
-			</data>
-		</dict>
-		<key>Modules/BetterFontPicker.swiftmodule/Project/arm64.swiftsourceinfo</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			B68ntXrfJhM9+6plmvi52hqUGzx825Usguc+Mql8gb0=
-			</data>
-		</dict>
-		<key>Modules/BetterFontPicker.swiftmodule/Project/x86_64-apple-macos.swiftsourceinfo</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			31/zhPx4iA/T5ghtzb1PwglUnhH1wZkkkMJHmISFFcc=
-			</data>
-		</dict>
-		<key>Modules/BetterFontPicker.swiftmodule/Project/x86_64.swiftsourceinfo</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			31/zhPx4iA/T5ghtzb1PwglUnhH1wZkkkMJHmISFFcc=
-			</data>
-		</dict>
-		<key>Modules/BetterFontPicker.swiftmodule/arm64-apple-macos.swiftdoc</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			e8W1uzJrHDjbBdEdLC5rBEtbtFo5T97ktO2/mfEScCE=
-			</data>
-		</dict>
-		<key>Modules/BetterFontPicker.swiftmodule/arm64-apple-macos.swiftmodule</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			64ndpdPvsYHZQ+xM8xs8L7IOhpwNPJsTtAnbAO0GKAY=
-			</data>
-		</dict>
-		<key>Modules/BetterFontPicker.swiftmodule/arm64.swiftdoc</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			e8W1uzJrHDjbBdEdLC5rBEtbtFo5T97ktO2/mfEScCE=
-			</data>
-		</dict>
-		<key>Modules/BetterFontPicker.swiftmodule/arm64.swiftmodule</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			64ndpdPvsYHZQ+xM8xs8L7IOhpwNPJsTtAnbAO0GKAY=
-			</data>
-		</dict>
 		<key>Modules/BetterFontPicker.swiftmodule/x86_64-apple-macos.swiftdoc</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			NKa5YoRrNuQgszVxEIyyOVgCDchl5wIDsvuji8GqHcA=
+			N2kO8Ii19Ou5qDd48tDPbMTVR/Ty221vW+/V8XVFatE=
 			</data>
 		</dict>
 		<key>Modules/BetterFontPicker.swiftmodule/x86_64-apple-macos.swiftmodule</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			o0lGXQd/kkhc+3oAbEe4he036r7baeoAs1PQiu8jr/I=
+			aIonA06wNlvaWkKeiqG/M6aN85hxLTAKmGyW5oEEyOY=
 			</data>
 		</dict>
 		<key>Modules/BetterFontPicker.swiftmodule/x86_64.swiftdoc</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			NKa5YoRrNuQgszVxEIyyOVgCDchl5wIDsvuji8GqHcA=
+			N2kO8Ii19Ou5qDd48tDPbMTVR/Ty221vW+/V8XVFatE=
 			</data>
 		</dict>
 		<key>Modules/BetterFontPicker.swiftmodule/x86_64.swiftmodule</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			o0lGXQd/kkhc+3oAbEe4he036r7baeoAs1PQiu8jr/I=
+			aIonA06wNlvaWkKeiqG/M6aN85hxLTAKmGyW5oEEyOY=
 			</data>
 		</dict>
 		<key>Modules/module.modulemap</key>
@@ -140,42 +84,42 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			bBSwH5lfG1YMDJIeCL5zU4Ya5VEvbZ6UojGsLMwdNfM=
+			FxkU5VnbvOxkBScTbRV+X2/x5JlcSMtGX25JHF+Hbnc=
 			</data>
 		</dict>
 		<key>Resources/FilledStar.tiff</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			UOGgNhtt+DxJ9e7cexZxI1wWnoQ31vEknERCHFH68W8=
+			crdMi06dD8plV8h7WktR7xl269M4N0/5hxcjc4n9eBw=
 			</data>
 		</dict>
 		<key>Resources/HorizontalSpacingIcon.tiff</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			Vbc2/zSHp+cSh4oHUkYf8JjsPJcMAfoYXoDH5afDeL8=
+			lfijtDgKvZBu9lg/BpQ9KaDPPRyub23XaF3dGtObU3Y=
 			</data>
 		</dict>
 		<key>Resources/Info.plist</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			XKo5nnEvYN8cBQNP6ERM2g/sxN+Mv6IOPHIDVmp0r3Q=
+			6eUkxkhdA/lMdtD/gAYNqB/4wdccjh7zeJTpNYLQZSU=
 			</data>
 		</dict>
 		<key>Resources/MainViewController.nib</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			7hayOPX85ZXxB8338NKA3oDuAbFKIeCjK6GdGBG5gCM=
+			ApE8LFbqB7CwC2RcJgTCchwLqxa1aW7SF/9aRmYn5CE=
 			</data>
 		</dict>
 		<key>Resources/VerticalSpacingIcon.tiff</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			4LqJmYpIHH2QNbPymMXuO5Uae4N4aE7XdVaUb3SmwwM=
+			NNbkj3uwNnKmzypHLmABWMHyMq43a5eNHKJWLuRw06k=
 			</data>
 		</dict>
 	</dict>

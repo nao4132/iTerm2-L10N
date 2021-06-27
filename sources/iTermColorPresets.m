@@ -3,7 +3,9 @@
 #import "DebugLogging.h"
 #import "ITAddressBookMgr.h"
 #import "iTermProfilePreferences.h"
+#import "NSArray+iTerm.h"
 #import "NSDictionary+iTerm.h"
+#import "NSStringITerm.h"
 
 NSString *const kCustomColorPresetsKey = @"Custom Color Presets";
 NSString *const kRebuildColorPresetsMenuNotification = @"kRebuildColorPresetsMenuNotification";
@@ -135,38 +137,72 @@ NSString *const kRebuildColorPresetsMenuNotification = @"kRebuildColorPresetsMen
 
 @implementation ProfileModel(iTermColorPresets)
 
-+ (NSArray *)colorKeys {
-    return @[ KEY_ANSI_0_COLOR,
-              KEY_ANSI_1_COLOR,
-              KEY_ANSI_2_COLOR,
-              KEY_ANSI_3_COLOR,
-              KEY_ANSI_4_COLOR,
-              KEY_ANSI_5_COLOR,
-              KEY_ANSI_6_COLOR,
-              KEY_ANSI_7_COLOR,
-              KEY_ANSI_8_COLOR,
-              KEY_ANSI_9_COLOR,
-              KEY_ANSI_10_COLOR,
-              KEY_ANSI_11_COLOR,
-              KEY_ANSI_12_COLOR,
-              KEY_ANSI_13_COLOR,
-              KEY_ANSI_14_COLOR,
-              KEY_ANSI_15_COLOR,
-              KEY_FOREGROUND_COLOR,
-              KEY_BACKGROUND_COLOR,
-              KEY_BOLD_COLOR,
-              KEY_LINK_COLOR,
-              KEY_SELECTION_COLOR,
-              KEY_SELECTED_TEXT_COLOR,
-              KEY_CURSOR_COLOR,
-              KEY_CURSOR_TEXT_COLOR,
-              KEY_TAB_COLOR,
-              KEY_UNDERLINE_COLOR,
-              KEY_CURSOR_GUIDE_COLOR,
-              KEY_BADGE_COLOR ];
++ (NSArray<NSString *> *)colorKeysWithModes:(BOOL)modes {
+    NSArray *keys = @[
+        KEY_ANSI_0_COLOR,
+        KEY_ANSI_1_COLOR,
+        KEY_ANSI_2_COLOR,
+        KEY_ANSI_3_COLOR,
+        KEY_ANSI_4_COLOR,
+        KEY_ANSI_5_COLOR,
+        KEY_ANSI_6_COLOR,
+        KEY_ANSI_7_COLOR,
+        KEY_ANSI_8_COLOR,
+        KEY_ANSI_9_COLOR,
+        KEY_ANSI_10_COLOR,
+        KEY_ANSI_11_COLOR,
+        KEY_ANSI_12_COLOR,
+        KEY_ANSI_13_COLOR,
+        KEY_ANSI_14_COLOR,
+        KEY_ANSI_15_COLOR,
+        KEY_FOREGROUND_COLOR,
+        KEY_BACKGROUND_COLOR,
+        KEY_BOLD_COLOR,
+        KEY_LINK_COLOR,
+        KEY_SELECTION_COLOR,
+        KEY_SELECTED_TEXT_COLOR,
+        KEY_CURSOR_COLOR,
+        KEY_CURSOR_TEXT_COLOR,
+        KEY_TAB_COLOR,
+        KEY_UNDERLINE_COLOR,
+        KEY_CURSOR_GUIDE_COLOR,
+        KEY_BADGE_COLOR ];
+
+    if (!modes) {
+        return keys;
+    }
+    return [keys flatMapWithBlock:^NSArray *(NSString *key) {
+        return @[ [key stringByAppendingString:COLORS_LIGHT_MODE_SUFFIX],
+                  [key stringByAppendingString:COLORS_DARK_MODE_SUFFIX] ];
+    }];
+}
+
+- (BOOL)presetHasMultipleModes:(NSString *)presetName {
+    iTermColorPreset *settings = [iTermColorPresets presetWithName:presetName];
+    if (!settings) {
+        return NO;
+    }
+    return iTermColorPresetHasModes(settings);
 }
 
 - (BOOL)addColorPresetNamed:(NSString *)presetName toProfile:(Profile *)profile {
+    const BOOL presetHasModes = [self presetHasMultipleModes:presetName];
+    const iTermColorPresetMode modes = presetHasModes ? (iTermColorPresetModeLight | iTermColorPresetModeDark) : 0;
+    return [self addColorPresetNamed:presetName toProfile:profile from:modes to:modes updateUseModes:YES];
+}
+
+- (BOOL)addColorPresetNamed:(NSString *)presetName
+                  toProfile:(Profile *)profile
+                       from:(iTermColorPresetMode)source
+                         to:(iTermColorPresetMode)destination {
+    return [self addColorPresetNamed:presetName toProfile:profile from:source to:destination updateUseModes:NO];
+}
+
+- (BOOL)addColorPresetNamed:(NSString *)presetName
+                  toProfile:(Profile *)profile
+                       from:(iTermColorPresetMode)source
+                         to:(iTermColorPresetMode)destination
+             updateUseModes:(BOOL)updateUseModes {
     NSString *guid = profile[KEY_GUID];
     assert(guid);
 
@@ -176,13 +212,66 @@ NSString *const kRebuildColorPresetsMenuNotification = @"kRebuildColorPresetsMen
     }
     NSMutableDictionary* newDict = [NSMutableDictionary dictionaryWithDictionary:profile];
 
-    for (NSString *colorName in [ProfileModel colorKeys]) {
-        iTermColorDictionary *colorDict = [settings iterm_presetColorWithName:colorName];
-        if (colorDict) {
-            newDict[colorName] = colorDict;
-        } else {
-            [newDict removeObjectForKey:colorName];  // Can happen for tab color and underline color, which are optional
+    const BOOL presetUsesModes = iTermColorPresetHasModes(settings);
+    NSArray<NSString *> *suffixesToSet = @[];   // Suffixes we write to.
+    NSArray<NSString *> *suffixesToSkip = @[];  // Suffixes on input that we ignore.
+    if (!presetUsesModes) {
+        if (source != 0) {
+            return [self addColorPresetNamed:presetName toProfile:profile from:0 to:destination];
         }
+        suffixesToSkip = @[ COLORS_LIGHT_MODE_SUFFIX, COLORS_DARK_MODE_SUFFIX ];
+    } else {
+        // Preset has light & dark mode
+        if (source == 0) {
+            suffixesToSkip = @[ COLORS_LIGHT_MODE_SUFFIX, COLORS_DARK_MODE_SUFFIX ];
+        } else if (source == iTermColorPresetModeLight) {
+            suffixesToSkip = @[ @"", COLORS_DARK_MODE_SUFFIX ];
+        } else if (source == iTermColorPresetModeDark) {
+            suffixesToSkip = @[ @"", COLORS_LIGHT_MODE_SUFFIX ];
+        } else {
+            suffixesToSkip = @[ @"" ];
+        }
+    }
+
+    if (destination == 0) {
+        suffixesToSet = @[ @"" ];
+    }
+    if (destination & iTermColorPresetModeLight) {
+        suffixesToSet = [suffixesToSet arrayByAddingObject:COLORS_LIGHT_MODE_SUFFIX];
+    }
+    if (destination & iTermColorPresetModeDark) {
+        suffixesToSet = [suffixesToSet arrayByAddingObject:COLORS_DARK_MODE_SUFFIX];
+    }
+
+    for (NSString *colorName in [ProfileModel colorKeysWithModes:presetUsesModes]) {
+        // Check if this key in the preset should be skipped.
+        NSString *colorNameSuffix = @"";
+        NSString *baseColorName = colorName;
+        for (NSString *candidate in @[ COLORS_LIGHT_MODE_SUFFIX, COLORS_DARK_MODE_SUFFIX ]) {
+            if ([colorName hasSuffix:candidate]) {
+                baseColorName = [colorName stringByDroppingLastCharacters:candidate.length];
+                colorNameSuffix = candidate;
+                break;
+            }
+        }
+        if ([suffixesToSkip containsObject:colorNameSuffix]) {
+            continue;
+        }
+
+        // Fan out the value to the profile.
+        iTermColorDictionary *colorDict = [settings iterm_presetColorWithName:colorName];
+        for (NSString *suffix in suffixesToSet) {
+            NSString *key = [baseColorName stringByAppendingString:suffix];
+            if (colorDict) {
+                newDict[key] = colorDict;
+            } else {
+                [newDict removeObjectForKey:key];  // Can happen for tab color and underline color, which are optional
+            }
+        }
+    }
+
+    if (updateUseModes) {
+        newDict[KEY_USE_SEPARATE_COLORS_FOR_LIGHT_AND_DARK_MODE] = (destination == 0) ? @NO : @YES;
     }
 
     [self setBookmark:newDict withGuid:guid];
@@ -193,3 +282,20 @@ NSString *const kRebuildColorPresetsMenuNotification = @"kRebuildColorPresetsMen
 }
 
 @end
+
+BOOL iTermColorPresetHasModes(iTermColorPreset *preset) {
+    return preset[KEY_FOREGROUND_COLOR COLORS_LIGHT_MODE_SUFFIX] != nil;
+}
+
+NSColor *iTermColorPresetGet(iTermColorPreset *preset, NSString *baseKey, BOOL dark) {
+    if (!iTermColorPresetHasModes(preset)) {
+        return [preset[baseKey] colorValue];
+    }
+    NSString *key;
+    if (dark) {
+        key = [baseKey stringByAppendingString:COLORS_DARK_MODE_SUFFIX];
+    } else {
+        key = [baseKey stringByAppendingString:COLORS_LIGHT_MODE_SUFFIX];
+    }
+    return [preset[key] colorValue] ?: [preset[baseKey] colorValue];
+}

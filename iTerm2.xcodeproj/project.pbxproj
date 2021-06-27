@@ -1635,6 +1635,16 @@
 		A60C0372208A56AB00FE2F1F /* iTermAPIConnectionIdentifierController.h in Headers */ = {isa = PBXBuildFile; fileRef = A60C0370208A56AB00FE2F1F /* iTermAPIConnectionIdentifierController.h */; };
 		A60C0373208A56AB00FE2F1F /* iTermAPIConnectionIdentifierController.m in Sources */ = {isa = PBXBuildFile; fileRef = A60C0371208A56AB00FE2F1F /* iTermAPIConnectionIdentifierController.m */; };
 		A60C0393208F8B5000FE2F1F /* iTermScriptsMenuController.h in Headers */ = {isa = PBXBuildFile; fileRef = A60C0391208F8B5000FE2F1F /* iTermScriptsMenuController.h */; };
+		A60D02312683D1E200E19362 /* HelloWorld.swift in Sources */ = {isa = PBXBuildFile; fileRef = A60D02302683D1E200E19362 /* HelloWorld.swift */; };
+		A60D02342683D61000E19362 /* Phony.swift in Sources */ = {isa = PBXBuildFile; fileRef = A60D02332683D61000E19362 /* Phony.swift */; };
+		A60D0239268451C100E19362 /* Phony.swift in Sources */ = {isa = PBXBuildFile; fileRef = A60D02332683D61000E19362 /* Phony.swift */; };
+		A60D023A2684521400E19362 /* Phony.swift in Sources */ = {isa = PBXBuildFile; fileRef = A60D02332683D61000E19362 /* Phony.swift */; };
+		A60D023B2684526000E19362 /* Phony.swift in Sources */ = {isa = PBXBuildFile; fileRef = A60D02332683D61000E19362 /* Phony.swift */; };
+		A60D023D2687EF3B00E19362 /* InjectTrigger.swift in Sources */ = {isa = PBXBuildFile; fileRef = A60D023C2687EF3B00E19362 /* InjectTrigger.swift */; };
+		A60D023F2687F5D800E19362 /* StatusBarKnobFontViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A60D023E2687F5D800E19362 /* StatusBarKnobFontViewController.swift */; };
+		A60D02412687F86C00E19362 /* iTermStatusBarKnobFontViewController.xib in Resources */ = {isa = PBXBuildFile; fileRef = A60D02402687F86300E19362 /* iTermStatusBarKnobFontViewController.xib */; };
+		A60D02422687F86C00E19362 /* iTermStatusBarKnobFontViewController.xib in Resources */ = {isa = PBXBuildFile; fileRef = A60D02402687F86300E19362 /* iTermStatusBarKnobFontViewController.xib */; };
+		A60D02432687F86E00E19362 /* iTermStatusBarKnobFontViewController.xib in Resources */ = {isa = PBXBuildFile; fileRef = A60D02402687F86300E19362 /* iTermStatusBarKnobFontViewController.xib */; };
 		A60D20C92597F496004AC979 /* iTermImage+ImageWithData.m in Sources */ = {isa = PBXBuildFile; fileRef = A60D20C82597F496004AC979 /* iTermImage+ImageWithData.m */; };
 		A60D20D22597F4DF004AC979 /* iTermImage.m in Sources */ = {isa = PBXBuildFile; fileRef = A6755F421D728FFA00F3726C /* iTermImage.m */; };
 		A60D20DC2597F83E004AC979 /* image_decoder.sb in Resources */ = {isa = PBXBuildFile; fileRef = A60D20DB2597F83D004AC979 /* image_decoder.sb */; };
@@ -3592,6 +3602,7 @@
 		A6DBE76C22507D1600144200 /* NSView+iTerm.m in Sources */ = {isa = PBXBuildFile; fileRef = A61B66C918D4D855009AC9D5 /* NSView+iTerm.m */; };
 		A6DCDD202560B410004EA8A1 /* NSAttributedString+PSM.h in Headers */ = {isa = PBXBuildFile; fileRef = A6DCDD1E2560B410004EA8A1 /* NSAttributedString+PSM.h */; };
 		A6DCDD212560B410004EA8A1 /* NSAttributedString+PSM.m in Sources */ = {isa = PBXBuildFile; fileRef = A6DCDD1F2560B410004EA8A1 /* NSAttributedString+PSM.m */; };
+		A6DEB2EB267BBE6C00192994 /* write_only_profile_prologue.txt in Resources */ = {isa = PBXBuildFile; fileRef = A6DEB2EA267BBE6C00192994 /* write_only_profile_prologue.txt */; };
 		A6DF401C1897607E00F05947 /* NSTextField+iTerm.h in Headers */ = {isa = PBXBuildFile; fileRef = A6DF401A1897607E00F05947 /* NSTextField+iTerm.h */; };
 		A6DF91B52477B38700FB9F42 /* iTermMissionControlHacks.h in Headers */ = {isa = PBXBuildFile; fileRef = A6DF91B32477B38700FB9F42 /* iTermMissionControlHacks.h */; };
 		A6DF91B62477B38700FB9F42 /* iTermMissionControlHacks.m in Sources */ = {isa = PBXBuildFile; fileRef = A6DF91B42477B38700FB9F42 /* iTermMissionControlHacks.m */; };
@@ -4068,6 +4079,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = A60593B1257DF9A500CACEE6;
 			remoteInfo = ShellLauncher;
+		};
+		A60D02352683D95A00E19362 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0464AB0C006CD2EC7F000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A66717851DCE36C3000CE608;
+			remoteInfo = iTerm2SharedARC;
 		};
 		A64FCD51238DDF61001D8199 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -4756,9 +4774,6 @@
 		530AB88820AE85DF00D2AA08 /* tab.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = tab.py; sourceTree = "<group>"; };
 		530AB88920AE85DF00D2AA08 /* tool.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = tool.py; sourceTree = "<group>"; };
 		530AB88E20AE85DF00D2AA08 /* README.rst */ = {isa = PBXFileReference; lastKnownFileType = text; path = README.rst; sourceTree = "<group>"; };
-		530AB89120AE85DF00D2AA08 /* api_pb2.pyc */ = {isa = PBXFileReference; lastKnownFileType = file; path = api_pb2.pyc; sourceTree = "<group>"; };
-		530AB89220AE85DF00D2AA08 /* it2api */ = {isa = PBXFileReference; lastKnownFileType = text; path = it2api; sourceTree = "<group>"; };
-		530AB89320AE85DF00D2AA08 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		530AB89420AFDF5000D2AA08 /* iTermScriptFunctionCall.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = iTermScriptFunctionCall.h; sourceTree = "<group>"; };
 		530AB89520AFDF5000D2AA08 /* iTermScriptFunctionCall.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = iTermScriptFunctionCall.m; sourceTree = "<group>"; };
 		530AB89820AFF21200D2AA08 /* CoreParse.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreParse.framework; path = ThirdParty/CoreParse.framework; sourceTree = "<group>"; };
@@ -5226,6 +5241,13 @@
 		A60C0371208A56AB00FE2F1F /* iTermAPIConnectionIdentifierController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = iTermAPIConnectionIdentifierController.m; sourceTree = "<group>"; };
 		A60C0391208F8B5000FE2F1F /* iTermScriptsMenuController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = iTermScriptsMenuController.h; sourceTree = "<group>"; };
 		A60C0392208F8B5000FE2F1F /* iTermScriptsMenuController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = iTermScriptsMenuController.m; sourceTree = "<group>"; };
+		A60D022F2683D1E200E19362 /* iTerm2SharedARC-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "iTerm2SharedARC-Bridging-Header.h"; sourceTree = "<group>"; };
+		A60D02302683D1E200E19362 /* HelloWorld.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelloWorld.swift; sourceTree = "<group>"; };
+		A60D02322683D60F00E19362 /* iTerm2-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "iTerm2-Bridging-Header.h"; sourceTree = "<group>"; };
+		A60D02332683D61000E19362 /* Phony.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Phony.swift; sourceTree = "<group>"; };
+		A60D023C2687EF3B00E19362 /* InjectTrigger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InjectTrigger.swift; sourceTree = "<group>"; };
+		A60D023E2687F5D800E19362 /* StatusBarKnobFontViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarKnobFontViewController.swift; sourceTree = "<group>"; };
+		A60D02402687F86300E19362 /* iTermStatusBarKnobFontViewController.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = iTermStatusBarKnobFontViewController.xib; sourceTree = "<group>"; };
 		A60D20C82597F496004AC979 /* iTermImage+ImageWithData.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "iTermImage+ImageWithData.m"; sourceTree = "<group>"; };
 		A60D20DB2597F83D004AC979 /* image_decoder.sb */ = {isa = PBXFileReference; lastKnownFileType = text; name = image_decoder.sb; path = OtherResources/image_decoder.sb; sourceTree = SOURCE_ROOT; };
 		A60D20E52597FAFB004AC979 /* libsandbox.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libsandbox.tbd; path = usr/lib/libsandbox.tbd; sourceTree = SDKROOT; };
@@ -6587,6 +6609,12 @@
 		A6DCDD1E2560B410004EA8A1 /* NSAttributedString+PSM.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "NSAttributedString+PSM.h"; sourceTree = "<group>"; };
 		A6DCDD1F2560B410004EA8A1 /* NSAttributedString+PSM.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "NSAttributedString+PSM.m"; sourceTree = "<group>"; };
 		A6DDA88425B376D200AA55EE /* iTermActivityInfo.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = iTermActivityInfo.h; sourceTree = "<group>"; };
+		A6DEB2C0267BACFE00192994 /* gen_profile.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = gen_profile.py; sourceTree = "<group>"; };
+		A6DEB2D5267BB8A600192994 /* profile_prologue.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = profile_prologue.txt; sourceTree = "<group>"; };
+		A6DEB2DF267BB95100192994 /* partial_profile.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = partial_profile.txt; sourceTree = "<group>"; };
+		A6DEB2E8267BBC7F00192994 /* gen_profile.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = gen_profile.py; sourceTree = "<group>"; };
+		A6DEB2E9267BBC8000192994 /* prologue.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = prologue.txt; sourceTree = "<group>"; };
+		A6DEB2EA267BBE6C00192994 /* write_only_profile_prologue.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = write_only_profile_prologue.txt; sourceTree = "<group>"; };
 		A6DF401A1897607E00F05947 /* NSTextField+iTerm.h */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 4; lastKnownFileType = sourcecode.c.h; path = "NSTextField+iTerm.h"; sourceTree = "<group>"; tabWidth = 4; };
 		A6DF401B1897607E00F05947 /* NSTextField+iTerm.m */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 4; lastKnownFileType = sourcecode.c.objc; path = "NSTextField+iTerm.m"; sourceTree = "<group>"; tabWidth = 4; };
 		A6DF7B711A5BA33900D96409 /* iTermParser.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = iTermParser.h; sourceTree = "<group>"; };
@@ -7128,6 +7156,10 @@
 				1D9DDE2D142E730700275650 /* Triggers */,
 				A647E3B118C35DD900450FA1 /* VT100 */,
 				759637B42593AF6B00E278CC /* XPC */,
+				A60D02302683D1E200E19362 /* HelloWorld.swift */,
+				A60D022F2683D1E200E19362 /* iTerm2SharedARC-Bridging-Header.h */,
+				A60D02332683D61000E19362 /* Phony.swift */,
+				A60D02322683D60F00E19362 /* iTerm2-Bridging-Header.h */,
 			);
 			name = Classes;
 			path = sources/;
@@ -8083,6 +8115,7 @@
 				A6D8973922154A8800325F6A /* AnnotateTrigger.m */,
 				A6E112D425C615B400875D27 /* iTermHighlightLineTrigger.h */,
 				A6E112D525C615B400875D27 /* iTermHighlightLineTrigger.m */,
+				A60D023C2687EF3B00E19362 /* InjectTrigger.swift */,
 			);
 			name = Triggers;
 			sourceTree = "<group>";
@@ -8315,7 +8348,6 @@
 			isa = PBXGroup;
 			children = (
 				530AB7ED20AE85DE00D2AA08 /* library */,
-				530AB88F20AE85DF00D2AA08 /* examples */,
 			);
 			path = api;
 			sourceTree = "<group>";
@@ -8332,6 +8364,7 @@
 			isa = PBXGroup;
 			children = (
 				530AB7EF20AE85DE00D2AA08 /* iterm2 */,
+				A6DEB2C0267BACFE00192994 /* gen_profile.py */,
 			);
 			path = python;
 			sourceTree = "<group>";
@@ -8339,6 +8372,11 @@
 		530AB7EF20AE85DE00D2AA08 /* iterm2 */ = {
 			isa = PBXGroup;
 			children = (
+				A6DEB2EA267BBE6C00192994 /* write_only_profile_prologue.txt */,
+				A6DEB2E8267BBC7F00192994 /* gen_profile.py */,
+				A6DEB2DF267BB95100192994 /* partial_profile.txt */,
+				A6DEB2D5267BB8A600192994 /* profile_prologue.txt */,
+				A6DEB2E9267BBC8000192994 /* prologue.txt */,
 				530AB7F020AE85DE00D2AA08 /* Makefile */,
 				530AB7F120AE85DE00D2AA08 /* MANIFEST.in */,
 				530AB7F220AE85DE00D2AA08 /* docs */,
@@ -8450,24 +8488,6 @@
 				530AB86C20AE85DF00D2AA08 /* window.py */,
 			);
 			path = iterm2;
-			sourceTree = "<group>";
-		};
-		530AB88F20AE85DF00D2AA08 /* examples */ = {
-			isa = PBXGroup;
-			children = (
-				530AB89020AE85DF00D2AA08 /* python */,
-			);
-			path = examples;
-			sourceTree = "<group>";
-		};
-		530AB89020AE85DF00D2AA08 /* python */ = {
-			isa = PBXGroup;
-			children = (
-				530AB89120AE85DF00D2AA08 /* api_pb2.pyc */,
-				530AB89220AE85DF00D2AA08 /* it2api */,
-				530AB89320AE85DF00D2AA08 /* README.md */,
-			);
-			path = python;
 			sourceTree = "<group>";
 		};
 		5370676121C9D2390088D0F3 /* SignedArchive */ = {
@@ -8753,6 +8773,8 @@
 				A631FCA020EF0BCC00EB824F /* iTermStatusBarKnobColorViewController.xib */,
 				A618FFC72245F89900B8FD88 /* iTermStatusBarKnobActionViewController.h */,
 				A618FFC82245F89900B8FD88 /* iTermStatusBarKnobActionViewController.m */,
+				A60D023E2687F5D800E19362 /* StatusBarKnobFontViewController.swift */,
+				A60D02402687F86300E19362 /* iTermStatusBarKnobFontViewController.xib */,
 			);
 			name = Knobs;
 			sourceTree = "<group>";
@@ -12086,6 +12108,7 @@
 				A66717861DCE36C3000CE608 /* Sources */,
 				A66719031DCE36C3000CE608 /* Frameworks */,
 				A66719091DCE36C3000CE608 /* Headers */,
+				A60D023826844E6500E19362 /* ShellScript */,
 			);
 			buildRules = (
 			);
@@ -12124,6 +12147,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				A60D02362683D95A00E19362 /* PBXTargetDependency */,
 				69021A932344313A00FDA6CA /* PBXTargetDependency */,
 			);
 			name = iTerm2Shared;
@@ -12171,6 +12195,7 @@
 						ProvisioningStyle = Manual;
 					};
 					874206460564169600CFC3F1 = {
+						LastSwiftMigration = 1250;
 						ProvisioningStyle = Manual;
 						SystemCapabilities = {
 							com.apple.HardenedRuntime = {
@@ -12188,6 +12213,7 @@
 					};
 					A66717851DCE36C3000CE608 = {
 						DevelopmentTeam = H7V7XYVQ7D;
+						LastSwiftMigration = 1250;
 					};
 					A6866B6623CAA10A00ACD94C = {
 						CreatedOnToolsVersion = 11.3;
@@ -12581,6 +12607,7 @@
 				A67F613A214395680093940A /* graphic_heroku@2x.png in Resources */,
 				1D6ED9E819AEA20D005A7799 /* PrefsMouse.png in Resources */,
 				A6E7AE8E214394DD00DE9F3B /* graphic_composer@2x.png in Resources */,
+				A60D02432687F86E00E19362 /* iTermStatusBarKnobFontViewController.xib in Resources */,
 				A6E7AE60214394CA00DE9F3B /* graphic_clojure.png in Resources */,
 				A66F52D52106F6F100571168 /* gitdown@2x.png in Resources */,
 				8441619925D90A1800F0FC7E /* iTermMinimalComposerViewController.xib in Resources */,
@@ -12626,7 +12653,8 @@
 				1D44CFFD1CC7F5A600BE5630 /* PTYTextViewTest-golden-testBlockCursorReverseVideo.png in Resources */,
 				A6F7A744213CB143004DE961 /* StatusBarIconPaste.png in Resources */,
 				1D44D0591CC7F5A600BE5630 /* PTYTextViewTest-golden-travis-testBlinkingCursorNotHidden.png in Resources */,
-				8441620625D90A8900F0FC7E /* NumberOfSpacesAccessoryView.xib in Resources */,
+				A60D02422687F86C00E19362 /* iTermStatusBarKnobFontViewController.xib in Resources */,
+				A67D0D751A2EE12A003A8B35 /* NumberOfSpacesAccessoryView.xib in Resources */,
 				1D44CFF01CC7F5A600BE5630 /* PTYTextViewTest-golden-testBackgroundImageWithReverseVideo.png in Resources */,
 				A6FE8D08209382C000B5C648 /* download@2x.png in Resources */,
 				A6E7AE5F214394CA00DE9F3B /* graphic_clojure.png in Resources */,
@@ -13336,6 +13364,7 @@
 				A6B70FBB19830C37007A4284 /* dead.png in Resources */,
 				A623D94E1F8984700011F8C3 /* key@2x.png in Resources */,
 				53FF9820209283BE008688D7 /* template_basic_daemon.py in Resources */,
+				A6DEB2EB267BBE6C00192994 /* write_only_profile_prologue.txt in Resources */,
 				A62DBB9920F47CFA008B63D1 /* GoBack.png in Resources */,
 				A67F615E214395990093940A /* graphic_monitor@2x.png in Resources */,
 				A67F617B214395A70093940A /* graphic_nodejs.png in Resources */,
@@ -13439,6 +13468,7 @@
 				A6C978F124A0194500971AA7 /* WindowCornerFull.psd in Resources */,
 				A67F618D214395A70093940A /* graphic_nodejs@2x.png in Resources */,
 				A6F7A749213CB143004DE961 /* StatusBarIconRAM.png in Resources */,
+				A60D02412687F86C00E19362 /* iTermStatusBarKnobFontViewController.xib in Resources */,
 				A60BB3891EB54BD700D76C09 /* CopyMode@2x.png in Resources */,
 				A67F616D214395990093940A /* graphic_nano@2x.png in Resources */,
 				1D8F396B13EB7A2C0025B80B /* BroadcastInput.png in Resources */,
@@ -13995,6 +14025,23 @@
 			shellPath = /bin/sh;
 			shellScript = "exec tools/updateVersion.py\ncd $BUILT_PRODUCTS_DIR/iTerm2.app/Contents/MacOS\nln -s iTerm2 iTerm";
 		};
+		A60D023826844E6500E19362 /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "#!/bin/bash\nset -x\ntest -d ${PROJECT_DERIVED_FILE_DIR} || mkdir ${PROJECT_DERIVED_FILE_DIR}\ncp ${DERIVED_SOURCES_DIR}/*-Swift.h ${PROJECT_DERIVED_FILE_DIR}\n";
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -14020,6 +14067,7 @@
 				A67960FB1F8202C2008A42BC /* iTermCursorGuide.metal in Sources */,
 				A67960F91F8202C2008A42BC /* iTermBadge.metal in Sources */,
 				A6DBC04E2005F45700F1466D /* iTermHighlightRow.metal in Sources */,
+				A60D023A2684521400E19362 /* Phony.swift in Sources */,
 				A60EBD191FAED954008C7F5B /* iTermCopyBackground.metal in Sources */,
 				A67960F81F8202C2008A42BC /* iTermBackgroundImage.metal in Sources */,
 			);
@@ -14043,6 +14091,7 @@
 				A629C701220FFF5E00E7D4AE /* iTermProfilePreferencesTabViewWrapperView.m in Sources */,
 				A638A05120EB47A900DE347F /* iTermTextShaderCommon.metal in Sources */,
 				A67960F31F8202C1008A42BC /* iTermCursorGuide.metal in Sources */,
+				A60D023B2684526000E19362 /* Phony.swift in Sources */,
 				A6D22A441BC8BE6B004084E0 /* Model.xcdatamodeld in Sources */,
 				A68400B31FF8644F008D3EE2 /* iTermFulScreenFlash.metal in Sources */,
 				A67960F11F8202C1008A42BC /* iTermBadge.metal in Sources */,
@@ -14096,6 +14145,7 @@
 				A67960EB1F8202C0008A42BC /* iTermCursorGuide.metal in Sources */,
 				A67960E91F8202C0008A42BC /* iTermBadge.metal in Sources */,
 				A6DBC04C2005F45700F1466D /* iTermHighlightRow.metal in Sources */,
+				A60D02342683D61000E19362 /* Phony.swift in Sources */,
 				A60EBD171FAED952008C7F5B /* iTermCopyBackground.metal in Sources */,
 				A67960E81F8202C0008A42BC /* iTermBackgroundImage.metal in Sources */,
 			);
@@ -14167,6 +14217,7 @@
 				A67D19582237289900BD0D4D /* iTermImage.m in Sources */,
 				A6A64E5E2508B83F0040490B /* iTermStatusBarSnippetComponent.m in Sources */,
 				5312269B20CB1D3A004831C6 /* iTermBuiltInFunctions.m in Sources */,
+				A60D023F2687F5D800E19362 /* StatusBarKnobFontViewController.swift in Sources */,
 				A65660D92372A69A00DC6744 /* iTermDoublyLinkedList.m in Sources */,
 				A6352257238CA38A00FED5BC /* iTermMultiServerJobManager.m in Sources */,
 				A653F66824CD6A8C0062377E /* iTermRestorableStateRestorer.m in Sources */,
@@ -14391,6 +14442,7 @@
 				A630116A20E60725008114B7 /* iTermStatusBarLayout.m in Sources */,
 				A665C1CB243A4DE300F623F0 /* SIGArchiveCommon.m in Sources */,
 				A6A4867120B67A6D00493302 /* KeysPreferencesViewController.m in Sources */,
+				A60D023D2687EF3B00E19362 /* InjectTrigger.swift in Sources */,
 				A60D223025A11039004AC979 /* VT100RemoteHost.m in Sources */,
 				A629F5AB23AFF5EC00C2F16B /* iTermShellIntegrationDownloadAndRunViewController.m in Sources */,
 				A631FC8E20EDDAEA00EB824F /* iTermSearchFieldCell.m in Sources */,
@@ -14640,6 +14692,7 @@
 				A6B147612133395500D0814F /* iTermStatusBarLayout+tmux.m in Sources */,
 				A68400B91FF97138008D3EE2 /* iTermTimestampDrawHelper.m in Sources */,
 				A62EED9320DF5B2F00943DE3 /* iTermScriptChooser.m in Sources */,
+				A60D02312683D1E200E19362 /* HelloWorld.swift in Sources */,
 				A6A4867B20B67E5D00493302 /* ProfilesTerminalPreferencesViewController.m in Sources */,
 				A66F52AA210458CA00571168 /* iTermNetworkUtilization.m in Sources */,
 				A63011CE20E85B16008114B7 /* SessionTitleView.m in Sources */,
@@ -15024,6 +15077,7 @@
 				A608CD09214DE7C1007A7B87 /* iTermAutomaticProfileSwitcherTest.m in Sources */,
 				A60BB37F1EB5149100D76C09 /* iTermCopyModeState.m in Sources */,
 				53D68F842283FA4B0018710D /* iTermTmuxLayoutBuilderTest.m in Sources */,
+				A60D0239268451C100E19362 /* Phony.swift in Sources */,
 				A608CD0A214DE7C1007A7B87 /* iTermNSURLCategoryTest.m in Sources */,
 				535D0910224DBE7D00A79581 /* iTermPreferencesSearchTests.m in Sources */,
 				A608CCFC214DE7C1007A7B87 /* iTermPasteHelperTest.m in Sources */,
@@ -15076,6 +15130,11 @@
 			isa = PBXTargetDependency;
 			target = A60593B1257DF9A500CACEE6 /* ShellLauncher */;
 			targetProxy = A60593DD257DFB0900CACEE6 /* PBXContainerItemProxy */;
+		};
+		A60D02362683D95A00E19362 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A66717851DCE36C3000CE608 /* iTerm2SharedARC */;
+			targetProxy = A60D02352683D95A00E19362 /* PBXContainerItemProxy */;
 		};
 		A64FCD52238DDF61001D8199 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -15518,6 +15577,7 @@
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				ARCHS = "$(ARCHS_STANDARD)";
+				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CLANG_WARN_INT_CONVERSION = YES;
 				CODE_SIGN_ENTITLEMENTS = iTerm2.entitlements;
@@ -15578,6 +15638,9 @@
 				PRODUCT_NAME = iTerm2;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = macosx;
+				SWIFT_OBJC_BRIDGING_HEADER = "sources/iTerm2-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+				USER_HEADER_SEARCH_PATHS = "$(CONFIGURATION_TEMP_DIR)/iTerm2SharedARC.build/DerivedSources";
 				USE_HEADERMAP = NO;
 				VALID_ARCHS = "$(ARCHS_STANDARD)";
 				WARNING_CFLAGS = (
@@ -15654,6 +15717,7 @@
 				PRODUCT_NAME = iTerm2ForApplescriptTesting;
 				SDKROOT = macosx;
 				SECTORDER_FLAGS = "";
+				SWIFT_VERSION = 5.0;
 				VALID_ARCHS = "$(ARCHS_STANDARD)";
 				WARNING_CFLAGS = (
 					"-Wextra",
@@ -15723,6 +15787,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.googlecode.iterm2.applescript;
 				PRODUCT_NAME = iTerm2ForApplescriptTesting;
 				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
 				VALID_ARCHS = "$(ARCHS_STANDARD)";
 				WARNING_CFLAGS = (
 					"-Wextra",
@@ -15791,6 +15856,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.googlecode.iterm2.applescript;
 				PRODUCT_NAME = iTerm2ForApplescriptTesting;
 				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
 				VALID_ARCHS = "$(ARCHS_STANDARD)";
 				WARNING_CFLAGS = (
 					"-Wextra",
@@ -15874,6 +15940,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "com.google.${PRODUCT_NAME:rfc1034identifier}";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
 				VALID_ARCHS = "$(ARCHS_STANDARD)";
 				WARNING_CFLAGS = (
 					"-Wall",
@@ -15948,6 +16015,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "com.google.${PRODUCT_NAME:rfc1034identifier}";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
 				VALID_ARCHS = "$(ARCHS_STANDARD)";
 				WARNING_CFLAGS = (
 					"-Wall",
@@ -16022,6 +16090,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "com.google.${PRODUCT_NAME:rfc1034identifier}";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
 				VALID_ARCHS = "$(ARCHS_STANDARD)";
 				WARNING_CFLAGS = (
 					"-Wall",
@@ -16730,6 +16799,7 @@
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				ARCHS = "$(ARCHS_STANDARD)";
+				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CLANG_WARN_INT_CONVERSION = YES;
 				CODE_SIGN_ENTITLEMENTS = iTerm2.entitlements;
@@ -16786,6 +16856,9 @@
 				PRODUCT_NAME = iTerm2;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = macosx;
+				SWIFT_OBJC_BRIDGING_HEADER = "sources/iTerm2-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+				USER_HEADER_SEARCH_PATHS = "$(CONFIGURATION_TEMP_DIR)/iTerm2SharedARC.build/DerivedSources";
 				USE_HEADERMAP = NO;
 				VALID_ARCHS = "$(ARCHS_STANDARD)";
 				WARNING_CFLAGS = (
@@ -16865,6 +16938,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "com.google.${PRODUCT_NAME:rfc1034identifier}";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
 				VALID_ARCHS = "$(ARCHS_STANDARD)";
 				WARNING_CFLAGS = (
 					"-Wall",
@@ -16971,6 +17045,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.googlecode.iterm2.applescript;
 				PRODUCT_NAME = iTerm2ForApplescriptTesting;
 				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
 				VALID_ARCHS = "$(ARCHS_STANDARD)";
 				WARNING_CFLAGS = (
 					"-Wextra",
@@ -17031,6 +17106,7 @@
 				PRODUCT_NAME = iTerm2Shared;
 				SDKROOT = macosx;
 				SKIP_INSTALL = NO;
+				USER_HEADER_SEARCH_PATHS = "$(CONFIGURATION_TEMP_DIR)/iTerm2SharedARC.build/DerivedSources";
 				VALID_ARCHS = "$(ARCHS_STANDARD)";
 				WARNING_CFLAGS = (
 					"-Wall",
@@ -17044,6 +17120,7 @@
 		A656E98E1F970C7200158128 /* Beta */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
@@ -17092,6 +17169,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "com.iterm2.$(PRODUCT_NAME:rfc1034identifier)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/iTerm2.app/Contents/MacOS/iTerm2";
 				VALID_ARCHS = "$(ARCHS_STANDARD)";
 				WARNING_CFLAGS = (
@@ -17146,12 +17224,15 @@
 					ThirdParty,
 					"$(PROJECT_DIR)/SearchableComboListView",
 				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 10.14;
 				OTHER_CFLAGS = "-DBETA=1";
 				OTHER_LDFLAGS = "";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SKIP_INSTALL = NO;
+				SWIFT_OBJC_BRIDGING_HEADER = "sources/iTerm2SharedARC-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
 				USER_HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/SearchableComboListView";
 				VALID_ARCHS = "$(ARCHS_STANDARD)";
 				WARNING_CFLAGS = (
@@ -17467,6 +17548,7 @@
 					ThirdParty,
 					"$(PROJECT_DIR)/SearchableComboListView",
 				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 10.14;
 				ONLY_ACTIVE_ARCH = YES;
 				OTHER_CFLAGS = (
@@ -17477,6 +17559,9 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SKIP_INSTALL = NO;
+				SWIFT_OBJC_BRIDGING_HEADER = "sources/iTerm2SharedARC-Bridging-Header.h";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
 				USER_HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/SearchableComboListView";
 				VALID_ARCHS = "$(ARCHS_STANDARD)";
 				WARNING_CFLAGS = (
@@ -17531,11 +17616,14 @@
 					ThirdParty,
 					"$(PROJECT_DIR)/SearchableComboListView",
 				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 10.14;
 				OTHER_LDFLAGS = "";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SKIP_INSTALL = NO;
+				SWIFT_OBJC_BRIDGING_HEADER = "sources/iTerm2SharedARC-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
 				USER_HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/SearchableComboListView";
 				VALID_ARCHS = "$(ARCHS_STANDARD)";
 				WARNING_CFLAGS = (
@@ -17589,12 +17677,15 @@
 					ThirdParty,
 					"$(PROJECT_DIR)/SearchableComboListView",
 				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 10.14;
 				OTHER_CFLAGS = "-DBETA=1";
 				OTHER_LDFLAGS = "";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SKIP_INSTALL = NO;
+				SWIFT_OBJC_BRIDGING_HEADER = "sources/iTerm2SharedARC-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
 				USER_HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/SearchableComboListView";
 				VALID_ARCHS = "$(ARCHS_STANDARD)";
 				WARNING_CFLAGS = (
@@ -17985,6 +18076,7 @@
 				PRODUCT_NAME = iTerm2Shared;
 				SDKROOT = macosx;
 				SKIP_INSTALL = NO;
+				USER_HEADER_SEARCH_PATHS = "$(CONFIGURATION_TEMP_DIR)/iTerm2SharedARC.build/DerivedSources";
 				VALID_ARCHS = "$(ARCHS_STANDARD)";
 				WARNING_CFLAGS = (
 					"-Wall",
@@ -18041,6 +18133,7 @@
 				PRODUCT_NAME = iTerm2Shared;
 				SDKROOT = macosx;
 				SKIP_INSTALL = NO;
+				USER_HEADER_SEARCH_PATHS = "$(CONFIGURATION_TEMP_DIR)/iTerm2SharedARC.build/DerivedSources";
 				VALID_ARCHS = "$(ARCHS_STANDARD)";
 				WARNING_CFLAGS = (
 					"-Wall",
@@ -18097,6 +18190,7 @@
 				PRODUCT_NAME = iTerm2Shared;
 				SDKROOT = macosx;
 				SKIP_INSTALL = NO;
+				USER_HEADER_SEARCH_PATHS = "$(CONFIGURATION_TEMP_DIR)/iTerm2SharedARC.build/DerivedSources";
 				VALID_ARCHS = "$(ARCHS_STANDARD)";
 				WARNING_CFLAGS = (
 					"-Wall",
@@ -18110,6 +18204,7 @@
 		A6C764251B45CB2800E3C992 /* Development */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
@@ -18166,6 +18261,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "com.iterm2.$(PRODUCT_NAME:rfc1034identifier)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/iTerm2.app/Contents/MacOS/iTerm2";
 				VALID_ARCHS = "$(ARCHS_STANDARD)";
 				WARNING_CFLAGS = (
@@ -18178,6 +18274,7 @@
 		A6C764261B45CB2800E3C992 /* Deployment */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
@@ -18226,6 +18323,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "com.iterm2.$(PRODUCT_NAME:rfc1034identifier)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/iTerm2.app/Contents/MacOS/iTerm2";
 				VALID_ARCHS = "$(ARCHS_STANDARD)";
 				WARNING_CFLAGS = (
@@ -18238,6 +18336,7 @@
 		A6C764271B45CB2800E3C992 /* Nightly */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
@@ -18286,6 +18385,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "com.iterm2.$(PRODUCT_NAME:rfc1034identifier)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/iTerm2.app/Contents/MacOS/iTerm2";
 				VALID_ARCHS = "$(ARCHS_STANDARD)";
 				WARNING_CFLAGS = (
@@ -18300,6 +18400,7 @@
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				ARCHS = "$(ARCHS_STANDARD)";
+				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CLANG_WARN_INT_CONVERSION = YES;
 				CODE_SIGN_ENTITLEMENTS = iTerm2.entitlements;
@@ -18362,6 +18463,10 @@
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = macosx;
 				SECTORDER_FLAGS = "";
+				SWIFT_OBJC_BRIDGING_HEADER = "sources/iTerm2-Bridging-Header.h";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				USER_HEADER_SEARCH_PATHS = "$(CONFIGURATION_TEMP_DIR)/iTerm2SharedARC.build/DerivedSources";
 				USE_HEADERMAP = NO;
 				VALID_ARCHS = "$(ARCHS_STANDARD)";
 				WARNING_CFLAGS = (
@@ -18383,6 +18488,7 @@
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				ARCHS = "$(ARCHS_STANDARD)";
+				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CLANG_WARN_INT_CONVERSION = YES;
 				CODE_SIGN_ENTITLEMENTS = iTerm2.entitlements;
@@ -18439,6 +18545,9 @@
 				PRODUCT_NAME = iTerm2;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = macosx;
+				SWIFT_OBJC_BRIDGING_HEADER = "sources/iTerm2-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+				USER_HEADER_SEARCH_PATHS = "$(CONFIGURATION_TEMP_DIR)/iTerm2SharedARC.build/DerivedSources";
 				USE_HEADERMAP = NO;
 				VALID_ARCHS = "$(ARCHS_STANDARD)";
 				WARNING_CFLAGS = (
